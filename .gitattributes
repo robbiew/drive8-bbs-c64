@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+*.d81 binary
+*.prg binary
+*.dylib binary

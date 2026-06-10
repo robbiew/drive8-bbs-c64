@@ -1,0 +1,116 @@
+/* CBM relative (REL) file access using oscar64 kernalio.
+ *
+ * REL files use the command channel's "P" (position) command to seek
+ * to a record:  PRINT#15,"P";CHR$(sa);CHR$(rec_lo);CHR$(rec_hi);CHR$(0)
+ * where `sa` is the secondary address (logical file number) of the data
+ * channel.  We use CFG_FNUM_DATA (8) for data and CFG_FNUM_CMD (15) for
+ * the command channel.
+ *
+ * Only one REL file may be open at a time (single data channel).
+ */
+#include "bbs/rel.h"
+#include "bbs/config.h"
+#include <c64/kernalio.h>
+#include <string.h>
+#include <stdio.h>
+
+static u8 s_rec_size = 0;
+static u8 s_device   = 0;
+static u8 s_open     = 0;
+
+bbs_err_t rel_open(u8 device, const char *name, u8 record_size,
+                   rel_handle_t *out)
+{
+    if (s_open) return BBS_EFULL;   /* only one open at a time */
+
+    char fname[40];
+    sprintf(fname, "%s,L,%c", name, (char)record_size);
+    krnio_setnam(fname);
+    /* OPEN with ",L,size" format. CBM DOS creates the file on first write
+     * if it doesn't exist. If the open fails here, treat it as "file not found"
+     * (most common) rather than I/O error — the caller will decide whether to
+     * create it or treat it as a real error. */
+    if (!krnio_open(CFG_FNUM_DATA, device, CFG_FNUM_DATA)) {
+        return BBS_ENOTFOUND;
+    }
+
+    /* Open command channel. */
+    krnio_setnam("");
+    krnio_open(CFG_FNUM_CMD, device, 15);
+
+    s_rec_size = record_size;
+    s_device   = device;
+    s_open     = 1;
+    *out = (rel_handle_t)CFG_FNUM_DATA;
+    return BBS_OK;
+}
+
+bbs_err_t rel_position(rel_handle_t h, u16 rec)
+{
+    if (!s_open) return BBS_ENOTFOUND;
+    /* Send "P" command via PRINT#15 (CHKOUT style) — equivalent to BASIC:
+     *   PRINT#15,"P";CHR$(sa);CHR$(rec_lo);CHR$(rec_hi);CHR$(0)
+     * Using OPEN/CLOSE to deliver the P command as a "filename" is unreliable
+     * on 1581/U64; the PRINT# approach is the canonical CBM DOS method. */
+    if (!krnio_chkout(CFG_FNUM_CMD)) return BBS_EIO;
+    krnio_chrout('P');
+    krnio_chrout((char)h);                    /* secondary address of data file */
+    krnio_chrout((char)(rec & 0xFF));         /* record number low byte */
+    krnio_chrout((char)((rec >> 8) & 0xFF));  /* record number high byte */
+    krnio_chrout(0);                           /* byte offset within record */
+    krnio_clrchn();
+    return BBS_OK;
+}
+
+bbs_err_t rel_read(rel_handle_t h, void *buf, u8 record_size, u8 *got)
+{
+    if (!s_open) return BBS_ENOTFOUND;
+    /* krnio_read handles CHKIN internally (same pattern as krnio_write/CHKOUT).
+     * Calling krnio_chkin here would send TALK+SECOND twice on the IEC bus
+     * without an intervening UNTALK — same double-CHKIN bug as rel_write had.
+     *
+     * krnio_pstatus[fnum] is set to KRNIO_EOF by krnio_read when it reads the
+     * last byte of a REL record (CBM DOS signals end-of-record via KERNAL ST).
+     * krnio_read checks this cache at entry and returns 0 immediately if set.
+     * We must reset it before each record read so the scan advances past
+     * record 1.  krnio_pstatus is declared extern in kernalio.h.
+     *
+     * DO NOT call krnio_clrchn() here — that closes ALL channels including
+     * the data channel, breaking sequential reads. Only reset the status cache. */
+    krnio_pstatus[(char)h] = KRNIO_OK;
+    int r = krnio_read((char)h, (char *)buf, (int)record_size);
+    if (r < 0) { *got = 0; return BBS_EIO; }
+    *got = (u8)r;
+    return BBS_OK;
+}
+
+bbs_err_t rel_write(rel_handle_t h, const void *buf, u8 record_size)
+{
+    if (!s_open) return BBS_ENOTFOUND;
+    /* krnio_write handles CHKOUT + CHROUT loop + CLRCHN internally.
+     * Calling krnio_chkout here before krnio_write would send LISTEN+SECOND
+     * twice on the IEC bus without an intervening UNLISTEN — avoid that.
+     *
+     * DO NOT call krnio_clrchn() before krnio_write — krnio_write already
+     * calls it internally as part of the close sequence. Calling it here
+     * would close the data channel prematurely. */
+    int r = krnio_write((char)h, (const char *)buf, (int)record_size);
+    return (r == (int)record_size) ? BBS_OK : BBS_EIO;
+}
+
+bbs_err_t rel_close(rel_handle_t h)
+{
+    if (!s_open) return BBS_OK;
+    krnio_clrchn();
+    krnio_close((char)h);
+    krnio_close(CFG_FNUM_CMD);
+    s_open = 0;
+    return BBS_OK;
+}
+
+void rel_reset(void)
+{
+    /* Force-clear the single-open guard. Use only when the underlying
+     * KERNAL channels were closed by external code (e.g. setup scratch). */
+    s_open = 0;
+}

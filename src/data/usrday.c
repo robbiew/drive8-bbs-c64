@@ -1,0 +1,82 @@
+/* src/data/usrday.c - Per-user daily-limit state (USR.DAY REL file). */
+
+#include "bbs/usrday.h"
+#include "bbs/cfg.h"
+#include "bbs/rel.h"
+#include "bbs/config.h"
+#include <string.h>
+#include <stdio.h>
+
+/* No msgs_code overlay (cf. usrptr.c): USR.DAY is used on the core session
+ * login/logoff/tick path, so it stays resident in main code. */
+
+#define USRDAY_READ_MIN 6
+
+static bbs_err_t usrday_open(u8 device, rel_handle_t *h)
+{
+    char fname[32];
+    bbs_err_t err;
+    err = cfg_send_drive_init(device, bbs_cfg.init_system);
+    if (err != BBS_OK) return err;
+    sprintf(fname, "%u:USR.DAY", (unsigned)bbs_cfg.drive_system);
+    return rel_open(device, fname, RECORD_SIZE_USR_DAY, h);
+}
+
+bbs_err_t usrday_load(u16 user_id, usr_day_record_t *out, u8 device)
+{
+    rel_handle_t h;
+    bbs_err_t err;
+    u8 buf[RECORD_SIZE_USR_DAY];
+    u8 got;
+
+    if (!out || user_id == 0) return BBS_EBADARG;
+
+    memset(out, 0, sizeof(*out));   /* default: fresh / no usage */
+
+    err = usrday_open(device, &h);
+    if (err != BBS_OK) return err;  /* BBS_ENOTFOUND if file absent */
+
+    err = rel_position(h, (u8)user_id);
+    if (err != BBS_OK) { rel_close(h); return err; }
+
+    memset(buf, 0, RECORD_SIZE_USR_DAY);
+    err = rel_read(h, buf, RECORD_SIZE_USR_DAY, &got);
+    rel_close(h);
+
+    /* Missing/short record = user has no daily state yet. Not an error. */
+    if (err != BBS_OK || got < USRDAY_READ_MIN) return BBS_OK;
+
+    out->last_mm     = buf[0];
+    out->last_dd     = buf[1];
+    out->last_yy     = buf[2];
+    out->calls_today = buf[3];
+    out->mins_today  = (u16)buf[4] | ((u16)buf[5] << 8);
+    return BBS_OK;
+}
+
+bbs_err_t usrday_save(u16 user_id, const usr_day_record_t *rec, u8 device)
+{
+    rel_handle_t h;
+    bbs_err_t err;
+    u8 buf[RECORD_SIZE_USR_DAY];
+
+    if (!rec || user_id == 0) return BBS_EBADARG;
+
+    memset(buf, 0, RECORD_SIZE_USR_DAY);
+    buf[0] = rec->last_mm;
+    buf[1] = rec->last_dd;
+    buf[2] = rec->last_yy;
+    buf[3] = rec->calls_today;
+    buf[4] = (u8)(rec->mins_today & 0xFF);
+    buf[5] = (u8)(rec->mins_today >> 8);
+
+    err = usrday_open(device, &h);
+    if (err != BBS_OK) return err;
+
+    err = rel_position(h, (u8)user_id);
+    if (err != BBS_OK) { rel_close(h); return err; }
+
+    err = rel_write(h, buf, RECORD_SIZE_USR_DAY);
+    rel_close(h);
+    return err;
+}

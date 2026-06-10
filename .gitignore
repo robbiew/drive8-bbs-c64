@@ -1,0 +1,63 @@
+# Build output
+build/
+
+# Vendor toolchains (installed via tools/install-*.sh)
+vendor/*
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Disk images and related files (except for the seed and blank disk images)
+*.D81
+!data/users-seed.d81
+!data/blank-disk.d81
+!data/boards-seed.d81
+
+## local docs, notes, and personal resources
+docs/
+notes/
+resources/
+reference/
+
+# =========================================================================
+# AI Coding Agents & Assistants (Cursor, Claude Code, Copilot, etc.)
+# =========================================================================
+
+# General agent workspaces, logs, and temporary execution files
+.agent/
+.agents/
+agent_workspace/
+**/agent-run-*/
+*.agent.log
+.superpowers/
+
+# Claude Code & Anthropic local agent caches
+.claude/
+claude-session.json
+
+# Tool-specific rule or instruction overrides you want to keep local
+.cursorrules.local
+CLAUDE.local.md
+AGENTS.local.md
+CLAUDE.md
+
+# Auto-generated prompt templates, scratchpads, and execution histories
+.prompt_history/
+agent_scratchpad.*
+*.prompt.tmp
+
+# Agent local state frameworks (e.g., LangChain, AutoGPT caches)
+.cache/abstra/
+.autogpt/
+
+# local/build artifacts
+*.dylib
+*.dump
+
+# Editor backups
+*.bak

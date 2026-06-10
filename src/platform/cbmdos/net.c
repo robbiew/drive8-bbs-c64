@@ -1,0 +1,437 @@
+/* C64 / U64 SwiftLink ACIA driver. Implements bbs/net.h.
+ *
+ * The 6551 ACIA is at $DE00-$DE03. The U64 firmware bridges incoming
+ * TCP telnet connections (port 3000) through the ACIA at configurable baud
+ * (default 9600), and drives DSR active-low when a TCP session is live.
+ *
+ * Baud rate configuration:
+ *   - On U64: Setting ACIA_CTL baud bits may work if the U64 firmware supports
+ *     dynamic reconfiguration. Verify with U64 documentation.
+ *   - On VICE: tcpser's speed is fixed at startup (e.g., -s 9600). ACIA register
+ *     writes are harmless but have no effect. Reconfigure tcpser's command line
+ *     to change speed, not the BBS config.
+ *
+ * Under VICE with tcpser, DSR is never driven — connect/disconnect is
+ * detected exclusively via AT command strings (CONNECT / NO CARRIER).
+ * The driver auto-detects which mode it is in: if DSR is seen active
+ * during a session, DSR-based disconnect is used (U64); otherwise AT
+ * strings are authoritative (VICE/tcpser).
+ *
+ * Ported from drive8-bbs src/platform/c64u/acia.c.
+ */
+#include "bbs/net.h"
+#include "bbs/cfg.h"
+#include "net/telnet_iac.h"
+#include "net/at_response.h"
+#include <string.h>
+
+#define ACIA_DATA    (*(volatile u8 *)0xDE00)
+#define ACIA_STATUS  (*(volatile u8 *)0xDE01)
+#define ACIA_CMD     (*(volatile u8 *)0xDE02)
+#define ACIA_CTL     (*(volatile u8 *)0xDE03)
+
+/* UCI register addresses on Ultimate 64 hardware.  AUTO uses the idle CMD
+ * register probe to distinguish U64 from VICE before the modem state machine
+ * starts; VICE builds should still use MODEM_TYPE=VICE explicitly. */
+#define UCI_CMD      (*(volatile u8 *)0xDF1D)
+#define UCI_IDENTIFIER ((u8)0xC9)
+
+#define ST_TX_EMPTY  0x10
+#define ST_RX_FULL   0x08
+
+/* Baud rate mappings (6551 ACIA bits 0-3). Keep original control byte structure (0x1E base for 9600)
+ * for compatibility with U64 firmware. Only bits 0-3 change per baud rate. */
+#define CTL_BAUD_300    0x16    /* 0001 0110: baud bits=0110 */
+#define CTL_BAUD_1200   0x18    /* 0001 1000: baud bits=1000 */
+#define CTL_BAUD_2400   0x1A    /* 0001 1010: baud bits=1010 */
+#define CTL_BAUD_9600   0x1E    /* 0001 1110: baud bits=1110 (original) */
+#define CTL_BAUD_19200  0x1F    /* 0001 1111: baud bits=1111 */
+#define CTL_BAUD_38400  0x1F    /* 0001 1111: U64 handles; uses 19200 register value */
+
+#define CMD_DTR_ON   0x0B   /* DTR=1, RTS low, TX int disabled (ACIA IRQ OFF) */
+#define CMD_DTR_OFF  0x0A   /* DTR=0 */
+
+/* ── NMI-free interrupt-driven RX (VICE/tcpser overrun fix) ──────────────────
+ * The 6551 holds only one received byte.  The WFC/session main loop is
+ * preempted by multi-ms KERNAL routines (screen, disk), so polling the ACIA
+ * there overruns the register and drops inbound bytes — under VICE the CONNECT
+ * result code is lost and the BBS never answers a caller.
+ *
+ * We deliberately do NOT enable the ACIA's own RX interrupt: on SwiftLink it is
+ * wired to the (unmaskable) NMI, which corrupts the timing-critical KERNAL IEC
+ * disk routines and crashes the BBS.  Instead a CIA#1 Timer-B IRQ polls the
+ * ACIA into a ring buffer.  Being a maskable IRQ it is held off (SEI) during
+ * KERNAL disk I/O — no corruption — yet fires freely at the WFC wait loop
+ * (which does no disk) to capture the CONNECT burst.  Single producer
+ * (acia_irq_isr writes s_rx_tail); single consumer (net_rx reads s_rx_head). */
+/* 128-byte power-of-two ring.  head/tail are full u8 counters (wrap at 256);
+ * the low 7 bits index the buffer (RX_BUF_MASK).  net_rx drains continuously,
+ * so 128 bytes is ample for result codes and input bursts.  The buffer lives
+ * in the KERNAL cassette buffer ($033C-$03BB) — free RAM on a disk-only BBS —
+ * to keep it out of the cramped oscar64 BSS segment. */
+#define RX_BUF_MASK  0x7Fu
+#define s_rx_buf     ((volatile u8 *)0x033Cu)   /* 128 bytes @ $033C-$03BB */
+static volatile u8 s_rx_head;
+static volatile u8 s_rx_tail;
+
+/* Timer-B reload (~0.24ms at ~1.02MHz) — comfortably below one byte time at the
+ * highest delivered rate (the ACIA register tops out at 19200 here, ~0.52ms per
+ * byte), so the connect burst is never missed. */
+#define TIMERB_LATCH 250
+
+/* CIA#1 Timer-B IRQ, chained off $0314.  Reads the CIA ICR once (which clears
+ * it), drains the ACIA into the ring on a Timer-B tick, and on a Timer-A tick
+ * runs the KERNAL jiffy (UDTIM) + keyboard scan (SCNKEY) so the local console
+ * keeps working, then exits via the KERNAL IRQ epilogue ($EA81). */
+__asm acia_irq_isr
+{
+    lda $dc0d           // read+clear CIA1 ICR: bit0=TimerA, bit1=TimerB
+    pha
+    and #$02
+    beq chkta
+tbloop:
+    lda $de01
+    and #$08            // RDRF (receive register full)?
+    beq chkta
+    lda s_rx_tail
+    and #$7f            // low 7 bits index the 128-byte ring
+    tax
+    lda $de00
+    sta $033c, x        // s_rx_buf @ $033C (cassette buffer)
+    inc s_rx_tail
+    jmp tbloop
+chkta:
+    pla
+    and #$01
+    beq done
+    jsr $ffea           // UDTIM: jiffy clock + STOP key
+    jsr $ff9f           // SCNKEY: keyboard scan -> buffer (for GETIN)
+done:
+    jmp $ea81           // KERNAL IRQ epilogue: pull Y,X,A then RTI
+}
+
+/* Full Timer-B RX-IRQ (re)arm: load the latch, force-load+start the timer in
+ * continuous mode, unmask the Timer-B interrupt, and install the $0314 vector —
+ * all under SEI so a stray IRQ never jumps through a half-built setup.  Safe to
+ * call repeatedly: net_irq_arm() arms it once, and net_rx() re-arms whenever the
+ * KERNAL boot/disk path has stopped the timer or reset the vector.  Writing
+ * $DC0D with the set-mask bit ($82) only ADDS Timer-B to the enabled interrupts,
+ * leaving the KERNAL's Timer-A jiffy interrupt untouched. */
+static void net_irq_setup(void)
+{
+    __asm {
+        sei
+        lda #<TIMERB_LATCH
+        sta $dc06
+        lda #>TIMERB_LATCH
+        sta $dc07
+        lda #$11            // CRB: start, continuous, force-load, count phi2
+        sta $dc0f
+        lda #$82            // ICR: set-bit + enable Timer-B interrupt
+        sta $dc0d
+    }
+    *(void * volatile *)0x0314 = (void *)acia_irq_isr;
+    __asm { cli }
+}
+
+/* Arm the Timer-B RX IRQ.  Call once boot disk I/O is finished: the KERNAL boot
+ * path resets the $0314 RAM vector and stops Timer B, and running the timer
+ * during the disk-heavy boot adds needless load.  net_rx() re-arms defensively. */
+void net_irq_arm(void)
+{
+    s_rx_head = 0;
+    s_rx_tail = 0;
+    net_irq_setup();
+}
+
+static net_state_t     s_state;
+static at_parser_t     s_at;
+/* s_iac lives in free RAM ($02A7-$02C7, the unused $02A7-$02FF block) to keep
+ * its 33 bytes out of the resident region ($0880-$9700), which is at its hard
+ * memory ceiling. Every use is &s_iac passed to a telnet_filter_* call, so the
+ * struct-lvalue macro yields a constant address (no indirection). It is always
+ * telnet_filter_init()'d before use, so it needs no zero-init. */
+#define s_iac (*(telnet_filter_t *)0x02A7u)
+/* s_saw_dsr_inactive: guards against spurious connect at boot if DSR happens
+ * to read active.  Set TRUE the first time we observe DSR inactive; reset
+ * by net_disconnect() so each call cycle requires a real inactive→active edge. */
+static bool_t          s_saw_dsr_inactive;
+/* s_dsr_was_active: TRUE if DSR was seen active during the current session.
+ * If FALSE, we're running under VICE/tcpser (DSR never driven) and must use
+ * AT string events for disconnect rather than DSR state. */
+static bool_t          s_dsr_was_active;
+/* s_at_mode: TRUE once an AT-string CONNECT has been seen (VICE/tcpser, or any
+ * modem that reports result codes).  In that mode the DSR hardware line is
+ * meaningless (raw TCP doesn't carry it; the ACIA reads a constant value), so
+ * the U64 DSR connect/disconnect logic is disabled — otherwise the always-
+ * "active" DSR reading spuriously re-connects the BBS right after a NO CARRIER
+ * hangup, leaving it stuck "connected". */
+static bool_t          s_at_mode;
+
+static modem_type_t resolve_modem_type(void)
+{
+    if (bbs_cfg.modem_type != MODEM_AUTO) {
+        return bbs_cfg.modem_type;
+    }
+
+    /* U64 hardware responds with $C9 on the idle UCI CMD register; VICE does
+     * not expose UCI, so AUTO resolves to VICE unless that signature is present.
+     */
+    if (UCI_CMD == UCI_IDENTIFIER) {
+        return MODEM_U64;
+    }
+
+    return MODEM_VICE;
+}
+
+static void acia_putc(u8 b)
+{
+    u16 timeout = 0;
+    while ((ACIA_STATUS & ST_TX_EMPTY) == 0) {
+        // cppcheck-suppress knownConditionTrueFalse
+        if (++timeout == 0) return;
+    }
+    ACIA_DATA = b;
+}
+
+static void acia_puts(const char *s)
+{
+    while (*s) acia_putc((u8)*s++);
+}
+
+bbs_err_t net_init(void)
+{
+    u8 ctl;
+    modem_type_t modem_type;
+    
+    s_state              = NET_IDLE;
+    s_saw_dsr_inactive   = FALSE;
+    s_dsr_was_active     = FALSE;
+    modem_type           = resolve_modem_type();
+    if (bbs_cfg.modem_type == MODEM_AUTO) {
+        bbs_cfg.modem_type = modem_type;
+    }
+    /* MODEM_VICE forces AT-string mode from boot; MODEM_U64 keeps DSR mode and
+     * never auto-switches. AUTO resolves once at boot, then follows the detected
+     * modem type for the remainder of the session. */
+    s_at_mode            = (modem_type == MODEM_VICE);
+    at_parser_init(&s_at);
+    telnet_filter_init(&s_iac);
+
+    /* Map configured baud rate to ACIA control register bits 0-3.
+     * On U64: Reconfiguring ACIA_CTL may work if the U64 firmware supports it.
+     * On VICE: tcpser's speed is fixed at startup and not affected by ACIA writes.
+     * Supported rates: 300, 1200, 2400, 9600, 19200, 38400 (all ACIA standard). */
+    switch (bbs_cfg.baud_rate) {
+    case 300:    ctl = CTL_BAUD_300;    break;
+    case 1200:   ctl = CTL_BAUD_1200;   break;
+    case 2400:   ctl = CTL_BAUD_2400;   break;
+    case 9600:   ctl = CTL_BAUD_9600;   break;
+    case 19200:  ctl = CTL_BAUD_19200;  break;
+    case 38400:  ctl = CTL_BAUD_38400;  break;
+    default:     ctl = CTL_BAUD_9600;   break;  /* Fallback to 9600 if invalid */
+    }
+    ACIA_CTL = ctl;
+    ACIA_CMD = CMD_DTR_ON;
+
+    acia_puts("ATZ\r");
+    acia_puts("ATS0=1\r");
+
+    /* Prime the guard: if DSR is currently inactive (no caller), mark it
+     * so the first incoming call (DSR active edge) will trigger connect.
+     * If DSR is already active at boot (shouldn't happen), we skip this
+     * and connect only after DSR goes inactive then active again. */
+    if ((ACIA_STATUS & 0x40) != 0) {
+        s_saw_dsr_inactive = TRUE;
+    }
+
+    return BBS_OK;
+}
+
+net_state_t net_state(void) { return s_state; }
+
+static u8 process_inbound(u8 in, u8 *out)
+{
+    u8 b, app;
+    at_event_t e = at_parser_feed(&s_at, in, &b, &app);
+    switch (e) {
+    case AT_EVT_RING:
+        /* ATS0=1 handles auto-answer — no explicit ATA needed. */
+        break;
+    case AT_EVT_CONNECT:
+        /* AT-string connect: used by VICE/tcpser where DSR is never driven.
+         * On U64, DSR-based connect fires first (below) and this is a no-op
+         * because s_state is already NET_CONNECTED. */
+        /* AUTO/VICE: a result code means we're on tcpser → switch to AT-string
+         * mode and ignore DSR.  U64 mode is forced to DSR and never switches. */
+        if (bbs_cfg.modem_type != MODEM_U64) s_at_mode = TRUE;
+        if (s_state == NET_IDLE) {
+            s_state = NET_CONNECTED;
+            s_at.connected = TRUE;
+            telnet_filter_init(&s_iac);
+        }
+        break;
+    case AT_EVT_NOCARRIER:
+        s_state = NET_DROPPING;
+        break;
+    default: break;
+    }
+
+    if (!app) return 0;
+    if (s_state != NET_CONNECTED) return 0;
+    return telnet_filter_feed(&s_iac, in, out);
+}
+
+bbs_err_t net_rx(void *buf, u16 want, u16 *got)
+{
+    /* DSR-based disconnect (U64 only): only fire if DSR was seen active
+     * during this session.  Under VICE/tcpser DSR is never driven, so
+     * s_dsr_was_active stays FALSE and this check is skipped — disconnect
+     * is handled via AT_EVT_NOCARRIER in process_inbound() instead. */
+    if (s_state == NET_CONNECTED && s_dsr_was_active &&
+        (ACIA_STATUS & 0x40) != 0) {
+        s_state = NET_DROPPING;
+        at_parser_init(&s_at);
+    }
+
+    /* Track DSR going active while connected (marks U64 mode).  Skipped in
+     * AT-string mode: under VICE the DSR bit reads a constant value that would
+     * otherwise mislead the disconnect/connect logic below. */
+    if (!s_at_mode && s_state == NET_CONNECTED && (ACIA_STATUS & 0x40) == 0) {
+        s_dsr_was_active = TRUE;
+    }
+
+    /* NET_DROPPING → NET_IDLE.
+     * U64 mode (s_dsr_was_active): wait for DSR to go inactive, confirming
+     * the TCP session has been torn down, then re-assert DTR.
+     * VICE mode (!s_dsr_was_active): DSR is never meaningful; transition
+     * immediately — NO CARRIER already signals the call is done. */
+    if (s_state == NET_DROPPING) {
+        bool_t dsr_active = ((ACIA_STATUS & 0x40) == 0) ? TRUE : FALSE;
+        if (!dsr_active || !s_dsr_was_active) {
+            s_state = NET_IDLE;
+            ACIA_CMD = CMD_DTR_ON;
+            s_saw_dsr_inactive = TRUE;
+        }
+    }
+
+    /* DSR-based connect (U64): DSR going active after having been seen inactive.
+     * Skipped under VICE (DSR never goes active) — connect is via AT_EVT_CONNECT. */
+    {
+        bool_t dsr_active = ((ACIA_STATUS & 0x40) == 0) ? TRUE : FALSE;
+        if (!dsr_active) s_saw_dsr_inactive = TRUE;
+        /* !s_at_mode: never DSR-connect once result codes are in use (VICE) —
+         * the constant-active DSR reading would spuriously re-connect right
+         * after a NO CARRIER hangup, which is the "stuck connected" bug. */
+        if (!s_at_mode && s_state == NET_IDLE && s_saw_dsr_inactive && dsr_active) {
+            s_state          = NET_CONNECTED;
+            s_at.connected   = TRUE;
+            s_dsr_was_active = TRUE;
+            telnet_filter_init(&s_iac);
+        }
+    }
+
+    u8 *p = (u8 *)buf;
+    *got = 0;
+
+    /* Drain telnet filter outbound replies first. */
+    {
+        u8 reply[TELNET_REPLY_MAX];
+        u8 r = telnet_filter_take_reply(&s_iac, reply, sizeof(reply));
+        for (u8 i = 0; i < r; i++) acia_putc(reply[i]);
+    }
+
+    /* Defensively re-arm the Timer-B RX IRQ.  The KERNAL boot/disk path resets
+     * the $0314 RAM vector to its default handler ($EA31) AND stops Timer B
+     * (CRB $DC0F bit0 clears), so the ISR stops firing and the ring goes cold.
+     * Re-arm whenever either has reverted: vector != our ISR, or Timer B is no
+     * longer running.  net_irq_setup() does the full SEI-guarded rebuild. */
+    if (*(void * volatile *)0x0314 != (void *)acia_irq_isr ||
+        (*(volatile u8 *)0xDC0F & 0x01) == 0) {
+        net_irq_setup();
+    }
+
+    /* Drain the Timer-B-filled RX ring buffer. want=0 is valid: pumps the AT
+     * parser without consuming payload (used by the idle WFC poll).  The ISR
+     * is the sole producer (s_rx_tail); we are the sole consumer (s_rx_head). */
+    while (s_rx_head != s_rx_tail) {
+        if (s_state == NET_CONNECTED && *got >= want) break;
+        u8 in = s_rx_buf[s_rx_head & RX_BUF_MASK];
+        s_rx_head++;
+        u8 outbyte;
+        if (process_inbound(in, &outbyte) && *got < want)
+            p[(*got)++] = outbyte;
+    }
+
+    if (s_state != NET_CONNECTED && *got == 0) return BBS_EAGAIN;
+    return BBS_OK;
+}
+
+bbs_err_t net_tx(const void *buf, u16 n, u16 *sent)
+{
+    if (s_state != NET_CONNECTED) { *sent = 0; return BBS_EAGAIN; }
+    const u8 *p = (const u8 *)buf;
+    for (u16 i = 0; i < n; i++) acia_putc(p[i]);
+    *sent = n;
+    return BBS_OK;
+}
+
+/* Busy-wait n jiffies (~1/60 s each) using the KERNAL jiffy low byte ($A2),
+ * which the IRQ keeps ticking.  Counts ticks (wrap-safe); bails if the jiffy
+ * stops advancing so a dead IRQ can never hang the BBS. */
+static void delay_jiffies(u8 n)
+{
+    u8  last  = *(volatile u8 *)0x00A2;
+    u8  count = 0;
+    u16 guard = 0;
+    while (count < n) {
+        u8 now = *(volatile u8 *)0x00A2;
+        if (now != last) { last = now; count++; guard = 0; }
+        // cppcheck-suppress knownConditionTrueFalse
+        else if (++guard == 0u) break;   /* jiffy frozen → IRQ dead, don't hang */
+    }
+}
+
+bbs_err_t net_disconnect(void)
+{
+    /* VICE/tcpser: raw TCP carries no DTR line, so the DTR drop below won't hang
+     * up the caller (the U64 firmware does, via the DSR/DTR hardware lines).
+     * Issue the Hayes escape + ATH so tcpser closes the TCP itself.  The guard
+     * delays bracket "+++": the escape is only recognized after ~1s of silence
+     * before and after it, otherwise it is passed through as data.  Only in
+     * AT-string mode (VICE); U64/DSR mode hangs up via the DTR drop below. */
+    if (s_at_mode) {
+        delay_jiffies(72);          /* ~1.2 s silence before +++ */
+        acia_puts("+++");
+        delay_jiffies(72);          /* ~1.2 s after +++ → modem enters command mode */
+        acia_puts("ATH\r");
+        delay_jiffies(18);          /* let ATH be processed */
+    }
+
+    /* Drop DTR. U64 sees falling edge and tears down the bridged TCP session.
+     * Transition to NET_DROPPING so the polling loop can observe DSR go inactive,
+     * then re-assert DTR and move to NET_IDLE ready for the next caller.
+     * Under VICE (s_dsr_was_active==FALSE), NET_DROPPING transitions to NET_IDLE
+     * immediately since DSR is never driven. */
+    ACIA_CMD = CMD_DTR_OFF;
+    s_state              = NET_DROPPING;
+    s_saw_dsr_inactive   = FALSE;
+    s_dsr_was_active     = FALSE;
+    at_parser_init(&s_at);
+    telnet_filter_init(&s_iac);
+    /* Flush the RX ring: discard any leftover bytes (old call tail, +++ATH
+     * echoes, a partial result code) so they can't corrupt the next call —
+     * otherwise the stale CONNECT/RING leaks into the next caller's input. */
+    s_rx_head = s_rx_tail;
+    return BBS_OK;
+}
+
+const char *net_term_type(void)
+{
+    return telnet_filter_term(&s_iac);
+}
+
+u8 net_acia_status(void)
+{
+    return ACIA_STATUS;
+}

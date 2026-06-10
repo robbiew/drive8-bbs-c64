@@ -1,0 +1,158 @@
+/* bbs/hal/disk.h - CBM IEC disk I/O abstraction.
+ *
+ * Wraps oscar64 kernalio for all BBS sequential disk access.
+ * Every call takes an explicit device number — no global device state —
+ * to support the multi-device layout (T64_DRIVE_SYSTEM, T64_DRIVE_MSGS, etc.)
+ *
+ * Channel numbers used internally:
+ *   CFG_FNUM_CMD  (15)  drive command / status channel
+ *   CFG_FNUM_DATA  (8)  primary data channel
+ *   CFG_FNUM_AUX   (1)  secondary / aux channel
+ *
+ * Sequential file naming on disk follows CBM DOS convention:
+ *   "drive:name,S,R"  read
+ *   "drive:name,S,W"  write (truncate)
+ *   "drive:name,S,A"  append
+ *   "@drive:name,S,W" write (overwrite existing)
+ *
+ * REL file access is handled by bbs/rel.h, not this module.
+ */
+#ifndef BBS_HAL_DISK_H
+#define BBS_HAL_DISK_H
+
+#include "bbs/types.h"
+#include "bbs/err.h"
+
+typedef enum {
+    DISK_READ   = 0,   /* Sequential read  ("S,R") */
+    DISK_WRITE  = 1,   /* Sequential write ("S,W") — creates or truncates */
+    DISK_APPEND = 2,   /* Sequential append ("S,A") */
+    DISK_OVER   = 3    /* Sequential overwrite ("@x:name,S,W") */
+} disk_mode_t;
+
+/* Last drive error message (set on BBS_EIO from any disk_ call). */
+extern char disk_errmsg[40];
+
+/* -----------------------------------------------------------------------
+ * Sequential file I/O
+ * ----------------------------------------------------------------------- */
+
+/* Open a sequential file on `device`, drive partition `drive`, with the
+ * given CBM `name` (no prefix — drive prefix added automatically).
+ * Returns BBS_OK or BBS_EIO / BBS_ENOTFOUND. */
+bbs_err_t disk_open(u8 device, u8 drive, const char *name, disk_mode_t mode);
+
+/* Close data and command channels. */
+void disk_close(void);
+
+/* Read one byte. Returns -1 on EOF/error. */
+i16 disk_getc(void);
+
+/* Read up to `len` raw bytes into buf. Returns bytes read (0 = EOF, -1 = error).
+ * Uses krnio_read() — one CHKIN + N×CHRIN + one CLRCHN per call.
+ * Much faster than disk_getc() for bulk sequential reads. */
+i16 disk_read(u8 *buf, u8 len);
+
+/* Read a CR-terminated line into buf[len]; strips CR; NUL-terminates.
+ * Returns bytes read, or -1 on EOF/error. */
+i16 disk_gets(char *buf, u8 len);
+
+/* Write one byte. Returns BBS_OK or BBS_EIO. */
+bbs_err_t disk_putc(char c);
+
+/* Write NUL-terminated string. Returns BBS_OK or BBS_EIO. */
+bbs_err_t disk_puts(const char *s);
+
+/* Write string followed by CR (CBM seq-file line terminator). */
+bbs_err_t disk_putline(const char *s);
+
+/* Returns TRUE if the current file is at EOF. */
+bool_t disk_eof(void);
+
+/* -----------------------------------------------------------------------
+ * File management
+ * ----------------------------------------------------------------------- */
+
+/* Scratch (delete) a file. */
+bbs_err_t disk_scratch(u8 device, u8 drive, const char *name);
+
+/* Rename a file. */
+bbs_err_t disk_rename(u8 device, u8 drive,
+                      const char *old_name, const char *new_name);
+
+/* Send a raw command string to the drive command channel (e.g. "I0"). */
+bbs_err_t disk_cmd(u8 device, const char *cmd);
+
+/* Read drive status into disk_errmsg. Returns numeric error code (0=OK). */
+u8 disk_status(u8 device);
+
+/* -----------------------------------------------------------------------
+ * Filename builder helpers
+ * ----------------------------------------------------------------------- */
+
+/* Build bulletin filename: "B.<board>.<post>" into buf. */
+void disk_name_bull(char *buf, u8 board, u16 post);
+
+/* Build mail filename: "E.<msg_id>.<user_id>" into buf. */
+void disk_name_mail(char *buf, u16 msg_id, u8 user_id);
+
+/* Terminal-aware filename builder (Phase B).
+ * Generates candidate filenames with a given prefix:
+ *   <pfx>.<name> <mode> <width>  (most specific)
+ *   <pfx>.<name> <mode>          (mode only)
+ *   <pfx>.<name> <width>         (width only)
+ *   <pfx>.<name>                 (generic fallback)
+ * Prefix conventions: 'g'=gfile, 'm'=menu, 'p'=prompt.
+ *
+ * Parameters:
+ *   out    - output struct receiving 4 candidate names
+ *   prefix - file type prefix char ('g', 'm', 'p', etc.)
+ *   name   - base name (e.g., "login", "main", "msgs")
+ *   mode   - terminal mode (0=PETSCII, 1=ANSI/CP437, 2=ASCII)
+ *   width  - terminal width (40 or 80)
+ */
+typedef struct {
+  char names[4][48];  /* 4 candidates in priority order */
+} term_filename_t;
+
+void disk_build_term_filename(term_filename_t *out,
+                              char prefix,
+                              const char *name,
+                              u8 mode, u8 width);
+
+/* Open a sequential file with fallback chain (Phase B).
+ * Tries candidates in priority order: specific → mode → width → generic.
+ * Uses session terminal settings to determine candidates.
+ *
+ * Parameters:
+ *   device    - disk device
+ *   drive     - partition number
+ *   base_name - base filename (e.g., "login")
+ *   mode      - DISK_READ, DISK_WRITE, etc.
+ *   term_mode - terminal mode from session->term_mode
+ *   term_width- terminal width from session->term_width
+ *
+ * Returns:
+ *   BBS_OK        - file opened and ready
+ *   BBS_ENOTFOUND - no candidate file found
+ *   BBS_EIO       - error opening file
+ */
+bbs_err_t disk_open_with_fallback(u8 device, u8 drive,
+                                  char prefix,
+                                  const char *base_name,
+                                  disk_mode_t mode,
+                                  u8 term_mode, u8 term_width);
+
+/* -----------------------------------------------------------------------
+ * Disk Statistics
+ * ----------------------------------------------------------------------- */
+
+/* Get disk free space in blocks (254-byte blocks, CBM convention).
+ * Returns BBS_OK or BBS_EIO. */
+bbs_err_t disk_free_blocks(u8 device, u16 *out_free);
+
+/* Get disk total capacity in blocks.
+ * Returns BBS_OK or BBS_EIO. */
+bbs_err_t disk_total_blocks(u8 device, u16 *out_total);
+
+#endif /* BBS_HAL_DISK_H */

@@ -1,0 +1,11 @@
+# VICE-specific config overrides (deltas only).
+# Merged over data/config by tools/deploy-vice.sh before assembling the disk.
+# Only keys that differ from the hardware default belong here; everything else
+# (BBS_NAME, SYSOP_NAME, devices, ...) stays single-sourced in data/config.
+#
+# NOTE: 19200 and 38400 program the SAME 6551 ACIA register (0x1F). VICE runs
+# that register at 19200, the U64 at 38400 — so BAUD_RATE here is cosmetic
+# (the number CONFIGURE/WFC shows). MODEM_TYPE=VICE is functional: it forces
+# AT-string carrier detection from boot instead of AUTO's DSR-then-flip path.
+BAUD_RATE=19200
+MODEM_TYPE=VICE
