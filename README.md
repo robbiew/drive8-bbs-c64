@@ -17,7 +17,7 @@ TURBO/64 BBS is a Commodore 64 BBS written in C for the Oscar64 compiler. It tar
 **Hardware / emulator**
 - Commodore 64 with SwiftLink/ACIA cartridge at $DE00, **or** C64 Ultimate (U64) with built-in ACIA, **or** VICE x64sc with tcpser modem bridge
 - Two .D81 disk images (or real 1581/CMD/U64 storage) — one for the BBS, one for message boards (device 9)
-- 16 MB REU required for the message boards. The C64 Ultimate has one built in, and VICE is auto-configured with one (`-reusize 16384`). The BBS boots and lets you log in without a REU, but reading and posting messages need it.
+- 16 MB REU required for the message boards and some other features. The C64 Ultimate has one built in, and VICE can be configured with one. The BBS boots and lets you log in without a REU, but reading and posting messages need it. This will probably be a hard-check in the future.
 
 **Developer Build host (macOS / Linux)**
 - `oscar64` compiler — `bash tools/install-oscar64.sh`
