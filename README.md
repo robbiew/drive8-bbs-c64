@@ -8,21 +8,21 @@ TURBO/64 BBS is a Commodore 64 BBS written in C for the Oscar64 compiler. It tar
 
 **Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards (post/read/list), and the SysOp editor are working. Private mail, file transfers, SysOp chat, polls, and the callers log remain stubbed.
 
-> **Not a developer?** Download `TURBO64-<ver>.d81` and `BOARDS-<ver>.d81` from the [latest GitHub release](../../releases/latest), copy them to your U64 storage, and jump straight to [First-Time Setup — U64, Step 2](#2-mount-and-boot-into-configure). You can skip Requirements and Building entirely.
+> **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to [First-Time Setup](#2-mount-and-boot-into-configure). 
 
 ---
 
 ## Requirements
 
 **Hardware / emulator**
-- Commodore 64 with SwiftLink/ACIA cartridge at $DE00, **or** C64 Ultimate (U64) with built-in ACIA, **or** VICE x64sc with tcpser modem bridge
-- Two .D81 disk images (or real 1581/CMD/U64 storage) — one for the BBS, one for message boards (device 9)
+- Commodore 64 with SwiftLink/ACIA cartridge at $DE00, **or** C64 Ultimate (C64U) with built-in ACIA, **or** VICE x64sc with tcpser modem bridge
+- Two .D81 disk images — one for the BBS, one blank one for message boards (device 9)
 - 16 MB REU required for the message boards and some other features. The C64 Ultimate has one built in, and VICE can be configured with one. The BBS boots and lets you log in without a REU, but reading and posting messages need it. This will probably be a hard-check in the future.
 
 **Developer Build host (macOS / Linux)**
 - `oscar64` compiler — `bash tools/install-oscar64.sh`
 - `c1541` from VICE package (disk assembly)
-- `c64u` deploy tool for U64 — `bash tools/install-c64u.sh`
+- `c64u` deploy tool for C64U — `bash tools/install-c64u.sh`
 - `tcpser` for VICE modem emulation — macOS: `brew install tcpser`
 
 ---
@@ -32,7 +32,7 @@ TURBO/64 BBS is a Commodore 64 BBS written in C for the Oscar64 compiler. It tar
 ```bash
 make all          # compile BOOT and CONFIGURE PRGs
 make disk         # assemble TURBO64-<ver>.d81 from build output + data/
-make disk-with-users  # same, but fetches live user database from U64 first
+make disk-with-users  # same, but fetches live user database from C64U first
 ```
 
 Output: `build/c64/BOOT-<ver>.prg`, `build/c64/CONFIGURE-<ver>.prg`, `build/c64/TURBO64-<ver>.d81`
@@ -41,7 +41,7 @@ See [`tools/README.md`](tools/README.md) for the full reference covering `build.
 
 ---
 
-## First-Time Setup — U64
+## First-Time Setup — C64U
 
 ### 1. Deploy the BBS disk
 
@@ -52,7 +52,7 @@ tools/deploy-u64.sh -l sd      # deploys to /SD/BBS/
 
 ### 2. Mount and boot into CONFIGURE
 
-On the U64, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
+On the C64U, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
 
 ```
 LOAD "CONFIGURE-0.1.0",8
@@ -97,7 +97,7 @@ The BBS reads message boards from a separate disk on `DEV_MSGS` (default device 
 
 #### Option A — blank disk (start fresh)
 
-Format a blank .D81 and mount it on U64 device 9. Then in CONFIGURE → **M — MSG AREAS → C — CREATE**, add boards. Each board needs a title, read level, and write level. The `BOARDS DIR` REL file and per-board index files are created automatically on first post.
+Format a blank .D81 and mount it on C64U device 9. Then in CONFIGURE → **M — MSG AREAS → C — CREATE**, add boards. Each board needs a title, read level, and write level. The `BOARDS DIR` REL file and per-board index files are created automatically on first post.
 
 #### Option B — example seed disk (3 pre-configured boards)
 
@@ -107,9 +107,9 @@ Format a blank .D81 and mount it on U64 device 9. Then in CONFIGURE → **M — 
 tools/deploy-u64.sh --boards   # uploads BOARDS-<ver>.D81 to /BBS/
 ```
 
-Then mount `BOARDS-<ver>.D81` on U64 device 9.
+Then mount `BOARDS-<ver>.D81` on C64U device 9.
 
-To refresh the seed from a running U64 (e.g. after adding boards via CONFIGURE):
+To refresh the seed from a running C64U (e.g. after adding boards via CONFIGURE):
 
 ```bash
 tools/extract-boards.sh        # saves live BOARDS-<ver>.D81 → data/boards-seed.d81
@@ -177,7 +177,7 @@ LOAD "CONFIGURE-0.1.0",8
 RUN
 ```
 
-Follow the same steps as U64: Init Files, then Config. For VICE testing a blank boards disk is usually sufficient — CONFIGURE → M — MSG AREAS to create a board, then mount a formatted .D81 on device 9 in VICE.
+Follow the same steps as C64U: Init Files, then Config. For VICE testing a blank boards disk is usually sufficient — CONFIGURE → M — MSG AREAS to create a board, then mount a formatted .D81 on device 9 in VICE.
 
 ### 4. Connect as a caller
 
@@ -486,7 +486,7 @@ the BBS — the menu, the message bases, etc.). **F1** (SysOp chat) and **F3**
 - **Scroll pacing.** Scrolling shifts ~7 KB of bitmap, so on a stock 1 MHz C64
   a fast full-screen scroll paces the BBS's output noticeably slower (the
   caller still receives everything; it just streams a bit slower during heavy
-  scrolling). It is much snappier on an accelerated machine like the U64.
+  scrolling). It is much snappier on an accelerated machine like the C64U.
 - **Bottom row.** The status bar occupies row 24, so the caller's 25th row is
   not shown in the spy.
 
@@ -505,7 +505,7 @@ Run CONFIGURE → I Init Files. The REL file was never created.
 Record 1 (SysOp) is missing. Run Init Files again.
 
 **`ERROR: MODEM INIT FAILED`**
-ACIA not detected at $DE00. On U64, verify ACIA/SwiftLink is enabled. In VICE, verify `tools/deploy-vice.sh` launched with `-acia1` flags.
+ACIA not detected at $DE00. On C64U, verify ACIA/SwiftLink is enabled. In VICE, verify `tools/deploy-vice.sh` launched with `-acia1` flags.
 
 **VICE: telnet connection refused**
 `tcpser` may not have started. Check that `deploy-vice.sh` output shows `tcpser launched`.
@@ -617,7 +617,7 @@ Real-hardware and emulator coverage is critical. Specifically needed:
 
 - **SD2IEC** — the BBS uses CBM DOS REL files; SD2IEC REL support has known edge cases. Reports of what works and what does not are very helpful.
 - **VICE** — regression testing after each feature addition; `tools/deploy-vice.sh` makes this fast.
-- **Real 1541/1571/1581** — timing and IEC bus behaviour differs from emulation and the U64's built-in drive.
+- **Real 1541/1571/1581** — timing and IEC bus behaviour differs from emulation and the C64U's built-in drive.
 - **Terminal clients** — SyncTerm, PuTTY, netcat, and real C64 terminals over a nullmodem or SwiftLink.
 
 File issues on GitHub with hardware/firmware versions, a description of what you did, and the exact error or unexpected behaviour.
