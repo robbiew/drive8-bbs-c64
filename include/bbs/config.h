@@ -18,10 +18,9 @@
 /* ACIA modem port (6551 SwiftLink at $DE00). Fixed 9600 8N1 via U64. */
 #define CFG_ACIA_BASE       0xDE00
 
-/* Maximum number of registered users */
-#define CFG_MAX_USERS       200
-
-/* Maximum number of bulletin boards */
+/* Maximum number of bulletin boards.
+ * (User capacity is USERS_MAX in records.h — a REL-file pre-allocation
+ * constraint, not a tunable default.) */
 #define CFG_MAX_BOARDS      20
 
 /* Maximum number of polls/votes */

@@ -157,7 +157,7 @@ typedef struct {
  *
  * Stored in "USR.PTR,L,40". Record number = user ID.
  * hwm[board_id - 1] = last msg_id read on that board (0 = never visited).
- * Pre-allocated for CFG_MAX_USERS users at disk-init.
+ * Pre-allocated for USERS_MAX users at disk-init.
  */
 typedef struct {
   u16  hwm[CFG_MAX_BOARDS];  /* CFG_MAX_BOARDS=20 * 2 bytes = 40 bytes */
