@@ -79,10 +79,10 @@ int ui_list_page_start(const ui_list_state_t *state);
 int ui_list_page_end(const ui_list_state_t *state);
 
 /* Edit functions - edit.c */
-/* Read one line of input into buf (capacity must be >= max+1). Handles
- * DEL/BS echo and line-buffered getchar. Applies toupper only when
- * case_mode == UI_CASE_UPPER. Does NOT print a prompt or trailing newline.
- * Returns the final length. */
+/* Read one line of input into buf (capacity must be >= max+1). Raw getch()
+ * input with manual echo: UPPER fields (case_mode == UI_CASE_UPPER) are
+ * touppered before echo, so they display uppercase while typing. Handles
+ * DEL/BS, echoes the terminating newline. Returns the final length. */
 int ui_read_line(char *buf, int max, u8 case_mode);
 int ui_edit_form(const char *title, ui_edit_field_t *fields, int count);
 void ui_edit_field_single(ui_edit_field_t *field);

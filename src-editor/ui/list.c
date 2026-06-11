@@ -46,7 +46,7 @@ int ui_list_paged(const char *title, const ui_list_item_t *items, int count, int
     ui_screen_header(title);
     printf("NO ITEMS TO DISPLAY.\n\n");
     printf("PRESS ANY KEY...\n");
-    getchar();
+    getch();
     return -1;
   }
   

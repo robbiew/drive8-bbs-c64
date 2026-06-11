@@ -237,20 +237,7 @@ static void users_do_create(u8 device)
 
   /* -- Handle -- */
   printf("HANDLE (MAX 15 CHARS): ");
-  len = 0;
-  memset(handle_buf, 0, sizeof(handle_buf));
-  for (;;) {
-    ch = getchar();
-    if (ch == 13 || ch == '\n') { printf("\n"); break; }
-    if (ch == 20 || ch == 8) {
-      if (len > 0) { len--; handle_buf[len] = 0; printf("\x08 \x08"); }
-      continue;
-    }
-    if (ch >= 32 && ch <= 126 && len < 15) {
-      ch = (char)toupper((unsigned char)ch);
-      handle_buf[len++] = ch;
-    }
-  }
+  len = ui_read_line(handle_buf, 15, UI_CASE_UPPER);
   if (len == 0) { ui_error("HANDLE CANNOT BE EMPTY."); return; }
   if (user_by_handle(handle_buf, device) != 0) {
     ui_error("HANDLE ALREADY IN USE.");
@@ -262,8 +249,8 @@ static void users_do_create(u8 device)
   printf("0=BANNED 1=NEW   2=USER\n");
   printf("3=POWER  4=CO    5=SYSOP\n");
   printf("LEVEL (0-5): ");
-  ch = getchar();
-  printf("\n");
+  ch = getch();
+  putchar(ch); printf("\n");
   if (ch < '0' || ch > '5') { ui_error("INVALID ACCESS LEVEL."); return; }
   s_edit_access[0] = ch;
   s_edit_access[1] = 0;
@@ -273,14 +260,15 @@ static void users_do_create(u8 device)
   len = 0;
   memset(credits_str, 0, sizeof(credits_str));
   for (;;) {
-    ch = getchar();
+    ch = getch();
     if (ch == 13 || ch == '\n') { printf("\n"); break; }
     if (ch == 20 || ch == 8) {
-      if (len > 0) { len--; credits_str[len] = 0; printf("\x08 \x08"); }
+      if (len > 0) { len--; credits_str[len] = 0; printf("\x14"); }
       continue;
     }
     if (ch >= '0' && ch <= '9' && len < 3) {
       credits_str[len++] = ch;
+      putchar(ch);
     }
   }
 
@@ -288,16 +276,16 @@ static void users_do_create(u8 device)
   printf("TERM MODE:\n");
   printf("0=PETSCII 1=ANSI 2=ASCII\n");
   printf("MODE (0-2): ");
-  ch = getchar();
-  printf("\n");
+  ch = getch();
+  putchar(ch); printf("\n");
   if (ch < '0' || ch > '2') ch = '0';
   s_edit_termmode[0] = ch;
   s_edit_termmode[1] = '\0';
 
   /* -- Columns -- */
   printf("COLUMNS (4=40, 8=80): ");
-  ch = getchar();
-  printf("\n");
+  ch = getch();
+  putchar(ch); printf("\n");
   if (ch == '8') { s_edit_termwidth[0]='8'; }
   else           { s_edit_termwidth[0]='4'; }
   s_edit_termwidth[1] = '0';
@@ -305,8 +293,8 @@ static void users_do_create(u8 device)
 
   /* -- Rows -- */
   printf("ROWS (4=24, 5=25): ");
-  ch = getchar();
-  printf("\n");
+  ch = getch();
+  putchar(ch); printf("\n");
   if (ch == '5') { s_edit_termrows[1]='5'; }
   else           { s_edit_termrows[1]='4'; }
   s_edit_termrows[0] = '2';
@@ -564,20 +552,16 @@ static void users_do_edit(u8 device)
     } else {
       /* -- Reset password -- */
       char pw[5];
-      int pwlen = 0;
+      int pwlen;
       char pwch;
 
       ui_screen_header("RESET PASSWORD");
       printf("USER: %s\n\n", user.handle);
-      printf("NEW PW (MAX 4 CHARS):\n");
+      printf("NEW PW (MAX 4 CHARS): ");
 
-      memset(pw, 0, sizeof(pw));
-      for (;;) {
-        pwch = getchar();
-        if (pwch == 13 || pwch == '\n') { printf("\n"); break; }
-        if ((pwch == 20 || pwch == 8) && pwlen > 0) { pwlen--; pw[pwlen] = 0; printf("\x08 \x08"); continue; }
-        if (pwch >= 32 && pwch <= 126 && pwlen < 4) { pw[pwlen++] = (char)toupper((unsigned char)pwch); printf("*"); }
-      }
+      /* No masking — local sysop console, and seeing the password beats
+       * guessing what got registered. */
+      pwlen = ui_read_line(pw, 4, UI_CASE_UPPER);
 
       if (pwlen == 0) { ui_error("PASSWORD CANNOT BE EMPTY."); continue; }
 

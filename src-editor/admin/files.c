@@ -88,15 +88,15 @@ static bbs_err_t areas_pick(const char *prompt, u8 device, ud_area_record_t *out
     ui_print_centered(prompt);
     printf("# TO SELECT: ");
     ch = (char)toupper((unsigned char)getch());
-    printf("\n");
 
-    if (ch == 'Q') return BBS_ENOTFOUND;
-    if (ch == 'N') { if (page < total_pages - 1) page++; continue; }
-    if (ch == 'P') { if (page > 0) page--; continue; }
+    if (ch == 'Q') { printf("\n"); return BBS_ENOTFOUND; }
+    if (ch == 'N') { printf("\n"); if (page < total_pages - 1) page++; continue; }
+    if (ch == 'P') { printf("\n"); if (page > 0) page--; continue; }
 
     if (ch >= '1' && ch <= '6') {
       u8 sel = (u8)(ch - '0');
       if (sel <= s_apage_count) {
+        putchar(ch); printf("\n");
         *out = s_apage[sel - 1];
         return BBS_OK;
       }
@@ -104,12 +104,13 @@ static bbs_err_t areas_pick(const char *prompt, u8 device, ud_area_record_t *out
 
     /* Multi-digit number */
     if (ch >= '0' && ch <= '9') {
+      putchar(ch);
       nbuf[0] = ch; nlen = 1;
       for (;;) {
-        ch = getchar();
+        ch = getch();
         if (ch == 13 || ch == '\n') { printf("\n"); break; }
-        if (ch == 20 && nlen > 0) { nlen--; printf("\x08 \x08"); continue; }
-        if (ch >= '0' && ch <= '9' && nlen < 3) { nbuf[nlen++] = ch; }
+        if (ch == 20 && nlen > 0) { nlen--; printf("\x14"); continue; }
+        if (ch >= '0' && ch <= '9' && nlen < 3) { nbuf[nlen++] = ch; putchar(ch); }
       }
       nbuf[nlen] = '\0';
       if (nlen > 0) {
@@ -189,13 +190,13 @@ static void areas_do_create(u8 device)
 
   /* Read level */
   printf("MIN DOWNLOAD LEVEL (0-5): ");
-  ch = getchar(); printf("\n");
+  ch = getch(); putchar(ch); printf("\n");
   if (ch < '0' || ch > '5') { ui_error("INVALID LEVEL."); return; }
   s_edit_read[0] = ch; s_edit_read[1] = 0;
 
   /* Upload level */
   printf("MIN UPLOAD LEVEL (0-5): ");
-  ch = getchar(); printf("\n");
+  ch = getch(); putchar(ch); printf("\n");
   if (ch < '0' || ch > '5') { ui_error("INVALID LEVEL."); return; }
   s_edit_upload[0] = ch; s_edit_upload[1] = 0;
 

@@ -39,7 +39,7 @@ make disk-with-users  # same, but fetches live user database from C64U first
 
 Output: `build/c64/BOOT-<ver>.prg`, `build/c64/CONFIGURE-<ver>.prg`, `build/c64/TURBO64-<ver>.d81`
 
-See [`tools/README.md`](tools/README.md) for the full reference covering `build.sh`, `deploy-vice.sh`, `deploy-u64.sh`, `extract-users.sh`, `extract-boards.sh`, and the other development scripts.
+See [`tools/README.md`](tools/README.md) for the full reference.
 
 ---
 
@@ -101,7 +101,7 @@ Format a blank .D81 and mount it on C64U device 9. Then in CONFIGURE → **M —
 
 Then mount `BOARDS-<ver>.D81` on C64U device 9.
 
-> ⚠️ The message index format uses 48-byte REL records. 
+> ⚠️ The message index format uses 63-byte REL records. 
 
 ### 5. Run the BBS
 
@@ -224,7 +224,7 @@ CONFIGURE MAIN MENU
 
 ## Message Boards
 
-Manage boards in CONFIGURE → **M — MSG AREAS** (List, Create, Edit, Delete,
+Manage boards in CONFIGURE → **M — MSG BOARDS** (List, Create, Edit, Delete,
 Maintenance).
 
 **Creating a board.** Create asks only for a **title**, then drops you into the
@@ -246,7 +246,7 @@ a field:
 | `M` | MAX MSG | Per-board message limit (`DEFAULT` = use the system default) |
 | `D` | MAX DAYS | Age-prune limit in days (`OFF` = no age pruning) |
 
-Press `S` to save, `Q`/`C` to cancel.
+Press `S` to save, `C` to cancel.
 
 **Size and age limits.** Two independent limits keep a board from growing without
 bound (compile-time defaults in `include/bbs/config.h`):
@@ -284,28 +284,42 @@ Files on `TURBO64-<ver>.d81` (device 8, system device):
 |----------|------|-------------|
 | `boot-<ver>` | PRG | BBS runtime |
 | `configure-<ver>` | PRG | SysOp editor |
+| `ovl_msgs` | PRG | Bulletin-board overlay |
+| `ovl_wfc` | PRG | WFC (waiting-for-call) overlay |
 | `config` | SEQ | BBS configuration (key=value) |
+| `access` | SEQ | Access levels (6 lines, one per level 0–5) |
 | `usr log` | REL | User database (30 bytes/record, 100 slots) |
 | `usr prof` | REL | Extended user profiles (86 bytes/record, 100 slots) |
-| `callers` | SEQ | Callers log (fixed-width lines; created by Init Files) |
+| `usr day` | REL | Per-user daily counters (8 bytes/record, 100 slots) |
+| `callers` | SEQ | Callers log (fixed-width lines) |
+| `status` | SEQ | SysOp status line |
+| `syscnt` | SEQ | System call counters |
 | `g.login` | SEQ | Login art — generic fallback |
 | `g.login 0` | SEQ | Login art — PETSCII |
-| `g.login 1` | SEQ | Login art — ANSI/CP437 |
-| `g.login 2` | SEQ | Login art — ASCII |
+| `g.login 1 80` | SEQ | Login art — ANSI/CP437 80-col |
+| `g.login 2 80` | SEQ | Login art — ASCII 80-col |
 | `g.newuser` | SEQ | New user screen — generic fallback |
-| `g.newuser 0` | SEQ | New user screen — PETSCII |
 | `g.term` | SEQ | Terminal selection menu |
 | `m.main` | SEQ | Main menu body — generic fallback |
 | `m.main 0` | SEQ | Main menu body — PETSCII |
-| `p.main 0` | SEQ | Main menu prompt — PETSCII |
+| `m.main 1 80` | SEQ | Main menu body — ANSI/CP437 80-col |
+| `m.msgs` | SEQ | Messages menu body — generic fallback |
+| `m.msgs 1 80` | SEQ | Messages menu body — ANSI/CP437 80-col |
+| `m.read` | SEQ | Read-message display — generic fallback |
+| `p.main` | SEQ | Main menu prompt — generic fallback |
+| `p.main 1 80` | SEQ | Main menu prompt — ANSI/CP437 80-col |
+| `p.msgs` | SEQ | Messages menu prompt |
+| `p.read` | SEQ | Read-message prompt — generic fallback |
+| `p.read 1 80` | SEQ | Read-message prompt — ANSI/CP437 80-col |
 
 Files on `BOARDS-<ver>.d81` (device 9, message device):
 
 | Filename | Type | Description |
 |----------|------|-------------|
-| `boards dir` | REL | Board directory (44 bytes/record, up to 20 boards) |
-| `b<n>.idx` | REL | Message index for board N (48 bytes/record, up to 200 msgs) |
+| `boards` | REL | Board directory (44 bytes/record; `CFG_MAX_BOARDS` boards, default 20) |
+| `b<n>.idx` | REL | Message index for board N (63 bytes/record, up to 200 msgs) |
 | `b<n>.txt` | SEQ | Message body text for board N |
+| `usr ptr` | REL | Per-user last-read pointers (`CFG_MAX_BOARDS` × 2 bytes/record, 100 slots) |
 
 ### Gfile Naming Convention
 
@@ -365,85 +379,38 @@ Example `p.read`:
 
 ## SysOp "Spy" Mode
 
-While a caller is online, the SysOp's local C64 screen mirrors what the caller
-sees, with a status panel anchored to the bottom rows showing who they are and
-offering quick actions. The view adapts to the caller's terminal: 40-column
-callers get a native PETSCII spy, and 80-column callers get a software
-80-column "soft" view.
+The local C64 screen mirrors the caller's session, with a status bar showing handle, access level, time online, and action keys. The view adapts to the caller's terminal type.
 
-### 40-column spy (default)
+### 40-column spy (PETSCII callers)
 
-For PETSCII callers, the caller's screen is mirrored directly
-into the C64's 40-column text screen using the C64 character ROM, so the full
-character set — including PETSCII graphics — renders faithfully. A five-row
-user-details panel (rows 20–24) shows handle, access level, real name, call
-count, location, and time online, with quick-action key labels.
+The caller's output is rendered directly on the C64's 40-column text screen using the C64 character ROM. A five-row panel (rows 20–24) shows user details and quick-action keys.
 
-The 40-column spy is **locked to the uppercase/graphics charset** for the whole
-session — it does **not** follow a caller who switches their terminal to the
-lowercase/text charset. This keeps PETSCII menus and art (authored in the
-uppercase/graphics charset) and the status panel rendering in correct case, and
-keeps the panel from flickering between cases as menus load. The trade-off: the
-C64 has only one global charset, so genuinely mixed-case text a lowercase-mode
-caller is reading (e.g. a message body) shows in graphics glyphs on the spy.
-ANSI/ASCII callers are unaffected — they use the 80-column soft view below,
-which renders its own font and preserves mixed case.
+The spy is **locked to the uppercase/graphics charset** for the entire session — it does not follow callers who switch to lowercase/text. This keeps PETSCII art and the status panel rendering correctly, but means mixed-case text (e.g. a message body) appears as graphics glyphs on the spy. ANSI/ASCII callers are unaffected since they use the 80-column view below.
 
 ### 80-column "soft" view (ANSI / ASCII callers)
 
-The C64's VIC-II has no hardware 80-column mode (that's a C128/VDC feature), so
-for 80-column callers TURBO/64 paints a **software** 80-column display: the spy
-zone is rendered into a VIC-II hi-res bitmap using a custom 4×6-pixel font,
-giving 80 characters across on a stock C64. This lets the SysOp watch an
-ANSI/CP437 or plain-ASCII caller's 80-column session — menus,
-message reading, file listings — in their true layout.
+The VIC-II has no hardware 80-column mode, so TURBO/64 renders a **software 80-column display** into a hi-res bitmap using a custom 4×6-pixel font — 80 columns on a stock C64. This mode is **automatic** when an REU is detected at boot and the caller is 80-column; without an REU it falls back to the 40-column spy.
 
-This mode is **automatic** and requires a **REU** (RAM Expansion Unit, e.g. the
-C64 Ultimate's built-in REU): when an REU is detected at boot and the caller's
-terminal is 80-column, the soft view is used; otherwise the spy falls back to
-the 40-column path. 
+Internals: VIC switches to hi-res bitmap mode (bank 3, bitmap at `$E000` under KERNAL ROM, colour RAM at `$C000`). A small ANSI parser in the overlay interprets printable text, CR/LF, cursor positioning (`ESC[H`/`ESC[r;cH`/`ESC[A`–`D`), screen clear (`ESC[2J`), and SGR colours (mapped to the VIC palette), rendering into the bitmap. Caller content occupies rows 0–23; row 24 is a reverse-video status bar (handle · access level · time · action keys) that stays visible and ticks once per second.
 
-**How it works (brief).** When an 80-column session starts, the VIC switches to
-hi-res bitmap mode (bank 3): the bitmap lives at `$E000` (under KERNAL ROM,
-where the VIC still reads it as RAM; the CPU banks KERNAL out for the brief
-glyph writes), and the per-cell colour RAM at `$C000`. A small ANSI parser
-interprets the byte stream the BBS sends to the caller — printable text, CR/LF,
-cursor positioning (`ESC[H`, `ESC[r;cH`, `ESC[A`–`D`), screen clear (`ESC[2J`),
-and SGR colours (`ESC[…m`, mapped to the VIC palette) — and renders it into the
-bitmap. Caller content occupies rows 0–23; row 24 is a reverse-video status bar
-(handle · access level · time online · action-key hints) that stays visible
-wherever the caller navigates and ticks once per second. Content scrolls when
-it passes the bottom row, mirroring the caller's terminal.
+### SysOp action keys
 
-**SysOp action keys.** **F2** drops the current caller (works from anywhere in
-the BBS — the menu, the message bases, etc.). **F1** (SysOp chat) and **F3**
-(change access level) are scaffolded but not yet wired.
+| Key | Action |
+|-----|--------|
+| **F2** | Drop the current caller (works from anywhere) |
+| **F1** | SysOp chat (scaffolded, not yet wired) |
+| **F3** | Change access level (scaffolded, not yet wired) |
 
-**Limitations and drawbacks.**
+### 80-column limitations
 
-- **Requires an REU.** No REU → 80-column callers are shown on the 40-column
-  spy (clipped to 40 columns).
-- **ASCII byte-stream only.** Only ANSI/CP437 and ASCII callers use
-  the soft view. PETSCII callers — even a C128 in 80-column mode — stay on the
-  40-column spy, because the bitmap parser speaks the ANSI/ASCII byte stream,
-  not PETSCII control codes.
-- **Approximate font.** The 4×6 font covers ASCII `0x20`–`0x7E`. CP437
-  box-drawing characters are approximated to `+ - | #`, so framed ANSI screens
-  render as recognizable but simplified line art, and fine graphics are lost.
-- **Two colours per cell.** Hi-res bitmap mode allows one foreground colour per
-  8×8 cell, and each cell holds two characters — so two adjacent characters of
-  different colours share the rightmost one's colour. Background is always
-  black (ANSI background colours are ignored).
-- **Scroll pacing.** Scrolling shifts ~7 KB of bitmap, so on a stock 1 MHz C64
-  a fast full-screen scroll paces the BBS's output noticeably slower (the
-  caller still receives everything; it just streams a bit slower during heavy
-  scrolling). It is much snappier on an accelerated machine like the C64U.
-- **Bottom row.** The status bar occupies row 24, so the caller's 25th row is
-  not shown in the spy.
+- **REU required.** No REU → 80-column callers shown on 40-column spy (clipped to 40 columns).
+- **ANSI/ASCII only.** PETSCII callers always use the 40-column spy — the bitmap parser doesn't speak PETSCII.
+- **Approximate font.** 4×6 font covers ASCII `0x20`–`0x7E`. CP437 box-drawing chars map to `+ - | #`; fine graphics are lost.
+- **Two colours per cell.** One foreground colour per 8×8 cell (two chars), so adjacent differently-coloured characters share the rightmost colour. Background is always black.
+- **Scroll pacing.** Shifting ~7 KB of bitmap per scroll; noticeably slower on a stock 1 MHz C64, snappy on C64U. Caller output is not delayed — only the spy rendering slows.
+- **Bottom row.** Status bar occupies row 24; the caller's row 25 is not shown.
 
-**Note:** the 80-column soft view is functional but has **not been extensively
-tested**, particularly with heavy ANSI art. Expect rough edges with complex
-colour/graphics screens. Any help here would be appreciated!
+> **Note:** The 80-column soft view is functional but not extensively tested with complex ANSI art. Help appreciated!
 
 ---
 
@@ -469,9 +436,6 @@ BOOT auto-detects terminal type via backspace probe. Use a terminal that respond
 
 **`M` from main menu says NO BOARDS**
 Device 9 is not mounted or has no boards configured. Mount `BOARDS-<ver>.D81` on device 9 and verify `DEV_MSGS=9` in config. If the disk is blank, use CONFIGURE → M — MSG AREAS to create at least one board.
-
-**Messages post fails / index errors**
-A `b<n>.idx` file may have been created with 32-byte records (old format). Scratch the affected `b<n>.idx` on device 9 — the BBS recreates it with 48-byte records on the next post.
 
 ---
 

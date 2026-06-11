@@ -17,16 +17,21 @@ int ui_read_line(char *buf, int max, u8 case_mode)
 {
   int len = 0;
   memset(buf, 0, (unsigned)(max + 1));
+  /* getch() (GETIN) with manual echo, not getchar() (CHRIN): the CHRIN screen
+   * editor echoes raw keys before the program sees them, so UPPER fields
+   * would display lowercase while typing. \x14 = PETSCII DEL erases the
+   * echoed char (PETSCII has no ASCII \x08 backspace). */
   for (;;) {
-    char ch = getchar();
-    if (ch == '\n' || ch == 13) break;
+    char ch = getch();
+    if (ch == '\n' || ch == 13) { putchar('\n'); break; }
     if (ch == 20 || ch == 8) {
-      if (len > 0) { len--; buf[len] = 0; printf("\x08 \x08"); }
+      if (len > 0) { len--; buf[len] = 0; printf("\x14"); }
       continue;
     }
     if (len < max && ch >= 32 && ch <= 126) {
       if (case_mode == UI_CASE_UPPER) ch = (char)toupper((unsigned char)ch);
       buf[len++] = ch;
+      putchar(ch);
     }
   }
   buf[len] = '\0';
@@ -42,12 +47,7 @@ void ui_edit_field_single(ui_edit_field_t *field)
   max_edit = (field->max_len > UI_FIELD_MAX_LEN) ? UI_FIELD_MAX_LEN : field->max_len;
 
   for (;;) {
-    /*
-     * End the prompt with \n so the user's input starts on a FRESH LINE
-     * at column 0. C64 CHRIN (screen editor) reads back from the start of
-     * the physical line where the cursor sits when RETURN is pressed.
-     */
-    printf("%d CHARS MAX.\nNEW %s:\n", max_edit, field->label);
+    printf("%d CHARS MAX.\nNEW %s: ", max_edit, field->label);
 
     len = ui_read_line(buffer, max_edit, field->case_mode);
 
@@ -88,9 +88,8 @@ void ui_select_field(const char *label, char *value, int max_len,
       printf(" [%d] %s\n",   i + 1, options[i]);
   }
   printf("CHOICE (RETURN=KEEP): ");
-  ch = getchar();
-  /* drain the trailing RETURN left in CHRIN buffer */
-  { char drain; do { drain = getchar(); } while (drain != '\n' && drain != 13); }
+  ch = getch();
+  if (ch >= '1' && ch < '1' + num_options) putchar(ch);
   printf("\n");
   if (ch >= '1' && ch < '1' + num_options) {
     sel = ch - '1';

@@ -44,7 +44,7 @@ bbs_err_t vote_by_index(u8 n, vote_record_t *out_rec, u8 device);
  * Load a vote record by vote ID.
  *
  * Args:
- *   id       — vote ID (1–20)
+ *   id       — vote ID (1–CFG_MAX_VOTES)
  *   out_rec  — pointer to vote_record_t to populate
  *   device   — CBM device number
  *
@@ -74,7 +74,7 @@ bbs_err_t vote_save(const vote_record_t *rec, u8 device);
  * vote_create()
  *
  * Create a new poll/vote question.
- * Assigns the next available vote ID (1–20).
+ * Assigns the next available vote ID (1–CFG_MAX_VOTES).
  *
  * Args:
  *   question  — poll question (max 24 chars)
@@ -83,7 +83,7 @@ bbs_err_t vote_save(const vote_record_t *rec, u8 device);
  *
  * Returns:
  *   BBS_OK         — vote created
- *   BBS_EFULL      — vote table full (20 votes max)
+ *   BBS_EFULL      — vote table full (CFG_MAX_VOTES max)
  *   BBS_EIO        — disk I/O error
  */
 bbs_err_t vote_create(const char *question, u8 device, u8 *out_id);

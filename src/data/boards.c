@@ -5,6 +5,7 @@
  */
 
 #include "bbs/boards.h"
+#include "bbs/config.h"
 #include "bbs/cfg.h"
 #include "bbs/rel.h"
 #include <string.h>
@@ -98,7 +99,7 @@ u8 board_count(u8 device) {
   }
 
   rel_position(h, 1);
-  for (rec_num = 1; rec_num <= 20; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_BOARDS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_BOARD_DIR);
     err = rel_read(h, (void *)buf, RECORD_SIZE_BOARD_DIR, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -108,7 +109,7 @@ u8 board_count(u8 device) {
       memset(buf + got, 0, RECORD_SIZE_BOARD_DIR - got);
     }
     board_unpack(&rec, buf);
-    if (rec.id != 0 && rec.id <= 20 && !title_is_deleted(rec.title)) {
+    if (rec.id != 0 && rec.id <= CFG_MAX_BOARDS && !title_is_deleted(rec.title)) {
       count++;
     }
   }
@@ -121,7 +122,7 @@ bbs_err_t board_by_index(u8 n, board_dir_record_t *out_rec, u8 device) {
   bbs_err_t err;
   rel_handle_t h;
   u8 buf[RECORD_SIZE_BOARD_DIR];
-  u8 ids[20], orders[20];
+  u8 ids[CFG_MAX_BOARDS], orders[CFG_MAX_BOARDS];
   u8 rec_num, count = 0, got;
   u8 c, o, target;
   board_dir_record_t tmp;
@@ -137,7 +138,7 @@ bbs_err_t board_by_index(u8 n, board_dir_record_t *out_rec, u8 device) {
 
   /* Pass 1: collect (id, display_order) of every valid board. */
   rel_position(h, 1);
-  for (rec_num = 1; rec_num <= 20; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_BOARDS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_BOARD_DIR);
     err = rel_read(h, (void *)buf, RECORD_SIZE_BOARD_DIR, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -147,7 +148,7 @@ bbs_err_t board_by_index(u8 n, board_dir_record_t *out_rec, u8 device) {
       memset(buf + got, 0, RECORD_SIZE_BOARD_DIR - got);
     }
     board_unpack(&tmp, buf);
-    if (tmp.id != 0 && tmp.id <= 20 && !title_is_deleted(tmp.title)) {
+    if (tmp.id != 0 && tmp.id <= CFG_MAX_BOARDS && !title_is_deleted(tmp.title)) {
       ids[count]    = tmp.id;
       orders[count] = tmp.display_order;
       count++;
@@ -184,7 +185,7 @@ bbs_err_t board_by_id(u8 id, board_dir_record_t *out_rec, u8 device) {
   u8 got;
   u8 buf[RECORD_SIZE_BOARD_DIR];
 
-  if (id == 0 || id > 20) {
+  if (id == 0 || id > CFG_MAX_BOARDS) {
     return BBS_EBADARG;
   }
 
@@ -229,7 +230,7 @@ bbs_err_t board_save(const board_dir_record_t *rec, u8 device) {
   rel_handle_t h;
   u8 buf[RECORD_SIZE_BOARD_DIR];
 
-  if (!rec || rec->id == 0 || rec->id > 20) {
+  if (!rec || rec->id == 0 || rec->id > CFG_MAX_BOARDS) {
     return BBS_EBADARG;
   }
 
@@ -268,7 +269,7 @@ bbs_err_t board_create(const char *title, u8 read_level, u8 write_level, u8 devi
     return err;
   }
 
-  for (rec_num = 1; rec_num <= 20; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_BOARDS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_BOARD_DIR);
     err = rel_read(h, (void *)buf, RECORD_SIZE_BOARD_DIR, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -278,14 +279,14 @@ bbs_err_t board_create(const char *title, u8 read_level, u8 write_level, u8 devi
       memset(buf + got, 0, RECORD_SIZE_BOARD_DIR - got);
     }
     board_unpack(&rec, buf);
-    if (rec.id != 0 && rec.id <= 20 && rec.id > highest_id) {
+    if (rec.id != 0 && rec.id <= CFG_MAX_BOARDS && rec.id > highest_id) {
       highest_id = rec.id;
     }
   }
 
   rel_close(h);
 
-  if (highest_id >= 20) {
+  if (highest_id >= CFG_MAX_BOARDS) {
     return BBS_EFULL;
   }
 
@@ -305,7 +306,7 @@ bbs_err_t board_delete(u8 board_id, u8 device) {
   bbs_err_t err;
   board_dir_record_t rec;
 
-  if (board_id == 0 || board_id > 20) {
+  if (board_id == 0 || board_id > CFG_MAX_BOARDS) {
     return BBS_EBADARG;
   }
 

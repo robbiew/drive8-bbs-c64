@@ -5,6 +5,7 @@
  */
 
 #include "bbs/file_areas.h"
+#include "bbs/config.h"
 #include "bbs/cfg.h"
 #include "bbs/rel.h"
 #include <string.h>
@@ -90,7 +91,7 @@ u8 file_area_count(u8 device) {
   }
 
   /* Sequential scan, counting non-deleted records */
-  for (rec_num = 1; rec_num <= 8; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_FILE_AREAS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_UD_AREA);
     err = rel_read(h, (void *)buf, RECORD_SIZE_UD_AREA, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -132,7 +133,7 @@ bbs_err_t file_area_by_index(u8 n, ud_area_record_t *out_rec, u8 device) {
   }
 
   /* Sequential scan, skip deleted records until we reach the nth one */
-  for (rec_num = 1; rec_num <= 8; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_FILE_AREAS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_UD_AREA);
     err = rel_read(h, (void *)buf, RECORD_SIZE_UD_AREA, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -166,7 +167,7 @@ bbs_err_t file_area_by_id(u8 id, ud_area_record_t *out_rec, u8 device) {
   u8 got;
   u8 buf[RECORD_SIZE_UD_AREA];
 
-  if (id == 0 || id > 8) {
+  if (id == 0 || id > CFG_MAX_FILE_AREAS) {
     return BBS_EBADARG;
   }
 
@@ -219,7 +220,7 @@ bbs_err_t file_area_save(const ud_area_record_t *rec, u8 device) {
   rel_handle_t h;
   u8 buf[RECORD_SIZE_UD_AREA];
 
-  if (!rec || rec->id == 0 || rec->id > 8) {
+  if (!rec || rec->id == 0 || rec->id > CFG_MAX_FILE_AREAS) {
     return BBS_EBADARG;
   }
 
@@ -269,7 +270,7 @@ bbs_err_t file_area_create(const char *title, u8 access_level, u8 upload_level,
   }
 
   /* Find highest area ID to assign next ID */
-  for (rec_num = 1; rec_num <= 8; rec_num++) {
+  for (rec_num = 1; rec_num <= CFG_MAX_FILE_AREAS; rec_num++) {
     memset(buf, 0, RECORD_SIZE_UD_AREA);
     err = rel_read(h, (void *)buf, RECORD_SIZE_UD_AREA, &got);
     if (err != BBS_OK || got < RECORD_READ_MIN) {
@@ -287,7 +288,7 @@ bbs_err_t file_area_create(const char *title, u8 access_level, u8 upload_level,
   rel_close(h);
 
   /* Check if we can create a new area */
-  if (highest_id >= 8) {
+  if (highest_id >= CFG_MAX_FILE_AREAS) {
     return BBS_EFULL;
   }
 
@@ -314,7 +315,7 @@ bbs_err_t file_area_delete(u8 area_id, u8 device) {
   bbs_err_t err;
   ud_area_record_t rec;
 
-  if (area_id == 0 || area_id > 8) {
+  if (area_id == 0 || area_id > CFG_MAX_FILE_AREAS) {
     return BBS_EBADARG;
   }
 

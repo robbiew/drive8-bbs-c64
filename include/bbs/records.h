@@ -92,10 +92,10 @@ typedef struct {
 #define BOARD_F_STICKY   0x08
 
 /**
- * MSG_INDEX_RECORD — 48 bytes (REL file record)
+ * MSG_INDEX_RECORD — 63 bytes (REL file record)
  *
- * Stored in "B<n>.IDX,L,32". One record per message (1-based).
- * 200 records = 6.4 KB — fits in one REU Bank 0 DMA.
+ * Stored in "B<n>.IDX,L,63". One record per message (1-based).
+ * 200 records = 12.6 KB — REU Bank 0 caches up to 200 records.
  * Bytes 32-62: subj (30 chars + NUL).
  */
 typedef struct {

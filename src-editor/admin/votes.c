@@ -155,7 +155,7 @@ static void votes_do_create(u8 device)
 
   /* Option count */
   printf("# OF OPTIONS (2-6): ");
-  ch = getchar(); printf("\n");
+  ch = getch(); putchar(ch); printf("\n");
   if (ch < '2' || ch > '6') { ui_error("OPTIONS MUST BE 2-6."); return; }
   opt_count = (u8)(ch - '0');
 

@@ -296,7 +296,7 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
       case 'R': {
         char lc;
         printf("READ LEVEL (0-5): ");
-        lc = getchar(); printf("\n");
+        lc = getch(); putchar(lc); printf("\n");
         if (lc >= '0' && lc <= '5') board->read_level = (u8)(lc - '0');
         else ui_error("INVALID LEVEL.");
         break;
@@ -305,7 +305,7 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
       case 'W': {
         char lc;
         printf("WRITE LEVEL (0-5): ");
-        lc = getchar(); printf("\n");
+        lc = getch(); putchar(lc); printf("\n");
         if (lc >= '0' && lc <= '5') board->write_level = (u8)(lc - '0');
         else ui_error("INVALID LEVEL.");
         break;
@@ -316,19 +316,10 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
 
       case 'O': {
         char handle[17];
-        int hlen = 0;
+        int hlen;
         u8 uid;
-        memset(handle, 0, sizeof(handle));
         printf("SUBOP HANDLE: ");
-        for (;;) {
-          char hc = getchar();
-          if (hc == 13 || hc == '\n') { printf("\n"); break; }
-          if ((hc == 20 || hc == 8) && hlen > 0) { hlen--; handle[hlen] = 0; printf("\x08 \x08"); continue; }
-          if (hc >= 32 && hc <= 126 && hlen < 16) {
-            hc = (char)toupper((unsigned char)hc);
-            handle[hlen++] = hc;
-          }
-        }
+        hlen = ui_read_line(handle, 16, UI_CASE_UPPER);
         if (hlen == 0) break;
         uid = user_by_handle(handle, device);
         if (uid == 0) { ui_error("HANDLE NOT FOUND."); break; }
@@ -346,18 +337,8 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
         break;
 
       case 'G': {
-        int tlen = 0;
-        memset(s_edit_net_tag, 0, sizeof(s_edit_net_tag));
         printf("NET TAG (8 CHARS, EG T64.GENL): ");
-        for (;;) {
-          char tc = getchar();
-          if (tc == 13 || tc == '\n') { printf("\n"); break; }
-          if ((tc == 20 || tc == 8) && tlen > 0) { tlen--; s_edit_net_tag[tlen] = 0; printf("\x08 \x08"); continue; }
-          if (tc >= 32 && tc <= 126 && tlen < 8) {
-            tc = (char)toupper((unsigned char)tc);
-            s_edit_net_tag[tlen++] = tc;
-          }
-        }
+        ui_read_line(s_edit_net_tag, 8, UI_CASE_UPPER);
         break;
       }
 
@@ -367,10 +348,10 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
         memset(mc, 0, sizeof(mc));
         printf("MAX MSGS (0=DEFAULT, 1-255): ");
         for (;;) {
-          char mc2 = getchar();
+          char mc2 = getch();
           if (mc2 == 13 || mc2 == '\n') { printf("\n"); break; }
-          if ((mc2 == 20 || mc2 == 8) && mlen > 0) { mlen--; mc[mlen] = 0; printf("\x08 \x08"); continue; }
-          if (mc2 >= '0' && mc2 <= '9' && mlen < 3) mc[mlen++] = mc2;
+          if ((mc2 == 20 || mc2 == 8) && mlen > 0) { mlen--; mc[mlen] = 0; printf("\x14"); continue; }
+          if (mc2 >= '0' && mc2 <= '9' && mlen < 3) { mc[mlen++] = mc2; putchar(mc2); }
         }
         for (mi = 0; mc[mi]; mi++) mv = mv * 10 + (mc[mi] - '0');
         s_edit_max_msgs = (u8)(mv > 255 ? 255 : mv);
@@ -384,10 +365,10 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
         memset(dc, 0, sizeof(dc));
         printf("MAX DAYS (0=DISABLED, 1-255): ");
         for (;;) {
-          char dc2 = getchar();
+          char dc2 = getch();
           if (dc2 == 13 || dc2 == '\n') { printf("\n"); break; }
-          if ((dc2 == 20 || dc2 == 8) && dlen > 0) { dlen--; dc[dlen] = 0; printf("\x08 \x08"); continue; }
-          if (dc2 >= '0' && dc2 <= '9' && dlen < 3) dc[dlen++] = dc2;
+          if ((dc2 == 20 || dc2 == 8) && dlen > 0) { dlen--; dc[dlen] = 0; printf("\x14"); continue; }
+          if (dc2 >= '0' && dc2 <= '9' && dlen < 3) { dc[dlen++] = dc2; putchar(dc2); }
         }
         for (di = 0; dc[di]; di++) dv = dv * 10 + (dc[di] - '0');
         s_edit_max_age = (u8)(dv > 255 ? 255 : dv);
@@ -401,10 +382,10 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
         memset(oc, 0, sizeof(oc));
         printf("ORDER (1-255): ");
         for (;;) {
-          char c2 = getchar();
+          char c2 = getch();
           if (c2 == 13 || c2 == '\n') { printf("\n"); break; }
-          if ((c2 == 20 || c2 == 8) && olen > 0) { olen--; oc[olen] = 0; printf("\x08 \x08"); continue; }
-          if (c2 >= '0' && c2 <= '9' && olen < 3) oc[olen++] = c2;
+          if ((c2 == 20 || c2 == 8) && olen > 0) { olen--; oc[olen] = 0; printf("\x14"); continue; }
+          if (c2 >= '0' && c2 <= '9' && olen < 3) { oc[olen++] = c2; putchar(c2); }
         }
         if (olen == 0) break;                 /* blank = keep current */
         for (oi = 0; oc[oi]; oi++) ov = ov * 10 + (oc[oi] - '0');
@@ -479,7 +460,6 @@ static void boards_do_delete(u8 device)
 static void boards_do_maint(u8 device)
 {
   board_dir_record_t board;
-  char ch;
   bbs_err_t err;
 
   if (boards_pick("SELECT AREA FOR MAINTENANCE", device, &board) != BBS_OK)
@@ -487,6 +467,7 @@ static void boards_do_maint(u8 device)
 
   for (;;) {
     u16 total_msgs = 0, deleted_msgs = 0;
+    char ch;
     char buf[48];
 
     msg_index_stats(board.id, device, &total_msgs, &deleted_msgs);

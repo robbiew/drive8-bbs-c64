@@ -24,6 +24,12 @@
 /* Maximum number of bulletin boards */
 #define CFG_MAX_BOARDS      20
 
+/* Maximum number of polls/votes */
+#define CFG_MAX_VOTES       20
+
+/* Maximum number of file areas */
+#define CFG_MAX_FILE_AREAS  8
+
 /* Message base limits */
 #define CFG_MSG_MAX_PER_BOARD   200   /* max messages per board index */
 #define CFG_MSG_LIMIT_DEFAULT   100   /* auto-prune threshold (0=no limit) */
