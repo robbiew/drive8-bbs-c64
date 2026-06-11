@@ -4,11 +4,13 @@
 
 ## What This Is: A Functional Anachronism
 
-TURBO/64 BBS is a Commodore 64 BBS written in C for the Oscar64 compiler. It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
+TURBO/64 BBS is a Commodore 64 BBS written in C for the [Oscar64 compiler](https://github.com/drmortalwombat/oscar64). It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
 
-**Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards (post/read/list), and the SysOp editor are working. Private mail, file transfers, SysOp chat, polls, and the callers log remain stubbed.
+**Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, and the "Configure" editor are working. 
 
-> **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to [First-Time Setup](#2-mount-and-boot-into-configure). 
+Not working: Private mail, file transfers, SysOp chat, polls/voting, doors and lots more remain stubbed.
+
+> **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to First-Time Setup below.
 
 ---
 
@@ -41,25 +43,18 @@ See [`tools/README.md`](tools/README.md) for the full reference covering `build.
 
 ---
 
-## First-Time Setup — C64U
+## First-Time Setup 
 
-### 1. Deploy the BBS disk
+### 1. Mount and boot into CONFIGURE
 
-```bash
-tools/deploy-u64.sh            # deploys TURBO64-<ver>.D81 to /BBS/
-tools/deploy-u64.sh -l sd      # deploys to /SD/BBS/
-```
-
-### 2. Mount and boot into CONFIGURE
-
-On the C64U, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
+On the C64, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
 
 ```
 LOAD "CONFIGURE-0.1.0",8
 RUN
 ```
 
-### 3. Initialize the disk (first time only)
+### 2. Initialize the files (first time only)
 
 From the CONFIGURE main menu, choose **I — INIT FILES**.
 
@@ -70,54 +65,45 @@ Creates:
 
 Record 1 is always the SysOp account — handle `SYSOP`, password `PASS`, access level 5. Change it!
 
-
-### 4. Configure the BBS
+### 3. Configure the BBS
 
 CONFIGURE → **C — CONFIG → 1 SETTINGS**:
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `BBS_NAME` | `A NEW T/64 BBS` | BBS name shown at login |
-| `BBS_CITY` | `SOMEWHERE, CA` | Location string |
-| `SYSOP_NAME` | `JOE SYSOP` | Displayed on BBS |
-| `NEW_USER_LEVEL` | `1` | Access level for new registrants (0–4) |
-| `ALLOW_NEW_USERS` | `1` | Allow self-registration |
+| `BBSNAME` | `A NEW T/64 BBS` | BBS name shown at login |
+| `BBSCITY` | `SOMEWHERE, CA` | Location string |
+| `SYSOPNAME` | `JOE SYSOP` | Displayed on BBS |
+| `NEWUSERLVL` | `1` | Access level for new registrants (0–4) |
+| `ALLOWNEW` | `1` | Allow self-registration |
+| `SYSOPSTAT`| ` ` | Default message when users try and chat |
+| `PROMPTCUR`| `ON` | Animated prompt cursor |
+
+CONFIGURE → **C - CONFIG → 2 DEVICES**:
+| Key | Default | Notes |
+|-----|---------|-------|
 | `DEV_SYSTEM` | `8` | Device for boot PRG, config, and gfiles |
 | `DEV_MSGS` | `9` | Device for message boards (separate drive recommended) |
 | `DEV_FILES` | `8` | Device for upload/download areas |
 | `DEV_DOORS` | `8` | Device for door programs |
 
+CONFIGURE → **C → 5 MODEM TYPE**: AUTO (DETECT), VICE, U64.
+
 CONFIGURE → **C → 2 BAUD RATE**: 300, 1200, 2400, 9600, 19200, or 38400.
 
 Changes are saved to the `config` SEQ file immediately.
 
-### 5. Set up the message boards disk (device 9)
+### 4. Set up the message boards disk (device 9)
 
-The BBS reads message boards from a separate disk on `DEV_MSGS` (default device 9). Two options:
-
-#### Option A — blank disk (start fresh)
+If configured in `DEVICES`, the BBS reads message boards from a separate disk on `DEV_MSGS` (default device 9). Two options:
 
 Format a blank .D81 and mount it on C64U device 9. Then in CONFIGURE → **M — MSG AREAS → C — CREATE**, add boards. Each board needs a title, read level, and write level. The `BOARDS DIR` REL file and per-board index files are created automatically on first post.
 
-#### Option B — example seed disk (3 pre-configured boards)
-
-`data/boards-seed.d81` contains a snapshot of `BOARDS-<ver>.D81` with three ready-to-use boards:
-
-```bash
-tools/deploy-u64.sh --boards   # uploads BOARDS-<ver>.D81 to /BBS/
-```
-
 Then mount `BOARDS-<ver>.D81` on C64U device 9.
-
-To refresh the seed from a running C64U (e.g. after adding boards via CONFIGURE):
-
-```bash
-tools/extract-boards.sh        # saves live BOARDS-<ver>.D81 → data/boards-seed.d81
-```
 
 > ⚠️ The message index format uses 48-byte REL records. 
 
-### 6. Run the BBS
+### 5. Run the BBS
 
 Outside CONFIGURE, on the C64:
 
@@ -149,41 +135,6 @@ CHECKING FOR REAL TIME CLOCK...
 ```
 
 If `USR LOG: NOT FOUND` or `USR LOG: EMPTY` appears, return to CONFIGURE and run Init Files.
-
----
-
-## First-Time Setup — VICE
-
-### 1. Build and assemble
-
-```bash
-make all && make disk
-```
-
-### 2. Launch VICE with modem bridge
-
-```bash
-bash tools/deploy-vice.sh
-```
-
-Starts `x64sc` with the disk image and launches `tcpser` as a virtual RS-232 modem bridge. VICE connects the emulated ACIA to tcpser on port 25232; tcpser listens for telnet on port 6400.
-
-### 3. Initialize and configure
-
-VICE autostarts BOOT. Press **RUN/STOP** to interrupt, then:
-
-```
-LOAD "CONFIGURE-0.1.0",8
-RUN
-```
-
-Follow the same steps as C64U: Init Files, then Config. For VICE testing a blank boards disk is usually sufficient — CONFIGURE → M — MSG AREAS to create a board, then mount a formatted .D81 on device 9 in VICE.
-
-### 4. Connect as a caller
-
-```bash
-telnet localhost 6400
-```
 
 ---
 
@@ -259,13 +210,13 @@ level,name,calls_per_day,mins_per_day,flags
 
 ```
 CONFIGURE MAIN MENU
-  I — INIT FILES      Initialize USR LOG, USR PROF, and CALLERS
+  I — INIT BBS        Initialize USR LOG, USR PROF, and CALLERS
   U — USER MGMT       List, delete, reset passwords
   M — MSG AREAS       Create/edit/delete message boards; compact and prune
   F — FILE AREAS      Create/edit upload/download areas (stub)
   V — VOTE MGMT       Create/edit polls (stub)
-  C — CONFIG          Edit BBS name, devices, baud rate
-  S — STATISTICS      Show user/area counts
+  C — CONFIG OPTIONS  Edit BBS name, devices, baud rate
+  S — STATISTICS      Show user/area counts (basic)
   Q — QUIT
 ```
 

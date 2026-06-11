@@ -177,10 +177,18 @@ bbs_err_t auth_prompt_login(session_t *s) {
     return err;
   }
 
-  /* Validate password */
-  err = auth_validate_password(s->handle, s->password);
-  if (err != BBS_OK) {
-    return BBS_EPERM;  /* Bad password */
+  /* Validate password — hash the entered password and compare directly
+   * against the already-loaded user record.  The old path called
+   * auth_validate_password() which re-looked-up the user from disk,
+   * adding two redundant disk/REU operations and mapping any I/O or
+   * lookup failure to BBS_EPERM (showing "INVALID LOGIN" even when
+   * the real problem was a transient I/O error, not a wrong password). */
+  {
+    char hash_attempt[4];
+    user_hash_password(s->password, hash_attempt);
+    if (strncmp(hash_attempt, user.password, 4) != 0) {
+      return BBS_EPERM;
+    }
   }
 
   /* Success! Populate session with user data */
