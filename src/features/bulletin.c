@@ -62,7 +62,10 @@ static void bull_read_input(char *buf, u8 max, u8 uc) {
     }
   }
   for (;;) {
-    if (!sess_getc(&ch)) continue;  /* edge case: full buf wait — accept brief hang on disconnect */
+    if (!sess_getc(&ch)) {
+      if (!sess_carrier_ok(s_sess)) return;   /* full-buf wait must not outlive carrier */
+      continue;
+    }
     if (ch == 10) continue;
     if (ch == 13) { bull_nl(); return; }
   }
