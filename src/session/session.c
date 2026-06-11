@@ -525,6 +525,18 @@ static void sess_idle_check(void)
     net_disconnect();
 }
 
+/* Translate one accepted inbound byte from the caller's wire encoding to
+ * canonical CP437, per the active session's mode.  Identity for ANSI/ASCII,
+ * control bytes, digits and punctuation; only PETSCII text-mode letters move. */
+static u8 sess_unxlate(u8 wire)
+{
+    term_mode_t em;
+    if (!s_active) return wire;
+    em = s_active->term_mode;
+    if (em == TERM_PETSCII && s_active->petscii_lower) em = TERM_PETSCII_LOWER;
+    return term_unxlate_byte(em, wire);
+}
+
 /* Read one byte from modem (or keyboard in local mode).
  * Returns 0 if nothing available yet. */
 static u8 sess_rx_byte(u8 *out)
@@ -535,11 +547,16 @@ static u8 sess_rx_byte(u8 *out)
          * editor — blocking this non-blocking pump until RETURN and echoing
          * the keystrokes (including the password) before the session sees
          * them. KBD_COUNT > 0 guarantees getchx() returns a real key. */
-        return sess_accept_input((u8)getchx(), out) ? 1 : 0;
+        if (sess_accept_input((u8)getchx(), out)) {
+            *out = sess_unxlate(*out);
+            return 1;
+        }
+        return 0;
     } else {
         u16 got;
         if (net_rx(out, 1, &got) == BBS_OK && got == 1) {
             if (sess_accept_input(*out, out)) {
+                *out = sess_unxlate(*out);
                 clock_read(&s_idle_mark);   /* activity — restart watchdog */
                 return 1;
             }
