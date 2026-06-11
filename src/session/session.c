@@ -762,6 +762,15 @@ bbs_err_t session_step(session_t *s) {
     else if (s->auth_step == 1) {
       if (ch == '\r' || ch == '\n') {
         if (s->password[0] == 0) {
+          s->empty_handle_attempts++;
+          if (s->empty_handle_attempts >= 3) {
+            sess_color(s, 0x9f, "\x1b[36m");
+            session_emit(s, "\r\nTOO MANY TRIES, HACKER!\r\n");
+            sess_color(s, 0x05, "\x1b[37m");
+            net_disconnect();
+            s->state = SESS_IDLE;
+            break;
+          }
           sess_color(s, 0x9f, "\x1b[36m");
           session_emit(s, "\r\nPASSWORD");
           sess_color(s, 0x05, "\x1b[37m");
