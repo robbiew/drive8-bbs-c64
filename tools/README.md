@@ -21,13 +21,6 @@ tools/build.sh u64 --seed-users   # preserve existing user data
 tools/build.sh u64 -l sd     # deploy to SD card
 ```
 
-### Restore boards disk to U64
-
-```bash
-tools/extract-boards.sh       # save live BOARDS-<ver>.D81 → data/boards-seed.d81
-tools/deploy-u64.sh --boards  # restore boards-seed.d81 to U64
-```
-
 ---
 
 ## Tool Reference
@@ -209,23 +202,6 @@ tools/extract-users.sh [options]
 
 ---
 
-### `extract-boards.sh` — Snapshot Boards Disk from U64
-
-Downloads `BOARDS-<ver>.D81` from U64 and saves it as `data/boards-seed.d81`. Use this to capture a known-good board configuration for quick restore during testing.
-
-```bash
-tools/extract-boards.sh [options]
-```
-
-| Option | Description |
-|--------|-------------|
-| `-l, --location <loc>` | Source: `bbs` (default → `/BBS`), `usb0`, `usb1`, `sd`, or full path |
-| `-d, --disk <path>` | Use a local `.d81` instead of fetching from U64 |
-
-To restore the saved seed: `tools/deploy-u64.sh --boards [-l bbs]`
-
----
-
 ### `install-c64u.sh` — Install c64u CLI
 
 Downloads and installs the `c64u` Ultimate64 filesystem tool into `vendor/c64u/bin/c64u`. Idempotent — exits immediately if already installed. Auto-detects platform (Darwin/Linux, arm64/x86_64).
@@ -257,6 +233,34 @@ tools/lint.sh
 ```
 
 Install cppcheck: `brew install cppcheck` / `sudo apt install cppcheck`.
+
+---
+
+### `release.sh` — GitHub Release Pipeline
+
+Builds all release artifacts, generates FILE_ID.DIZ and README.txt from templates, creates a git tag, and publishes a GitHub release via `gh`.
+
+```bash
+tools/release.sh              # full release: build, tag, push, publish
+tools/release.sh --dry-run    # build and stage artifacts only, no tag/push/publish
+tools/release.sh --skip-tag   # publish to an existing tag (no new tag created)
+```
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Build artifacts, stage in `build/release/`, show planned steps — no tag, push, or publish |
+| `--skip-tag` | Build and publish to an existing tag — no git tag created or pushed |
+| `-h, --help` | Show usage |
+
+**Requires:** `gh` CLI installed and authenticated (`gh auth login`). `oscar64` compiler and `c1541` available (needed by build step).
+
+**Release assets produced** (in `build/release/`):
+- `TURBO64-<ver>.d81` — bootable BBS system disk
+- `BOOT-<ver>.prg` — standalone BBS runtime
+- `CONFIGURE-<ver>.prg` — standalone SysOp config editor
+- `BOARDS-<ver>.d81` — blank disk for message bases (Device 9)
+- `FILE_ID.DIZ` — classic BBS description file
+- `README.txt` — plain-text project README
 
 ---
 
@@ -304,3 +308,4 @@ data/
 | `install-c64u.sh` | Install c64u filesystem tool |
 | `install-oscar64.sh` | Build oscar64 compiler from source |
 | `lint.sh` | Run cppcheck static analysis |
+| `release.sh` | Build artifacts, tag, and publish GitHub release |
