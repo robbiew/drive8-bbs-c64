@@ -746,15 +746,18 @@ bbs_err_t msg_prune_age(u8 board_id, u16 today, u8 device)
 
 /* ---- Body read ---------------------------------------------------- */
 
+/* Disk scratch — msgs_bss is full (<2 bytes free); lives in main bss. */
+#pragma bss(bss)
+static u8 s_skip_buf[64];
+#pragma bss(msgs_bss)
+
 bbs_err_t msg_body_read(u8 board_id, const msg_index_record_t *rec,
                          char *buf, u16 buf_len, u8 device)
 {
     char fname[16];
     bbs_err_t err;
-    u16 skip;
     u16 to_read;
     u16 n;
-    i16 c;
 
     if (!rec || !buf || buf_len == 0 || board_id == 0) return BBS_EBADARG;
 
@@ -770,20 +773,28 @@ bbs_err_t msg_body_read(u8 board_id, const msg_index_record_t *rec,
     err = disk_open(device, bbs_cfg.drive_msgs, fname, DISK_READ);
     if (err != BBS_OK) return err;
 
-    /* Skip to body_offset */
-    for (skip = 0; skip < rec->body_offset; skip++) {
-        c = disk_getc();
-        if (c < 0) { disk_close(); return BBS_EIO; }
+    /* Skip to body_offset in chunks — disk_read does one CHKIN/CLRCHN per
+     * chunk instead of per byte. */
+    {
+        u16 left = rec->body_offset;
+        while (left) {
+            u8 step = (left > (u16)sizeof(s_skip_buf)) ? (u8)sizeof(s_skip_buf) : (u8)left;
+            i16 r = disk_read(s_skip_buf, step);
+            if (r <= 0) { disk_close(); return BBS_EIO; }
+            left -= (u16)r;
+        }
     }
 
-    /* Read body_len bytes (capped to buf_len-1) */
     to_read = rec->body_len;
     if (to_read > buf_len - 1) to_read = buf_len - 1;
 
-    for (n = 0; n < to_read; n++) {
-        c = disk_getc();
-        if (c < 0) break;
-        buf[n] = (char)c;
+    n = 0;
+    while (n < to_read) {
+        u16 want = (u16)(to_read - n);
+        u8 step = (want > 254u) ? 254u : (u8)want;
+        i16 r = disk_read((u8 *)buf + n, step);
+        if (r <= 0) break;
+        n += (u16)r;
     }
     buf[n] = '\0';
     disk_close();
@@ -796,7 +807,7 @@ bbs_err_t msg_body_read(u8 board_id, const msg_index_record_t *rec,
     return BBS_OK;
 }
 /* msg_body_each_line lives in the main code section (not the msgs overlay)
- * so its local frame arrays (linebuf, chunk, fname) do not consume msgs_bss. */
+ * so its local frame arrays (linebuf, fname) do not consume msgs_bss. */
 #pragma code(code)
 #pragma bss(bss)
 bbs_err_t msg_body_each_line(u8 board_id, const msg_index_record_t *rec,
@@ -837,16 +848,29 @@ bbs_err_t msg_body_each_line(u8 board_id, const msg_index_record_t *rec,
         sprintf(fname, "B%u.TXT", (unsigned)board_id);  /* inline msg_txt_fname */
         err = disk_open(device, bbs_cfg.drive_msgs, fname, DISK_READ);
         if (err != BBS_OK) return err;
-        for (skip = 0; skip < rec->body_offset; skip++)
-            if (disk_getc() < 0) { disk_close(); return BBS_EIO; }
-        for (pos = 0; pos < body_len; pos++) {
-            i16 c = disk_getc();
-            if (c < 0) break;
-            if ((char)c == '\n') {
-                linebuf[linelen] = '\0'; cb(linebuf, ctx); linelen = 0;
-            } else if (linelen < 40u) {
-                linebuf[linelen++] = (char)(u8)c;
+        skip = rec->body_offset;
+        while (skip) {
+            u8 step = (skip > (u16)sizeof(s_skip_buf)) ? (u8)sizeof(s_skip_buf) : (u8)skip;
+            i16 r = disk_read(s_skip_buf, step);
+            if (r <= 0) { disk_close(); return BBS_EIO; }
+            skip -= (u16)r;
+        }
+        pos = 0;
+        while (pos < body_len) {
+            u16 want = (u16)(body_len - pos);
+            u8 step = (want > (u16)sizeof(s_skip_buf)) ? (u8)sizeof(s_skip_buf) : (u8)want;
+            i16 r = disk_read(s_skip_buf, step);
+            i16 k;
+            if (r <= 0) break;
+            for (k = 0; k < r; k++) {
+                char c = (char)s_skip_buf[k];
+                if (c == '\n') {
+                    linebuf[linelen] = '\0'; cb(linebuf, ctx); linelen = 0;
+                } else if (linelen < 40u) {
+                    linebuf[linelen++] = c;
+                }
             }
+            pos += (u16)r;
         }
         if (linelen) { linebuf[linelen] = '\0'; cb(linebuf, ctx); }
         disk_close();
