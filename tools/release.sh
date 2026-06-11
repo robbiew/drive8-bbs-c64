@@ -4,6 +4,8 @@
 # Usage: tools/release.sh              # full release
 #        tools/release.sh --dry-run    # build artifacts, show plan, no tag/push/publish
 #        tools/release.sh --skip-tag   # build + publish to existing tag
+#        tools/release.sh --force      # delete existing release + recreate from scratch
+#        tools/release.sh --force --skip-tag  # recreate release on existing tag
 
 set -euo pipefail
 
@@ -17,18 +19,20 @@ NC='\033[0m'
 
 DRY_RUN=0
 SKIP_TAG=0
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)  DRY_RUN=1; shift ;;
         --skip-tag) SKIP_TAG=1; shift ;;
+        --force)    FORCE=1; shift ;;
         -h|--help)
-            sed -n '2,7p' "$0"
+            sed -n '2,8p' "$0"
             exit 0
             ;;
         *)
             echo "Unknown option: $1" >&2
-            echo "Usage: tools/release.sh [--dry-run|--skip-tag]" >&2
+            echo "Usage: tools/release.sh [--dry-run|--skip-tag|--force]" >&2
             exit 1
             ;;
     esac
@@ -80,6 +84,18 @@ if [ "$SKIP_TAG" -eq 0 ]; then
         echo -e "${RED}ERROR: Tag $TAG already exists.${NC}" >&2
         echo "Use --skip-tag to publish to an existing tag, or bump the version." >&2
         exit 1
+    fi
+fi
+
+# --- Delete existing release if --force ---
+
+if [ "$FORCE" -eq 1 ]; then
+    if gh release view "$TAG" >/dev/null 2>&1; then
+        echo -e "${YELLOW}--force: deleting existing release $TAG...${NC}"
+        gh release delete "$TAG" --yes
+        echo ""
+    else
+        echo -e "${YELLOW}--force: no existing release $TAG to delete, proceeding.${NC}"
     fi
 fi
 
@@ -161,8 +177,13 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo -e "${YELLOW}DRY RUN — no tag, push, or publish will be performed.${NC}"
     echo ""
     echo "Planned steps:"
-    echo "  1. git tag -a \"$TAG\" -m \"TURBO/64 BBS v$VERSION\""
-    echo "  2. git push origin \"$TAG\""
+    if [ "$FORCE" -eq 1 ]; then
+        echo "  0. gh release delete \"$TAG\" --yes  (if release exists)"
+    fi
+    if [ "$SKIP_TAG" -eq 0 ]; then
+        echo "  1. git tag -a \"$TAG\" -m \"TURBO/64 BBS v$VERSION\""
+        echo "  2. git push origin \"$TAG\""
+    fi
     echo "  3. gh release create \"$TAG\" \\"
     echo "       TURBO64-${VERSION}.zip \\"
     echo "       --title \"TURBO/64 BBS v$VERSION\" \\"

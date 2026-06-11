@@ -244,13 +244,17 @@ Builds all release artifacts, generates FILE_ID.DIZ and README.txt from template
 tools/release.sh              # full release: build, tag, push, publish
 tools/release.sh --dry-run    # build and stage artifacts only, no tag/push/publish
 tools/release.sh --skip-tag   # publish to an existing tag (no new tag created)
+tools/release.sh --force      # delete existing release and recreate from scratch
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Build artifacts, create ZIP, show planned steps — no tag, push, or publish |
 | `--skip-tag` | Build and publish to an existing tag — no git tag created or pushed |
+| `--force` | Delete the existing GitHub release for this version and recreate it |
 | `-h, --help` | Show usage |
+
+`--force` can be combined with `--skip-tag` to replace a release on an already-pushed tag (e.g. `tools/release.sh --force --skip-tag`).
 
 **Requires:** `gh` CLI installed and authenticated (`gh auth login`), `zip`, `oscar64` compiler, and `c1541` available.
 
