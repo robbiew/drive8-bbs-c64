@@ -43,7 +43,7 @@ SESSION_SRCS := src/session/session.c src/session/spy80.c src/session/spy80_ansi
 FEATURE_SRCS := src/features/menu.c src/features/menu_tables.c src/features/menu_actions.c src/features/auth.c src/features/newuser.c src/features/bulletin.c src/features/editor.c src/features/mail.c src/features/files.c src/features/chat.c src/features/vote.c src/features/callers.c src/features/sysop.c
 PUB_HDRS := include/bbs/version.h include/bbs/config.h include/bbs/types.h include/bbs/err.h include/bbs/drives.h include/bbs/net.h include/bbs/io.h include/bbs/term.h include/bbs/rel.h include/bbs/records.h include/bbs/cfg.h include/bbs/users.h include/bbs/boards.h include/bbs/file_areas.h include/bbs/votes.h include/bbs/messages.h include/bbs/usrptr.h include/bbs/sstatus.h include/bbs/syscnt.h include/bbs/usrday.h include/bbs/editor.h include/bbs/menu.h include/bbs/session.h include/bbs/prompt_cursor.h include/bbs/auth.h include/bbs/bulletin.h include/bbs/mail.h include/bbs/files.h include/bbs/chat.h include/bbs/vote.h include/bbs/callers.h include/bbs/sysop.h include/bbs/hal/clock.h include/bbs/hal/disk.h include/bbs/hal/reu.h include/bbs/hal/term.h
 
-.PHONY: all c64 editor clean
+.PHONY: all c64 editor clean release
 
 SETUP_DATA  := $(OUTDIR)/config
 SETUP_SRC   := $(ROOT)data/config
@@ -59,6 +59,9 @@ disk: all
 
 disk-with-users: all
 	bash tools/assemble-d81.sh --fetch-users
+
+release:
+	bash tools/release.sh
 
 $(SETUP_DATA): $(SETUP_SRC)
 	@mkdir -p $(OUTDIR)
