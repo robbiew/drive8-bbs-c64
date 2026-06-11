@@ -435,8 +435,8 @@ static void bull_do_post(u16 parent) {
 }   /* bull_do_post */
 
 /* Sized against main-region headroom — see map before growing. */
-#define BULL_PAGE_ROWS   5
-#define BULL_MEMO_SLOTS  4
+#define BULL_PAGE_ROWS   4
+#define BULL_MEMO_SLOTS  3
 
 /* Listing page buffer + author memo live in main bss — the msgs overlay
  * region is nearly full (check the .map) and cannot hold them. */

@@ -748,7 +748,7 @@ bbs_err_t msg_prune_age(u8 board_id, u16 today, u8 device)
 
 /* Disk scratch — msgs_bss is full (<2 bytes free); lives in main bss. */
 #pragma bss(bss)
-static u8 s_skip_buf[32];
+static u8 s_skip_buf[24];
 #pragma bss(msgs_bss)
 
 bbs_err_t msg_body_read(u8 board_id, const msg_index_record_t *rec,
