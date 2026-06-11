@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include "bbs/menu.h"
+#include "bbs/menu_actions.h"
 #include "bbs/session.h"
 #include "bbs/bulletin.h"
 #include "bbs/users.h"

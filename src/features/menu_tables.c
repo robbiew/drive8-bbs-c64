@@ -9,36 +9,7 @@
 
 #include "bbs/menu.h"
 #include "bbs/session.h"
-
-/* Forward declarations of action handlers (menu_actions.c) */
-/* MAIN menu actions */
-extern void action_last_callers(session_t *s);
-extern void action_user_list(session_t *s);
-extern void action_system_info(session_t *s);
-extern void action_help(session_t *s);
-
-/* MSGS menu actions */
-extern void action_list_boards(session_t *s);
-
-/* EMAIL menu actions */
-extern void action_list_mail(session_t *s);
-extern void action_send_mail(session_t *s);
-
-/* PREFS menu actions */
-extern void action_term_mode(session_t *s);
-extern void action_term_width(session_t *s);
-extern void action_colors(session_t *s);
-extern void action_paging(session_t *s);
-extern void action_clear_on_msg(session_t *s);
-
-/* FILES menu actions */
-extern void action_list_areas(session_t *s);
-extern void action_download_file(session_t *s);
-extern void action_upload_file(session_t *s);
-extern void action_search_files(session_t *s);
-
-/* DOOR menu actions */
-extern void action_run_door(session_t *s);
+#include "bbs/menu_actions.h"
 
 /**
  * MAIN Menu Commands
