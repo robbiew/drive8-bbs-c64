@@ -807,7 +807,9 @@ bbs_err_t msg_body_read(u8 board_id, const msg_index_record_t *rec,
     return BBS_OK;
 }
 /* msg_body_each_line lives in the main code section (not the msgs overlay)
- * so its local frame arrays (linebuf, fname) do not consume msgs_bss. */
+ * so its local frame arrays (linebuf, fname) do not consume msgs_bss.
+ * Its string literals stay in msgs_data, so callers must hold the msgs
+ * overlay loaded — true for all message-feature callers today. */
 #pragma code(code)
 #pragma bss(bss)
 bbs_err_t msg_body_each_line(u8 board_id, const msg_index_record_t *rec,
