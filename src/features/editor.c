@@ -6,7 +6,6 @@
 #include "bbs/config.h"
 #include <string.h>
 #include <stdio.h>
-#include "bbs/net.h"
 #include "bbs/overlay.h"
 
 /* editor_crossline_bs — lives in the main code section so its locals do NOT
@@ -84,7 +83,7 @@ editor_result_t editor_run(const session_t *s, const char *context_line)
 
   for (;;) {
     if (!sess_getc(&ch)) {
-      if (!s->is_local && net_state() != NET_CONNECTED) return EDITOR_ABORT;
+      if (!sess_carrier_ok(s)) return EDITOR_ABORT;
       continue;
     }
 

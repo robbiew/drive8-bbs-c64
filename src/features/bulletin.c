@@ -14,7 +14,6 @@
 #include "bbs/sysop.h"
 #include <string.h>
 #include <stdio.h>
-#include "bbs/net.h"
 #include "bbs/overlay.h"
 #pragma code(msgs_code)
 #pragma data(msgs_data)
@@ -48,7 +47,7 @@ static void bull_read_input(char *buf, u8 max, u8 uc) {
   memset(buf, 0, (u8)(max + 1));
   while (len < max) {
     if (!sess_getc(&ch)) {
-      if (!s_sess->is_local && net_state() != NET_CONNECTED) return;
+      if (!sess_carrier_ok(s_sess)) return;
       continue;
     }
     if (ch == 10) continue;            /* skip LF — CRLF terminals send CR+LF */
@@ -79,7 +78,7 @@ static void bull_getkey(char *buf) {
   buf[0] = '\0';
   for (;;) {
     if (!sess_getc(&ch)) {
-      if (!s_sess->is_local && net_state() != NET_CONNECTED) return;
+      if (!sess_carrier_ok(s_sess)) return;
       continue;
     }
     break;
@@ -94,7 +93,7 @@ static void bull_getkey(char *buf) {
     u8 len;
     for (len = 1; len < 4;) {
       if (!sess_getc(&ch)) {
-        if (!s_sess->is_local && net_state() != NET_CONNECTED) break;
+        if (!sess_carrier_ok(s_sess)) break;
         continue;
       }
       if (ch == 13 || ch == 10) break;
@@ -379,7 +378,7 @@ static void bull_do_post(u16 parent) {
       if (uid) to_id_val = (u16)uid;
     }
     do {
-      if (!s_sess->is_local && net_state() != NET_CONNECTED) return;
+      if (!sess_carrier_ok(s_sess)) return;
       bull_tx("SUBJ: "); bull_read_input(s_msg_body + 17, 30, FALSE);
     } while (!s_msg_body[17]);
   }
@@ -492,7 +491,7 @@ static void bull_list_messages(const session_t *s) {
   row = 3;
   next_id = 1;
   for (;;) {
-    if (!s->is_local && net_state() != NET_CONNECTED) break;
+    if (!sess_carrier_ok(s)) break;
     nrows = msg_index_page(s_board.id, next_id, BULL_PAGE_ROWS,
                            s_list_rows, bbs_cfg.device_msgs);
     if (nrows == 0) break;
@@ -525,7 +524,7 @@ static void bull_list_messages(const session_t *s) {
         u8 ch = 0;
         bull_tx("-- MORE --");
         while (!sess_getc(&ch)) {
-          if (!s->is_local && net_state() != NET_CONNECTED) { bull_nl(); bull_sep(); return; }
+          if (!sess_carrier_ok(s)) { bull_nl(); bull_sep(); return; }
         }
         bull_nl();
         if (ch == 'Q' || ch == 'q' || ch == 3 || ch == 27) goto done;
@@ -543,7 +542,7 @@ done:
  * hits the end of available messages. */
 static void bull_reading_loop(const session_t *s) {
   for (;;) {
-    if (!s->is_local && net_state() != NET_CONNECTED) break;
+    if (!sess_carrier_ok(s)) break;
 
     /* Reading prompt: board name + message number. */
     session_set_mci_board(s_board.title);
@@ -641,7 +640,7 @@ bbs_err_t bulletin_run(session_t *s) {
       session_emit(s, "======================================\r\n\r\n");
     }
     for (;;) {
-      if (!s->is_local && net_state() != NET_CONNECTED) break;
+      if (!sess_carrier_ok(s)) break;
 
       /* Boards prompt — p.msgs with %BN for current board name. */
       session_set_mci_board(s_board.title);

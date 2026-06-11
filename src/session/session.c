@@ -635,6 +635,11 @@ static void session_time_check(void)
   }
 }
 
+bool_t sess_carrier_ok(const session_t *s)
+{
+  return (bool_t)(s->is_local || net_state() == NET_CONNECTED);
+}
+
 bool_t sess_getc(u8 *out)
 {
   if (sess_rx_byte(out)) return TRUE;

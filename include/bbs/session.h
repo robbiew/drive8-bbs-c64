@@ -218,6 +218,9 @@ void sess_tx(const char *text);
 /* Read one byte from the caller (keyboard in local mode, modem otherwise).
  * Returns TRUE if a byte was read, FALSE if no carrier / timeout. */
 bool_t sess_getc(u8 *out);
+/* TRUE while the session can still talk to the caller: local sessions are
+ * always live; remote sessions require modem carrier. */
+bool_t sess_carrier_ok(const session_t *s);
 void sess_erase_char(const session_t *s);
 /* Emit a terminal color/attribute byte (PETSCII) or ANSI escape.
  * No-op for ASCII mode. */
