@@ -19,6 +19,22 @@ bbs_err_t msg_index_put(u8 board_id, const msg_index_record_t *rec, u8 device);
 /* Count total + deleted index records in one open/close pass (fast). */
 bbs_err_t msg_index_stats(u8 board_id, u8 device, u16 *out_total, u16 *out_deleted);
 
+/* Compact listing row — only the fields the board listing renders. */
+typedef struct {
+    u16  msg_id;
+    u16  author_id;
+    u8   flags;
+    u8   month;          /* BCD nibbles, same as msg_index_record_t (0 = unset) */
+    u8   day;            /* BCD nibbles */
+    char subj[21];   /* listing renders at most 20 chars + NUL */
+} msg_list_row_t;
+
+/* Fill out[0..max_rows-1] from index records first_id, first_id+1, ... in
+ * ONE open/position/scan/close pass (REU-transparent).  Returns rows filled;
+ * stops early at the first never-written record (end of index). */
+u8 msg_index_page(u8 board_id, u16 first_id, u8 max_rows,
+                  msg_list_row_t *out, u8 device);
+
 /* ---- Post --------------------------------------------------------- */
 
 /* date_mmddyy: current system date as "MM/DD/YY" (e.g. wfc.date); stored as

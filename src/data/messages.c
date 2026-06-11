@@ -155,6 +155,63 @@ bbs_err_t msg_index_get(u8 board_id, u16 msg_id,
     return BBS_OK;
 }
 
+static void msg_row_from_rec(msg_list_row_t *row, const msg_index_record_t *rec)
+{
+    row->msg_id    = rec->msg_id;
+    row->author_id = rec->author_id;
+    row->flags     = rec->flags;
+    row->month     = rec->month;
+    row->day       = rec->day;
+    memcpy(row->subj, rec->subj, 20);
+    row->subj[20] = '\0';
+}
+
+/* Page fetch for the board listing: REU serves rows directly when loaded;
+ * otherwise ONE open/position/sequential-read/close pass replaces the
+ * per-message open/close cycles of repeated msg_index_get calls. */
+u8 msg_index_page(u8 board_id, u16 first_id, u8 max_rows,
+                  msg_list_row_t *out, u8 device)
+{
+    rel_handle_t h;
+    bbs_err_t err;
+    msg_index_record_t rec;
+    u8 buf[RECORD_SIZE_MSG_IDX];
+    u8 filled = 0;
+    u8 got;
+
+    if (!out || board_id == 0 || first_id == 0 || max_rows == 0) return 0;
+
+    if (bbs_cfg.reu_enabled) {
+        while (filled < max_rows &&
+               (u16)(first_id + filled) <= CFG_MSG_MAX_PER_BOARD) {
+            reu_index_get((u16)(first_id + filled), &rec);
+            if (rec.msg_id == 0) break;
+            msg_row_from_rec(&out[filled], &rec);
+            filled++;
+        }
+        return filled;
+    }
+
+    err = msg_open_idx(board_id, device, &h);
+    if (err != BBS_OK) return 0;
+    if (rel_position(h, first_id) != BBS_OK) { rel_close(h); return 0; }
+
+    while (filled < max_rows &&
+           (u16)(first_id + filled) <= CFG_MSG_MAX_PER_BOARD) {
+        memset(buf, 0, RECORD_SIZE_MSG_IDX);
+        err = rel_read(h, (void *)buf, RECORD_SIZE_MSG_IDX, &got);
+        if (err != BBS_OK || got < RECORD_READ_MIN) break;
+        if (got < RECORD_SIZE_MSG_IDX)
+            memset(buf + got, 0, RECORD_SIZE_MSG_IDX - got);
+        msg_unpack(&rec, buf);
+        if (rec.msg_id == 0) break;
+        msg_row_from_rec(&out[filled], &rec);
+        filled++;
+    }
+    rel_close(h);
+    return filled;
+}
+
 /* Count total and deleted index records in ONE pass: open the index REL once,
  * read sequentially, close once. (msg_index_get reopens/closes per call, which
  * is O(messages) drive open/close cycles — far too slow for the maint screen.)
