@@ -171,6 +171,8 @@ static bool_t _term_show_menu(const session_t *s, char *prompt_buf, u8 prompt_le
     if (got <= 0) { disk_close(); goto fallback; }
 
     /* Strip trailing CR/LF; track if line ended with CR (CRLF file artifact). */
+    /* got>0 is redundant after the guard above; kept as defensive style. */
+    // cppcheck-suppress knownConditionTrueFalse
     prev_had_cr = (got > 0 && (u8)prev[got - 1] == '\r');
     while (got > 0 && ((u8)prev[got-1] == '\r' || (u8)prev[got-1] == '\n'))
         prev[--got] = '\0';

@@ -183,6 +183,8 @@ void session_emit_charset(const session_t *s, u8 code)
  * spy writes screen codes directly, so this only changes which glyphs show. */
 static void screen_set_charset(bool_t lower)
 {
+    /* 0x8E is a valid PETSCII byte; host signed-char makes it look negative. */
+    // cppcheck-suppress invalidFunctionArg
     putchar(lower ? (char)0x0E : (char)0x8E);
     s_screen_lower = lower;
 }
