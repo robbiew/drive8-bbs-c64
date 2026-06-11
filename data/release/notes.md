@@ -7,6 +7,19 @@ If you run into problems or have suggestions, please open an issue on GitHub:
 
   https://github.com/robbiew/turbo64/issues
 
+Breaking Changes in v__VERSION__
+---------------------------------
+The password hash algorithm changed in this release. ALL stored password
+hashes are invalid — existing user files will not authenticate.
+
+Recovery steps:
+1. In CONFIGURE, run CREATE USER DATABASE to reinitialise the user file
+   (this reseeds SYSOP with password PASS).
+2. Reset each remaining user's password through the sysop user editor.
+
+There is no migration path. This is pre-release software with no installed
+base, so a clean reset is the correct approach.
+
 What works in v__VERSION__:
 
 - Login and new-user registration
