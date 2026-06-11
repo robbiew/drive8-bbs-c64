@@ -14,30 +14,13 @@
 /**
  * auth_password_matches()
  *
- * Compare a password attempt against a stored 4-byte hash. Falls back to
- * the pre-fold hash (first 4 chars only) so accounts that registered a
- * longer password before the hash folded the full string keep working;
- * the fallback stops applying once the password is next reset or changed.
+ * Compare a password attempt against a stored 4-byte hash.
  */
 static bool_t auth_password_matches(const char *attempt, const char *stored_hash) {
   char hash[4];
 
   user_hash_password(attempt, hash);
-  if (strncmp(hash, stored_hash, 4) == 0) {
-    return TRUE;
-  }
-
-  if (strlen(attempt) > 4) {
-    char prefix[5];
-    memcpy(prefix, attempt, 4);
-    prefix[4] = '\0';
-    user_hash_password(prefix, hash);
-    if (strncmp(hash, stored_hash, 4) == 0) {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
+  return (strncmp(hash, stored_hash, 4) == 0) ? TRUE : FALSE;
 }
 
 /**

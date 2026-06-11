@@ -138,11 +138,10 @@ bbs_err_t user_reset_password(u8 user_id, const char *new_password, u8 device);
  *
  * Hash a plaintext password (up to USER_PASSWORD_MAX chars, all of which
  * affect the result) into the 4-byte form stored in user_record_t.password.
- * Passwords of 4 chars or fewer hash identically to the pre-fold scheme, so
- * existing USR LOG records stay valid. The single shared hash used by both
- * the BBS runtime and the editor — output bytes are always printable
- * (0x21..0x7E), never 0x00 or a control byte, so a stored hash is safe
- * across the REL read layer and any PETSCII/charset round-trip.
+ * The single shared hash used by both the BBS runtime and the editor —
+ * output bytes are always printable (0x21..0x7E), never 0x00 or a control
+ * byte, so a stored hash is safe across the REL read layer and any
+ * PETSCII/charset round-trip.
  *
  * Args:
  *   password  — plaintext, NUL-terminated

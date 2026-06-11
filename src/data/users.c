@@ -483,8 +483,7 @@ void user_hash_password(const char *password, char *out_hash) {
     v[i] = key[i];
 
   /* Fold every char into the 4-byte state. Chars 5+ carry a position salt
-   * so e.g. "ABCDABCD" != "ABCD"; passwords of <= 4 chars reduce to the
-   * pre-fold hash (key[i] ^ password[i]), keeping existing records valid. */
+   * so e.g. "ABCDABCD" != "ABCD". */
   for (i = 0; i < USER_PASSWORD_MAX && password[i]; i++) {
     if (i < 4)
       v[i] ^= (u8)password[i];
