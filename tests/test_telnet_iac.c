@@ -74,5 +74,36 @@ int main(void) {
                   (long)(strlen(telnet_filter_term(&f)) <= TELNET_TERM_MAX), 1);
     }
 
+    /* take_reply partial drain preserves byte order across calls */
+    {
+        static const u8 want[] = {0xFF,0xFB,0x01, 0xFF,0xFD,0x18};
+        u8 got[8]; u8 n1, n2;
+        telnet_filter_init(&f);
+        n1 = telnet_filter_take_reply(&f, got, 4);
+        n2 = telnet_filter_take_reply(&f, got + n1, (u8)(sizeof(got) - n1));
+        EXPECT_EQ("drain.first", n1, 4);
+        EXPECT_EQ("drain.rest", n2, 2);
+        EXPECT_MEM("drain.bytes", got, want, 6);
+    }
+
+    /* unknown command after IAC (e.g. NOP) is consumed, stream continues */
+    {
+        static const u8 in[] = {0xFF,0xF1,'A'};
+        n = feed_all(&f, in, 3, app);
+        EXPECT_EQ("nop.count", n, 1);
+        EXPECT_EQ("nop.byte", app[0], 'A');
+    }
+
+    /* IAC SB IAC SE with empty buffer must not underflow sb_buf (was OOB) */
+    {
+        static const u8 in[] = {0xFF,0xFA,0xFF,0xF0,'B'};
+        char before[8];
+        strcpy(before, telnet_filter_term(&f));
+        n = feed_all(&f, in, sizeof(in), app);
+        EXPECT_EQ("sbempty.count", n, 1);
+        EXPECT_EQ("sbempty.byte", app[0], 'B');
+        EXPECT_STR("sbempty.term", telnet_filter_term(&f), before);
+    }
+
     return test_summary("telnet_iac");
 }

@@ -108,7 +108,7 @@ u8 telnet_filter_feed(telnet_filter_t *f, u8 in, u8 *out)
             }
             f->state = 0;
         } else if (in == IAC) {
-            if (f->sb_len <= TELNET_TERM_MAX) f->sb_buf[f->sb_len - 1] = IAC;
+            if (f->sb_len > 0 && f->sb_len <= TELNET_TERM_MAX) f->sb_buf[f->sb_len - 1] = IAC;
             f->sb_len++;
             f->state = 6;
         } else {

@@ -38,5 +38,19 @@ int main(void) {
               feed_str(&p, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r"),
               AT_EVT_NONE);
 
+    /* bare "CONNECT" with no speed suffix is still a CONNECT */
+    at_parser_init(&p);
+    EXPECT_EQ("connect.bare", feed_str(&p, "CONNECT\r"), AT_EVT_CONNECT);
+
+    /* realistic CRLF framing yields exactly one event */
+    {
+        u8 rings = 0;
+        const char *s = "\r\nRING\r\n";
+        at_parser_init(&p);
+        for (; *s; s++)
+            if (at_parser_feed(&p, (u8)*s, &ob, &oa) == AT_EVT_RING) rings++;
+        EXPECT_EQ("crlf.one_ring", rings, 1);
+    }
+
     return test_summary("at_response");
 }
