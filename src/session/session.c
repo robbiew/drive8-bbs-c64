@@ -529,7 +529,11 @@ static u8 sess_rx_byte(u8 *out)
 {
     if (s_local) {
         if (KBD_COUNT == 0) return 0;
-        return sess_accept_input((u8)getchar(), out) ? 1 : 0;
+        /* getchx() (GETIN), not getchar(): CHRIN would enter the KERNAL line
+         * editor — blocking this non-blocking pump until RETURN and echoing
+         * the keystrokes (including the password) before the session sees
+         * them. KBD_COUNT > 0 guarantees getchx() returns a real key. */
+        return sess_accept_input((u8)getchx(), out) ? 1 : 0;
     } else {
         u16 got;
         if (net_rx(out, 1, &got) == BBS_OK && got == 1) {

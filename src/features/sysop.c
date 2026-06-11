@@ -703,24 +703,25 @@ static u8 rtc_try_read(u8 *out_yr, u8 *out_mo, u8 *out_dy,
  */
 static u8 read_uint(void)
 {
-    // cppcheck-suppress variableScope
-    char c;
     u8 val = 0;
     u8 n = 0;
+    /* getch() (GETIN), not getchar() (CHRIN): CHRIN's early return on the 3rd
+     * digit left the rest of the line + RETURN in its readback state, feeding
+     * stray input into the next prompt (e.g. typing 2026 at YEAR). */
     for (;;) {
-        c = (char)getchar();
+        char c = (char)getch();
         if (c == '\r' || c == '\n') {
-            /* KERNAL already moved cursor to next line; submit whatever we have */
+            printf("\n");
             return (n > 0) ? val : 255;
         }
         if (c == '\x14' || c == 0x08 || c == 0x7f) {   /* PETSCII DEL / backspace */
-            if (n > 0) { n--; val /= 10; }
+            if (n > 0) { n--; val /= 10; printf("\x14"); }
             continue;
         }
         if (c >= '0' && c <= '9') {
             val = (u8)(val * 10 + (c - '0'));
             n++;
-            /* KERNAL already echoed the digit; no putchar needed */
+            printf("%c", c);
             if (n >= 3) { printf("\n"); return val; }
             continue;
         }

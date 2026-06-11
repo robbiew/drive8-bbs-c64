@@ -16,6 +16,7 @@
 #include "bbs/cfg.h"
 #include "bbs/hal/clock.h"
 #include <string.h>
+#include <conio.h>   /* getchx() — raw GETIN for the local console */
 
 /* C64 keyboard buffer count (non-blocking check) */
 #define KBD_COUNT (*(volatile u8 *)0xC6)
@@ -48,11 +49,13 @@ static bool_t _term_accept_input(u8 ch, u8 *out)
 static bool_t _term_getc_blocking(const session_t *s, u8 *out)
 {
     if (s->is_local) {
-        /* Local console: wait for keyboard (no idle timeout for the SysOp) */
+        /* Local console: wait for keyboard (no idle timeout for the SysOp).
+         * getchx() (GETIN) returns the pending key directly; getchar() (CHRIN)
+         * would invoke the KERNAL line editor and wait for RETURN. */
         while (KBD_COUNT == 0) {
             /* busy-wait */
         }
-        return _term_accept_input((u8)getchar(), out);
+        return _term_accept_input((u8)getchx(), out);
     } else {
         /* Remote modem: pump ACIA until byte available, idle, or hangup */
         u16 got;
