@@ -42,6 +42,11 @@ command -v gh >/dev/null 2>&1 || {
     exit 1
 }
 
+command -v zip >/dev/null 2>&1 || {
+    echo -e "${RED}ERROR: zip is not installed.${NC}" >&2
+    exit 1
+}
+
 gh auth status >/dev/null 2>&1 || {
     echo -e "${RED}ERROR: gh CLI is not authenticated.${NC}" >&2
     echo "Run: gh auth login" >&2
@@ -116,6 +121,40 @@ echo -e "${GREEN}Release assets staged:${NC}"
 ls -1 "$RELEASE_DIR"
 echo ""
 
+# --- Create ZIP archive ---
+
+ZIP_FILE="$RELEASE_DIR/TURBO64-${VERSION}.zip"
+echo -e "${BLUE}Creating ZIP archive...${NC}"
+(
+    cd "$RELEASE_DIR"
+    zip -q "TURBO64-${VERSION}.zip" \
+        "TURBO64-${VERSION}.d81" \
+        "BOOT-${VERSION}.prg" \
+        "CONFIGURE-${VERSION}.prg" \
+        "BOARDS-${VERSION}.d81" \
+        "FILE_ID.DIZ" \
+        "README.txt"
+)
+
+# --- Release notes ---
+
+NOTES_FILE="$ROOT/data/release/notes.md"
+NOTES_TMP="$RELEASE_DIR/notes.md"
+if [ -f "$NOTES_FILE" ]; then
+    sed "s/__VERSION__/$VERSION/g" "$NOTES_FILE" > "$NOTES_TMP"
+    RELEASE_NOTES="$(cat "$NOTES_TMP")"
+    echo -e "${GREEN}Using release notes from data/release/notes.md${NC}"
+else
+    PREV_TAG="$(git tag --sort=-version:refname 2>/dev/null | head -2 | tail -1)" || true
+    if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
+        RELEASE_NOTES="$(git log "$PREV_TAG..HEAD" --oneline)"
+    else
+        RELEASE_NOTES="$(git log --oneline)"
+    fi
+    echo -e "${YELLOW}No data/release/notes.md found, using git log for release notes.${NC}"
+fi
+echo ""
+
 # --- Dry run exit ---
 
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -125,14 +164,14 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "  1. git tag -a \"$TAG\" -m \"TURBO/64 BBS v$VERSION\""
     echo "  2. git push origin \"$TAG\""
     echo "  3. gh release create \"$TAG\" \\"
-    echo "       build/release/TURBO64-${VERSION}.d81 \\"
-    echo "       build/release/BOOT-${VERSION}.prg \\"
-    echo "       build/release/CONFIGURE-${VERSION}.prg \\"
-    echo "       build/release/BOARDS-${VERSION}.d81 \\"
-    echo "       build/release/FILE_ID.DIZ \\"
-    echo "       build/release/README.txt \\"
+    echo "       TURBO64-${VERSION}.zip \\"
     echo "       --title \"TURBO/64 BBS v$VERSION\" \\"
-    echo "       --notes \"<changelog>\""
+    echo "       --notes \"<from notes.md or git log>\""
+    echo ""
+    echo -e "Release notes preview:"
+    echo "---"
+    echo "$RELEASE_NOTES"
+    echo "---"
     echo ""
     echo -e "${GREEN}Dry run complete.${NC}"
     exit 0
@@ -148,27 +187,13 @@ if [ "$SKIP_TAG" -eq 0 ]; then
     echo ""
 fi
 
-# --- Changelog ---
-
-PREV_TAG="$(git tag --sort=-version:refname 2>/dev/null | head -2 | tail -1)" || true
-if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
-    CHANGELOG="$(git log "$PREV_TAG..HEAD" --oneline)"
-else
-    CHANGELOG="$(git log --oneline)"
-fi
-
 # --- GitHub release ---
 
 echo -e "${BLUE}Creating GitHub release $TAG...${NC}"
 gh release create "$TAG" \
-    "$RELEASE_DIR/TURBO64-${VERSION}.d81" \
-    "$RELEASE_DIR/BOOT-${VERSION}.prg" \
-    "$RELEASE_DIR/CONFIGURE-${VERSION}.prg" \
-    "$RELEASE_DIR/BOARDS-${VERSION}.d81" \
-    "$RELEASE_DIR/FILE_ID.DIZ" \
-    "$RELEASE_DIR/README.txt" \
+    "$ZIP_FILE" \
     --title "TURBO/64 BBS v$VERSION" \
-    --notes "$CHANGELOG"
+    --notes "$RELEASE_NOTES"
 
 echo ""
 echo -e "${GREEN}Release v$VERSION published!${NC}"

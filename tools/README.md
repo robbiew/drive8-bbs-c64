@@ -238,7 +238,7 @@ Install cppcheck: `brew install cppcheck` / `sudo apt install cppcheck`.
 
 ### `release.sh` — GitHub Release Pipeline
 
-Builds all release artifacts, generates FILE_ID.DIZ and README.txt from templates, creates a git tag, and publishes a GitHub release via `gh`.
+Builds all release artifacts, generates FILE_ID.DIZ and README.txt from templates, bundles them into a single ZIP, and publishes a GitHub release via `gh`.
 
 ```bash
 tools/release.sh              # full release: build, tag, push, publish
@@ -248,19 +248,22 @@ tools/release.sh --skip-tag   # publish to an existing tag (no new tag created)
 
 | Option | Description |
 |--------|-------------|
-| `--dry-run` | Build artifacts, stage in `build/release/`, show planned steps — no tag, push, or publish |
+| `--dry-run` | Build artifacts, create ZIP, show planned steps — no tag, push, or publish |
 | `--skip-tag` | Build and publish to an existing tag — no git tag created or pushed |
 | `-h, --help` | Show usage |
 
-**Requires:** `gh` CLI installed and authenticated (`gh auth login`). `oscar64` compiler and `c1541` available (needed by build step).
+**Requires:** `gh` CLI installed and authenticated (`gh auth login`), `zip`, `oscar64` compiler, and `c1541` available.
 
-**Release assets produced** (in `build/release/`):
+**Release asset:** A single `TURBO64-<ver>.zip` containing:
+
 - `TURBO64-<ver>.d81` — bootable BBS system disk
 - `BOOT-<ver>.prg` — standalone BBS runtime
 - `CONFIGURE-<ver>.prg` — standalone SysOp config editor
 - `BOARDS-<ver>.d81` — blank disk for message bases (Device 9)
-- `FILE_ID.DIZ` — classic BBS description file
+- `FILE_ID.DIZ` — classic BBS description file (45 chars/line, 10 lines)
 - `README.txt` — plain-text project README
+
+**Release notes:** If `data/release/notes.md` exists (with optional `__VERSION__` tokens), it is used as the GitHub release body. Otherwise, the script falls back to `git log` since the previous tag.
 
 ---
 
@@ -289,7 +292,14 @@ data/
 ├── users-seed.d81        user database snapshot (from extract-users.sh)
 ├── boards-seed.d81       boards disk snapshot (from extract-boards.sh)
 ├── usr_log               raw USR LOG binary
-└── usr_prof              raw USR PROF binary
+├── usr_prof              raw USR PROF binary
+└── release/
+    ├── file_id.diz.tmpl  FILE_ID.DIZ template (__VERSION__ substitution)
+    ├── readme.txt.tmpl    README.txt template (__VERSION__ substitution)
+    └── notes.md           release notes template (used by release.sh)
+
+build/release/
+└── TURBO64-<ver>.zip     release archive (created by release.sh)
 ```
 
 ---
