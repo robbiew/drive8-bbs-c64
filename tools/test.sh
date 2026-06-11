@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Build and run all host-side unit tests with the system C compiler.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/build/host"
+CC="${CC:-cc}"
+CFLAGS="-std=c99 -Wall -Wextra -I$ROOT/include -I$ROOT/tests"
+
+mkdir -p "$OUT"
+fails=0
+
+run() {
+    local name="$1"; shift
+    # shellcheck disable=SC2086
+    "$CC" $CFLAGS -o "$OUT/$name" "$@"
+    if ! "$OUT/$name"; then fails=1; fi
+}
+
+run test_prompt_cursor_frame \
+    "$ROOT/tests/test_prompt_cursor_frame.c" \
+    "$ROOT/src/session/prompt_cursor_frame.c"
+
+run test_telnet_iac -I"$ROOT/src/net" \
+    "$ROOT/tests/test_telnet_iac.c" "$ROOT/src/net/telnet_iac.c"
+
+run test_at_response -I"$ROOT/src/net" \
+    "$ROOT/tests/test_at_response.c" "$ROOT/src/net/at_response.c"
+
+# Characterization: full CP437 translation matrix vs committed golden.
+# shellcheck disable=SC2086
+"$CC" $CFLAGS -I"$ROOT/src/term" -o "$OUT/test_term_xlate" \
+    "$ROOT/tests/test_term_xlate.c" \
+    "$ROOT/src/term/term.c" "$ROOT/src/term/cp437_petscii.c" \
+    "$ROOT/src/term/cp437_ascii.c" "$ROOT/src/term/ansi.c"
+if ! "$OUT/test_term_xlate" > "$OUT/term_xlate.txt"; then
+    echo "term_xlate: dump binary failed"
+    fails=1
+elif ! diff -u "$ROOT/tests/golden/term_xlate.txt" "$OUT/term_xlate.txt"; then
+    echo "term_xlate: output differs from tests/golden/term_xlate.txt"
+    echo "  If the table change is intentional, regenerate and review the diff:"
+    echo "    build/host/test_term_xlate > tests/golden/term_xlate.txt"
+    fails=1
+fi
+
+if [ "$fails" -ne 0 ]; then echo "HOST TESTS FAILED"; exit 1; fi
+echo "ALL HOST TESTS PASSED"
