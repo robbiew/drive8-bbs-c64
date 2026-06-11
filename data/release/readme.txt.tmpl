@@ -1,0 +1,181 @@
+=============================================================================
+TURBO/64 BBS (T/64) v__VERSION__
+A Commodore 64 BBS for the Oscar64 compiler
+=============================================================================
+
+Note: This project is under active development and is not yet
+feature-complete.
+
+WHAT THIS IS
+------------
+
+TURBO/64 BBS is a Commodore 64 BBS written in C for the Oscar64 compiler.
+It targets native .prg output for real hardware (including C64 Ultimate)
+and VICE emulation.
+
+Current status: v__VERSION__ -- login/registration, terminal translation
+(PETSCII, ANSI/CP437, ASCII), bulletin boards, and the Configure editor are
+working.
+
+Not working: private mail, file transfers, SysOp chat, polls/voting, doors,
+and more remain stubbed.
+
+REQUIREMENTS
+------------
+
+Hardware / emulator:
+- Commodore 64 with SwiftLink/ACIA cartridge at $DE00, OR C64 Ultimate
+  with built-in ACIA, OR VICE x64sc with tcpser modem bridge
+- Two .D81 disk images -- one for the BBS, one blank for message boards
+  (device 9)
+- 16 MB REU required for message boards and some other features.  The
+  C64 Ultimate has one built in; VICE can be configured with one.  The
+  BBS boots and lets you log in without a REU, but reading and posting
+  messages need it.
+
+Developer build host (macOS / Linux):
+- oscar64 compiler -- bash tools/install-oscar64.sh
+- c1541 from VICE package (disk assembly)
+- c64u deploy tool for C64U -- bash tools/install-c64u.sh
+- tcpser for VICE modem emulation -- macOS: brew install tcpser
+
+QUICK START
+-----------
+
+1. Mount TURBO64-__VERSION__.d81 on device 8.
+
+2. Initialize the files (first time only):
+   LOAD "CONFIGURE-__VERSION__",8
+   RUN
+   Choose I -- INIT FILES from the main menu.
+   This creates USR LOG, USR PROF, and CALLERS.
+   Record 1 is always the SysOp account: handle SYSOP, password PASS,
+   access level 5.  Change it!
+
+3. Configure the BBS:
+   From CONFIGURE, choose C -- CONFIG to edit settings, devices, modem
+   type, and baud rate.  Changes are saved to the config SEQ file
+   immediately.
+
+4. Set up message boards disk (device 9):
+   Format a blank .D81, mount it on device 9.  In CONFIGURE, choose
+   M -- MSG AREAS then C -- CREATE to add boards.
+
+5. Run the BBS:
+   LOAD "BOOT-__VERSION__",8
+   RUN
+
+   Expected startup:
+     TURBO/64 BBS V__VERSION__
+     LOADING SETUP...
+       BBS: <your bbs name>
+       SYSOP: <your name>
+     INIT MODEM...
+       ACIA STATUS: $10
+     CHECKING REU...
+       REU: 16 MB
+     CHECKING USR LOG...
+       USR LOG: OK
+
+   If USR LOG: NOT FOUND or USR LOG: EMPTY, return to CONFIGURE and
+   run Init Files.
+
+CONFIGURATION REFERENCE
+-----------------------
+
+data/config default values:
+
+  BBS_NAME         A NEW T/64 BBS
+  BBS_CITY         SOMEWHERE, CA
+  SYSOP_NAME       JOE SYSOP
+  NEW_USER_LEVEL   1
+  MIN_CALL_TIME    5
+  MAX_CALL_TIME    60
+  DEV_SYSTEM       8
+  DEV_MSGS         9
+  DEV_FILES        8
+  DEV_DOORS        8
+  MODEM_INIT       ATZ
+  BAUD_RATE        38400
+  MODEM_TIMEOUT    255
+  ALLOW_NEW_USERS  1
+  ALLOW_UPLOADS    1
+
+Device values can include a drive number and CBM DOS init string:
+8, 8;0:, or 8;0:;CD:BBS.  The BBS sends the init string to the drive
+at startup.
+
+ACCESS LEVELS
+-------------
+
+  Level  Name      Description
+  ------ --------- ---------------------------------------------------
+  0      Deleted   Banned / deleted account
+  1      New       Unvalidated new user (default for registrants)
+  2      User      Standard validated user
+  3      Power     Power user
+  4      Co-SysOp  Co-SysOp
+  5      SysOp     Full access; cannot be deleted
+
+Each level has daily limits and capability flags edited in CONFIGURE:
+  CALLS/DAY  -- max logins per day for the level
+  MINS/DAY   -- max online minutes per day (enforced live)
+  FLAGS      -- capability bits (A=anon, P=page, S=send mail,
+                J=join polls, U=upload, T=no time limit,
+                C=no call limit, Y=sysop)
+
+WHAT IS NOT YET IMPLEMENTED
+----------------------------
+
+The following features return a placeholder message:
+
+- Private mail
+- File transfers (upload/download)
+- SysOp chat / page
+- Polls and votes
+- Last caller display
+- Door games
+- System info
+- Graffiti wall
+- Preferences (can't edit)
+- Help
+- Local chat
+- 80-column (ANSI) message viewer
+- WFC F keys (local login, log viewer, etc.)
+- Spy F keys (chat, change access level)
+- Adapt message area to 80 cols
+
+Data structures and CONFIGURE admin modules for all of the above are
+in place.
+
+HOW TO CONTRIBUTE
+-----------------
+
+TURBO/64 is an active project and contributions of all kinds are welcome
+-- you do not need to be a C programmer to help.
+
+Developers: the stubbed features listed above are the priority.  Each one
+has its data layer and CONFIGURE admin UI in place; what is missing is
+the caller-facing session logic inside src/features/.  If you want to
+pick up a feature, open an issue first to avoid duplication.  Good entry
+points: src/features/mail.c, src/features/vote.c,
+src/features/callers.c -- all thin stubs waiting to be wired up on the
+same pattern as src/features/bulletin.c.
+
+Artists and SysOps: the BBS ships with bare-bones gfiles.  Needed:
+PETSCII art (mode 0), ANSI/CP437 art (mode 1), ASCII variants (mode 2),
+and menu prompt files (p.*).  Files live in data/gfiles/ and are
+assembled directly onto the disk image by make disk.
+
+Testers: real-hardware and emulator coverage is critical.  Specifically
+needed: SD2IEC (REL file edge cases), VICE regression testing, real
+1541/1571/1581 drives, and terminal clients (SyncTerm, PuTTY, netcat,
+real C64 terminals).
+
+File issues on GitHub with hardware/firmware versions, a description of
+what you did, and the exact error or unexpected behaviour.
+
+GITHUB
+------
+
+https://github.com/mortonproduction/turbo64
