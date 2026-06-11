@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Lint
+        run: bash tools/lint.sh
+      - name: Host tests
+        run: bash tools/test.sh
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache oscar64
+        id: cache-oscar64
+        uses: actions/cache@v4
+        with:
+          path: vendor/oscar64
+          key: oscar64-${{ hashFiles('tools/install-oscar64.sh') }}
+      - name: Build oscar64
+        if: steps.cache-oscar64.outputs.cache-hit != 'true'
+        run: bash tools/install-oscar64.sh
+      - name: Build PRGs
+        run: make all
