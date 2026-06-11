@@ -136,7 +136,7 @@ with open(DISK, 'r+b') as f:
         t, s = sec[0], sec[1]
         for eo in range(2, 256, 32):
             entry = sec[eo:eo+32]
-            if len(entry) < 32: break
+            if len(entry) < 22: break  # 8th dir slot is a 30-byte slice; fields end at reclen (21)
             if (entry[0] & 0x07) != 4: continue   # must be REL
             # Mask to 7-bit first, which turns 0xA0 shifted-space padding into
             # 0x20 — so strip trailing spaces/nulls (not 0xA0) to get the name.
