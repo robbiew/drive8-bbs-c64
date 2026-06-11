@@ -467,39 +467,6 @@ bbs_err_t user_delete(u8 user_id, u8 device) {
 }
 
 /**
- * user_hash_password()
- *
- * The single password-hash implementation, shared by the BBS runtime
- * (auth.c) and the editor (setup.c, admin/users.c).
- *
- * Output bytes are mapped into the printable ASCII range 0x21..0x7E so a
- * stored hash can NEVER contain 0x00 (which the REL read layer treats as
- * end-of-record — see RECORD_READ_MIN above) or a control byte (which does
- * not survive a PETSCII/charset round-trip and previously corrupted the
- * seeded SYSOP password). See records.h for the on-disk record layout.
- */
-void user_hash_password(const char *password, char *out_hash) {
-  static const u8 key[4] = { 0x42, 0x85, 0xC3, 0x29 };
-  u8 v[4];
-  u8 i;
-
-  for (i = 0; i < 4; i++)
-    v[i] = key[i];
-
-  /* Fold every char into the 4-byte state. Chars 5+ carry a position salt
-   * so e.g. "ABCDABCD" != "ABCD". */
-  for (i = 0; i < USER_PASSWORD_MAX && password[i]; i++) {
-    if (i < 4)
-      v[i] ^= (u8)password[i];
-    else
-      v[i & 3] ^= (u8)((u8)(password[i] << 1) ^ i);
-  }
-
-  for (i = 0; i < 4; i++)
-    out_hash[i] = (char)(0x21 + (v[i] % 0x5E));
-}
-
-/**
  * user_reset_password()
  *
  * Reset a user's password (sysop operation).
@@ -520,7 +487,7 @@ bbs_err_t user_reset_password(u8 user_id, const char *new_password, u8 device) {
   }
 
   /* Hash new password */
-  user_hash_password(new_password, hash);
+  user_hash_password(user_id, new_password, hash);
 
   /* Update password field */
   memcpy(rec.password, hash, 4);

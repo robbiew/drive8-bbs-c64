@@ -336,7 +336,7 @@ static void users_do_create(u8 device)
   new_user.term_rows  = (u8)val;
 
   /* Default password: "PASS" (sysop can reset via [R] option) */
-  user_hash_password("PASS", new_user.password);
+  user_hash_password(new_id, "PASS", new_user.password);
 
   err = user_save(&new_user, device);
   if (err != BBS_OK) {

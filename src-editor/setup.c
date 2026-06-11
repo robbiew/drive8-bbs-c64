@@ -43,7 +43,7 @@ bbs_err_t setup_create_user_database(u8 device) {
   user.id = 1;
   strncpy(user.handle, "SYSOP", sizeof(user.handle) - 1);
   user.handle[sizeof(user.handle) - 1] = '\0';
-  user_hash_password("PASS", user.password);
+  user_hash_password(1, "PASS", user.password);
   user.access_level   = 5;
   user.calls          = 1;
   user.credit_balance = 100;

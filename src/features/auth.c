@@ -16,10 +16,11 @@
  *
  * Compare a password attempt against a stored 4-byte hash.
  */
-static bool_t auth_password_matches(const char *attempt, const char *stored_hash) {
+static bool_t auth_password_matches(u8 user_id, const char *attempt,
+                                    const char *stored_hash) {
   char hash[4];
 
-  user_hash_password(attempt, hash);
+  user_hash_password(user_id, attempt, hash);
   return (strncmp(hash, stored_hash, 4) == 0) ? TRUE : FALSE;
 }
 
@@ -43,7 +44,7 @@ bbs_err_t auth_validate_password(const char *handle, const char *password_attemp
     return BBS_EIO;
   }
 
-  if (!auth_password_matches(password_attempt, user.password)) {
+  if (!auth_password_matches(user_id, password_attempt, user.password)) {
     return BBS_EPERM;  /* Bad password */
   }
 
@@ -191,7 +192,7 @@ bbs_err_t auth_prompt_login(session_t *s) {
    * adding two redundant disk/REU operations and mapping any I/O or
    * lookup failure to BBS_EPERM (showing "INVALID LOGIN" even when
    * the real problem was a transient I/O error, not a wrong password). */
-  if (!auth_password_matches(s->password, user.password)) {
+  if (!auth_password_matches(user_id, s->password, user.password)) {
     return BBS_EPERM;
   }
 
@@ -249,7 +250,7 @@ bbs_err_t auth_register_new(session_t *s) {
   user.handle[sizeof(user.handle) - 1] = '\0';
 
   /* Hash and store password */
-  user_hash_password(s->password, hash);
+  user_hash_password(new_id, s->password, hash);
   memcpy(user.password, hash, 4);
 
   /* Set defaults from config */

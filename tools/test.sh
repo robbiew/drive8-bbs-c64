@@ -27,6 +27,9 @@ run test_telnet_iac -I"$ROOT/src/net" \
 run test_at_response -I"$ROOT/src/net" \
     "$ROOT/tests/test_at_response.c" "$ROOT/src/net/at_response.c"
 
+run test_user_hash \
+    "$ROOT/tests/test_user_hash.c" "$ROOT/src/data/user_hash.c"
+
 # Characterization: full CP437 translation matrix vs committed golden.
 # shellcheck disable=SC2086
 "$CC" $CFLAGS -I"$ROOT/src/term" -o "$OUT/test_term_xlate" \

@@ -138,16 +138,21 @@ bbs_err_t user_reset_password(u8 user_id, const char *new_password, u8 device);
  *
  * Hash a plaintext password (up to USER_PASSWORD_MAX chars, all of which
  * affect the result) into the 4-byte form stored in user_record_t.password.
- * The single shared hash used by both the BBS runtime and the editor —
- * output bytes are always printable (0x21..0x7E), never 0x00 or a control
- * byte, so a stored hash is safe across the REL read layer and any
- * PETSCII/charset round-trip.
+ * Salted with the user's record id, so identical passwords store different
+ * hashes per user.  The single shared hash used by both the BBS runtime and
+ * the editor — output bytes are always printable (0x21..0x7E), never 0x00
+ * or a control byte, so a stored hash is safe across the REL read layer and
+ * any PETSCII/charset round-trip.
  *
  * Args:
+ *   user_id   — record id of the owning user (salt)
  *   password  — plaintext, NUL-terminated
  *   out_hash  — 4-byte output buffer
+ *
+ * The iteration count is latency-bound at 1 MHz — see HASH_ROUNDS in
+ * user_hash.c before tuning.
  */
-void user_hash_password(const char *password, char *out_hash);
+void user_hash_password(u8 user_id, const char *password, char *out_hash);
 
 /**
  * user_profile_save()
