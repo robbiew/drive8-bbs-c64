@@ -95,8 +95,9 @@ bbs_err_t cfg_init(void);
  * Overwrites any existing file.
  *
  * Returns:
- *   BBS_OK    — saved successfully
- *   BBS_EIO   — disk write error
+ *   BBS_OK      — saved successfully
+ *   BBS_EFULL   — disk full (DOS error 72)
+ *   BBS_EIO     — write or drive-status error
  */
 bbs_err_t cfg_save(u8 device);
 

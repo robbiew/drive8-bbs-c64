@@ -321,15 +321,28 @@ bbs_err_t cfg_init(void) {
   return BBS_OK;
 }
 
+/* First disk_puts failure across a whole cfg_save pass; later writes are
+ * skipped once an error is latched (they would write into a broken file). */
+static bbs_err_t s_save_err;
+
+static void cfg_put(const char *line) {
+  if (s_save_err == BBS_OK) {
+    s_save_err = disk_puts(line);
+  }
+}
+
 /**
  * cfg_save()
  *
  * Write current bbs_cfg to the "config" sequential file on the given device.
+ * Returns BBS_EFULL on DOS 72 (disk full), BBS_EIO on any other write or
+ * drive-status error — callers must treat non-BBS_OK as "CONFIG is suspect".
  */
 bbs_err_t cfg_save(u8 device) {
   bbs_err_t err;
   char line[96];
   char spec[CFG_VALUE_MAX];
+  u8 status;
 
   disk_scratch(device, 0, "CONFIG");
 
@@ -338,32 +351,48 @@ bbs_err_t cfg_save(u8 device) {
     return err;
   }
 
-  sprintf(line, "BBS_NAME=%s\n",      bbs_cfg.bbs_name);    disk_puts(line);
-  sprintf(line, "BBS_CITY=%s\n",      bbs_cfg.bbs_city);    disk_puts(line);
-  sprintf(line, "SYSOP_NAME=%s\n",    bbs_cfg.sysop_name);  disk_puts(line);
-  sprintf(line, "NEW_USER_LEVEL=%u\n",(unsigned)bbs_cfg.new_user_level);   disk_puts(line);
-  sprintf(line, "MIN_CALL_TIME=%u\n", (unsigned)bbs_cfg.min_call_time);    disk_puts(line);
-  sprintf(line, "MAX_CALL_TIME=%u\n", (unsigned)bbs_cfg.max_call_time);    disk_puts(line);
-  sprintf(line, "IDLE_TIMEOUT=%u\n",  (unsigned)bbs_cfg.idle_timeout_mins); disk_puts(line);
+  s_save_err = BBS_OK;
+
+  sprintf(line, "BBS_NAME=%s\n",      bbs_cfg.bbs_name);    cfg_put(line);
+  sprintf(line, "BBS_CITY=%s\n",      bbs_cfg.bbs_city);    cfg_put(line);
+  sprintf(line, "SYSOP_NAME=%s\n",    bbs_cfg.sysop_name);  cfg_put(line);
+  sprintf(line, "NEW_USER_LEVEL=%u\n",(unsigned)bbs_cfg.new_user_level);   cfg_put(line);
+  sprintf(line, "MIN_CALL_TIME=%u\n", (unsigned)bbs_cfg.min_call_time);    cfg_put(line);
+  sprintf(line, "MAX_CALL_TIME=%u\n", (unsigned)bbs_cfg.max_call_time);    cfg_put(line);
+  sprintf(line, "IDLE_TIMEOUT=%u\n",  (unsigned)bbs_cfg.idle_timeout_mins); cfg_put(line);
   cfg_format_device_spec(spec, bbs_cfg.device_system, bbs_cfg.drive_system, bbs_cfg.init_system);
-  sprintf(line, "DEV_SYSTEM=%s\n",    spec);                                disk_puts(line);
+  sprintf(line, "DEV_SYSTEM=%s\n",    spec);                                cfg_put(line);
   cfg_format_device_spec(spec, bbs_cfg.device_msgs, bbs_cfg.drive_msgs, bbs_cfg.init_msgs);
-  sprintf(line, "DEV_MSGS=%s\n",      spec);                                disk_puts(line);
+  sprintf(line, "DEV_MSGS=%s\n",      spec);                                cfg_put(line);
   cfg_format_device_spec(spec, bbs_cfg.device_files, bbs_cfg.drive_files, bbs_cfg.init_files);
-  sprintf(line, "DEV_FILES=%s\n",     spec);                                disk_puts(line);
+  sprintf(line, "DEV_FILES=%s\n",     spec);                                cfg_put(line);
   cfg_format_device_spec(spec, bbs_cfg.device_doors, bbs_cfg.drive_doors, bbs_cfg.init_doors);
-  sprintf(line, "DEV_DOORS=%s\n",     spec);                                disk_puts(line);
-  sprintf(line, "MODEM_INIT=%s\n",    bbs_cfg.modem_init);                 disk_puts(line);
-  sprintf(line, "BAUD=%u\n",          (unsigned)bbs_cfg.baud_rate);        disk_puts(line);
-  sprintf(line, "MODEM_TIMEOUT=%u\n", (unsigned)bbs_cfg.modem_timeout);    disk_puts(line);
+  sprintf(line, "DEV_DOORS=%s\n",     spec);                                cfg_put(line);
+  sprintf(line, "MODEM_INIT=%s\n",    bbs_cfg.modem_init);                 cfg_put(line);
+  sprintf(line, "BAUD=%u\n",          (unsigned)bbs_cfg.baud_rate);        cfg_put(line);
+  sprintf(line, "MODEM_TIMEOUT=%u\n", (unsigned)bbs_cfg.modem_timeout);    cfg_put(line);
   sprintf(line, "MODEM_TYPE=%s\n",
           bbs_cfg.modem_type == MODEM_VICE ? "VICE" :
-          bbs_cfg.modem_type == MODEM_U64  ? "U64"  : "AUTO");             disk_puts(line);
-  sprintf(line, "ALLOW_NEW_USERS=%u\n",(unsigned)(bbs_cfg.allow_new_users ? 1 : 0));  disk_puts(line);
-  sprintf(line, "ALLOW_UPLOADS=%u\n",  (unsigned)(bbs_cfg.allow_uploads   ? 1 : 0));  disk_puts(line);
-  sprintf(line, "PROMPT_CURSOR=%u\n",  (unsigned)(bbs_cfg.prompt_cursor    ? 1 : 0));  disk_puts(line);
+          bbs_cfg.modem_type == MODEM_U64  ? "U64"  : "AUTO");             cfg_put(line);
+  sprintf(line, "ALLOW_NEW_USERS=%u\n",(unsigned)(bbs_cfg.allow_new_users ? 1 : 0));  cfg_put(line);
+  sprintf(line, "ALLOW_UPLOADS=%u\n",  (unsigned)(bbs_cfg.allow_uploads   ? 1 : 0));  cfg_put(line);
+  sprintf(line, "PROMPT_CURSOR=%u\n",  (unsigned)(bbs_cfg.prompt_cursor    ? 1 : 0));  cfg_put(line);
 
   disk_close();
+
+  if (s_save_err != BBS_OK) {
+    /* Still read the error channel: maps DISK FULL precisely and clears
+     * the drive's latched error before the next command. */
+    status = disk_status(device);
+    return (status == 72) ? BBS_EFULL : s_save_err;
+  }
+
+  /* KERNAL buffers writes; DOS 72 (DISK FULL) only surfaces on the drive
+   * status channel after close. */
+  status = disk_status(device);
+  if (status >= 20) {
+    return (status == 72) ? BBS_EFULL : BBS_EIO;
+  }
   return BBS_OK;
 }
 

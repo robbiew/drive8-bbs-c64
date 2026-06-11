@@ -8,7 +8,7 @@ typedef enum {
     BBS_OK        = 0,
     BBS_EIO       = 1,  /* I/O error (disk, ACIA) */
     BBS_EPERM     = 2,  /* permission denied / auth failure */
-    BBS_EFULL     = 3,  /* buffer or table full */
+    BBS_EFULL     = 3,  /* buffer, table, or disk full */
     BBS_ENOTFOUND = 4,  /* file, user, message not found */
     BBS_EAGAIN    = 5,  /* try again — resource temporarily unavailable */
     BBS_EPROTO    = 6,  /* protocol error (telnet, record corruption) */
