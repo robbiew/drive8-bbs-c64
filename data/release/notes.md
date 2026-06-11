@@ -1,14 +1,12 @@
 TURBO/64 BBS v__VERSION__ — PRE-RELEASE
 ========================================
 
-This is an early pre-release for testing and feedback. It is
-incomplete — many features are stubbed out and there are known
-rough edges. Expect bugs.
+This is an early pre-release for testing and feedback. It is incomplete — many features are stubbed out and there are known rough edges. Expect bugs.
 
 If you run into problems or have suggestions, please open an
 issue on GitHub:
 
-  https://github.com/mortonproduction/turbo64/issues
+  https://github.com/robbiew/turbo64/issues
 
 What works in v__VERSION__:
 
