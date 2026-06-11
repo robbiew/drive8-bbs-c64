@@ -476,12 +476,24 @@ bbs_err_t user_delete(u8 user_id, u8 device) {
  */
 void user_hash_password(const char *password, char *out_hash) {
   static const u8 key[4] = { 0x42, 0x85, 0xC3, 0x29 };
+  u8 v[4];
   u8 i;
 
-  for (i = 0; i < 4; i++) {
-    u8 v = (u8)password[i] ^ key[i];   /* password[i]==0 collapses to key[i] */
-    out_hash[i] = (char)(0x21 + (v % 0x5E));
+  for (i = 0; i < 4; i++)
+    v[i] = key[i];
+
+  /* Fold every char into the 4-byte state. Chars 5+ carry a position salt
+   * so e.g. "ABCDABCD" != "ABCD"; passwords of <= 4 chars reduce to the
+   * pre-fold hash (key[i] ^ password[i]), keeping existing records valid. */
+  for (i = 0; i < USER_PASSWORD_MAX && password[i]; i++) {
+    if (i < 4)
+      v[i] ^= (u8)password[i];
+    else
+      v[i & 3] ^= (u8)((u8)(password[i] << 1) ^ i);
   }
+
+  for (i = 0; i < 4; i++)
+    out_hash[i] = (char)(0x21 + (v[i] % 0x5E));
 }
 
 /**

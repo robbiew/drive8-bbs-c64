@@ -830,7 +830,7 @@ bbs_err_t session_step(session_t *s) {
           s->password[len - 1] = 0;
           sess_erase_char(s);
         }
-      } else if (ch >= 0x20 && ch < 0x7F && strlen(s->password) < 11) {
+      } else if (ch >= 0x20 && ch < 0x7F && strlen(s->password) < USER_PASSWORD_MAX) {
         /* Uppercase password to match stored hash (sysop stores "PASS" uppercase). */
         if (ch >= 'a' && ch <= 'z') ch -= 0x20;
         u8 pos = (u8)strlen(s->password);

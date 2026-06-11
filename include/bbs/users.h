@@ -11,6 +11,12 @@
 #include "err.h"
 #include "records.h"
 
+/* Password length rule — enforced at every entry point (BOOT login &
+ * registration, CONFIGURE reset). Storage is always the 4-byte hash in
+ * user_record_t.password regardless of length; see user_hash_password(). */
+#define USER_PASSWORD_MIN 4
+#define USER_PASSWORD_MAX 11
+
 /**
  * user_by_id()
  *
@@ -117,7 +123,7 @@ bbs_err_t user_delete(u8 user_id, u8 device);
  *
  * Args:
  *   user_id      — user ID to reset
- *   new_password — new password string (up to 4 chars)
+ *   new_password — new password string (up to USER_PASSWORD_MAX chars)
  *   device       — CBM device number
  *
  * Returns:
@@ -130,14 +136,16 @@ bbs_err_t user_reset_password(u8 user_id, const char *new_password, u8 device);
 /**
  * user_hash_password()
  *
- * Hash a plaintext password (up to 4 chars) into the 4-byte form stored in
- * user_record_t.password. The single shared hash used by both the BBS
- * runtime and the editor — output bytes are always printable (0x21..0x7E),
- * never 0x00 or a control byte, so a stored hash is safe across the REL
- * read layer and any PETSCII/charset round-trip.
+ * Hash a plaintext password (up to USER_PASSWORD_MAX chars, all of which
+ * affect the result) into the 4-byte form stored in user_record_t.password.
+ * Passwords of 4 chars or fewer hash identically to the pre-fold scheme, so
+ * existing USR LOG records stay valid. The single shared hash used by both
+ * the BBS runtime and the editor — output bytes are always printable
+ * (0x21..0x7E), never 0x00 or a control byte, so a stored hash is safe
+ * across the REL read layer and any PETSCII/charset round-trip.
  *
  * Args:
- *   password  — plaintext (NUL-padded; only the first 4 bytes are used)
+ *   password  — plaintext, NUL-terminated
  *   out_hash  — 4-byte output buffer
  */
 void user_hash_password(const char *password, char *out_hash);

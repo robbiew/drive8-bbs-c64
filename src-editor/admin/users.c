@@ -551,19 +551,19 @@ static void users_do_edit(u8 device)
 
     } else {
       /* -- Reset password -- */
-      char pw[5];
+      char pw[USER_PASSWORD_MAX + 1];
       int pwlen;
       char pwch;
 
       ui_screen_header("RESET PASSWORD");
       printf("USER: %s\n\n", user.handle);
-      printf("NEW PW (MAX 4 CHARS): ");
+      printf("NEW PW (4-11 CHARS): ");
 
       /* No masking — local sysop console, and seeing the password beats
        * guessing what got registered. */
-      pwlen = ui_read_line(pw, 4, UI_CASE_UPPER);
+      pwlen = ui_read_line(pw, USER_PASSWORD_MAX, UI_CASE_UPPER);
 
-      if (pwlen == 0) { ui_error("PASSWORD CANNOT BE EMPTY."); continue; }
+      if (pwlen < USER_PASSWORD_MIN) { ui_error("PASSWORD MUST BE 4-11 CHARS."); continue; }
 
       ui_hotkey_label('Y', "CONFIRM");
       ui_hotkey_label('N', "CANCEL");

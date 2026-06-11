@@ -2,6 +2,7 @@
 #include "bbs/newuser.h"
 #include "bbs/session.h"
 #include "bbs/auth.h"
+#include "bbs/users.h"   /* USER_PASSWORD_MIN/MAX */
 #include "bbs/cfg.h"
 #include "bbs/term.h"
 #include <string.h>
@@ -220,8 +221,8 @@ void session_reg_step(session_t *s, u8 ch)
             break;
 
         case 2: /* Password */
-            if (sess_reg_collect(s, ch, s->password, 11, '*')) {
-                if (strlen(s->password) < 4) {
+            if (sess_reg_collect(s, ch, s->password, USER_PASSWORD_MAX, '*')) {
+                if (strlen(s->password) < USER_PASSWORD_MIN) {
                     RC_CYAN(s); sess_tx("\r\nTOO SHORT. MIN 4 CHARS.\r\nPASSWORD");
                     RC_WHITE(s); sess_tx(": ");
                     memset(s->password, 0, sizeof(s->password));
@@ -232,7 +233,7 @@ void session_reg_step(session_t *s, u8 ch)
             break;
 
         case 3: /* Confirm password */
-            if (sess_reg_collect(s, ch, s->reg_confirm, 11, '*')) {
+            if (sess_reg_collect(s, ch, s->reg_confirm, USER_PASSWORD_MAX, '*')) {
                 if (strcmp(s->password, s->reg_confirm) != 0) {
                     RC_CYAN(s); sess_tx("\r\nMISMATCH. TRY AGAIN.\r\nPASSWORD");
                     RC_WHITE(s); sess_tx(": ");

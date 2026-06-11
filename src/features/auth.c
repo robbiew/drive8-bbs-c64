@@ -12,13 +12,41 @@
 #include <stdio.h>
 
 /**
+ * auth_password_matches()
+ *
+ * Compare a password attempt against a stored 4-byte hash. Falls back to
+ * the pre-fold hash (first 4 chars only) so accounts that registered a
+ * longer password before the hash folded the full string keep working;
+ * the fallback stops applying once the password is next reset or changed.
+ */
+static bool_t auth_password_matches(const char *attempt, const char *stored_hash) {
+  char hash[4];
+
+  user_hash_password(attempt, hash);
+  if (strncmp(hash, stored_hash, 4) == 0) {
+    return TRUE;
+  }
+
+  if (strlen(attempt) > 4) {
+    char prefix[5];
+    memcpy(prefix, attempt, 4);
+    prefix[4] = '\0';
+    user_hash_password(prefix, hash);
+    if (strncmp(hash, stored_hash, 4) == 0) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
  * auth_validate_password()
  *
  * Check if provided password matches stored password hash.
  */
 bbs_err_t auth_validate_password(const char *handle, const char *password_attempt) {
   user_record_t user;
-  char hash_attempt[4];
   u8 user_id;
 
   /* Find user by handle */
@@ -32,10 +60,7 @@ bbs_err_t auth_validate_password(const char *handle, const char *password_attemp
     return BBS_EIO;
   }
 
-  /* Hash and compare passwords */
-  user_hash_password(password_attempt, hash_attempt);
-
-  if (strncmp(hash_attempt, user.password, 4) != 0) {
+  if (!auth_password_matches(password_attempt, user.password)) {
     return BBS_EPERM;  /* Bad password */
   }
 
@@ -183,12 +208,8 @@ bbs_err_t auth_prompt_login(session_t *s) {
    * adding two redundant disk/REU operations and mapping any I/O or
    * lookup failure to BBS_EPERM (showing "INVALID LOGIN" even when
    * the real problem was a transient I/O error, not a wrong password). */
-  {
-    char hash_attempt[4];
-    user_hash_password(s->password, hash_attempt);
-    if (strncmp(hash_attempt, user.password, 4) != 0) {
-      return BBS_EPERM;
-    }
+  if (!auth_password_matches(s->password, user.password)) {
+    return BBS_EPERM;
   }
 
   /* Success! Populate session with user data */
