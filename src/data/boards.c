@@ -50,6 +50,10 @@ static void board_unpack(board_dir_record_t *rec, const u8 *buf) {
   rec->subop_id    = (u16)buf[18] | ((u16)buf[19] << 8);
   rec->read_level  = buf[20];
   rec->write_level = buf[21];
+  /* Clamping to SYSOP (not 0) keeps a corrupt board visible to the one
+   * account that can repair it, instead of hiding it from everyone. */
+  if (rec->read_level  > CFG_ACCESS_SYSOP) rec->read_level  = CFG_ACCESS_SYSOP;
+  if (rec->write_level > CFG_ACCESS_SYSOP) rec->write_level = CFG_ACCESS_SYSOP;
   rec->msg_count   = (u16)buf[22] | ((u16)buf[23] << 8);
   for (i = 0; i < 8; i++) rec->net_area_tag[i] = (char)buf[24 + i];
   /* bytes 32-35: reserved (was board password), ignored */

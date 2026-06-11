@@ -230,6 +230,10 @@ static void cfg_apply(const char *key, const char *value) {
     }
   } else if (strcmp(key, "NEW_USER_LEVEL") == 0) {
     bbs_cfg.new_user_level = (u8)atoi(value);
+    /* A hand-edited CONFIG must not seed accounts the user_unpack clamp
+     * would demote to DELETED; the editor UI caps this at CO as well. */
+    if (bbs_cfg.new_user_level > CFG_ACCESS_CO)
+      bbs_cfg.new_user_level = CFG_ACCESS_NEW;
   } else if (strcmp(key, "MIN_CALL_TIME") == 0) {
     bbs_cfg.min_call_time = (u8)atoi(value);
   } else if (strcmp(key, "MAX_CALL_TIME") == 0) {

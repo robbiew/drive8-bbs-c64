@@ -5,6 +5,7 @@
  */
 
 #include "bbs/users.h"
+#include "bbs/config.h"
 #include "bbs/cfg.h"
 #include "bbs/rel.h"
 #include "bbs/hal/reu.h"
@@ -65,6 +66,9 @@ static void user_unpack(user_record_t *rec, const u8 *buf) {
     rec->password[i] = (char)buf[16 + i];
   }
   rec->access_level = buf[20];
+  /* A corrupt/tampered record must never grant privileges: out-of-range
+   * levels demote to DELETED rather than clamping up toward SYSOP. */
+  if (rec->access_level > CFG_ACCESS_SYSOP) rec->access_level = CFG_ACCESS_DELETED;
   rec->credit_balance = buf[21];
   rec->calls = (u16)buf[22] | ((u16)buf[23] << 8);
   rec->downloads = buf[24];
