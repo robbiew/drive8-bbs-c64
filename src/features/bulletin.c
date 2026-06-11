@@ -20,6 +20,9 @@
 #pragma data(msgs_data)
 #pragma bss(msgs_bss)
 
+/* Module state lives in main bss — the paged-listing code growth left the
+ * msgs overlay region too full to hold it (oscar64 error 3034 otherwise). */
+#pragma bss(bss)
 static session_t          *s_sess;
 static board_dir_record_t  s_board;
 static u8                  s_board_idx;
@@ -28,6 +31,7 @@ static struct { u16 author_id; u8 flags; char subj[31]; } s_cur_info;
 static usr_ptr_record_t   *s_ptr;
 static char                s_msg_body[65]; /* layout: [0-15]=to [17-47]=subj [48-64]=area (compose scratchpad only) */
 static char                s_cmd[5];
+#pragma bss(msgs_bss)
 
 static void bull_tx(const char *s)   { sess_tx(s); }
 static void bull_nl(void)            { sess_tx("\r\n"); }
@@ -428,64 +432,109 @@ static void bull_do_post(u16 parent) {
   } /* close { char subj_sv } */
 }   /* bull_do_post */
 
+/* Sized against main-region headroom — see map before growing. */
+#define BULL_PAGE_ROWS   8
+#define BULL_MEMO_SLOTS  6
+
+/* Listing page buffer + author memo live in main bss — the msgs overlay
+ * region is nearly full (check the .map) and cannot hold them. */
+#pragma bss(bss)
+static msg_list_row_t s_list_rows[BULL_PAGE_ROWS];
+
+/* Author-id -> 7-char padded handle memo for one listing pass.  A screenful
+ * rarely has more than a handful of distinct authors; without the REU user
+ * cache each miss costs a full USR LOG open. */
+static struct { u16 id; char handle[8]; } s_author_memo[BULL_MEMO_SLOTS];
+static u8 s_author_memo_n;
+#pragma bss(msgs_bss)
+
+/* Resident code, not overlay: msgs_code is as tight as msgs_bss, and this
+ * helper only calls resident users.c anyway. */
+#pragma code(code)
+static const char *bull_author7(u16 author_id) {
+  u8 i;
+  user_record_t u;
+  for (i = 0; i < s_author_memo_n; i++)
+    if (s_author_memo[i].id == author_id) return s_author_memo[i].handle;
+  i = (s_author_memo_n < BULL_MEMO_SLOTS) ? s_author_memo_n
+                                          : (u8)(BULL_MEMO_SLOTS - 1);  /* full: reuse last */
+  memset(s_author_memo[i].handle, ' ', 7);
+  s_author_memo[i].handle[7] = '\0';
+  /* User ids are u8 today; the u16 field exists for future net import,
+   * which must add a guard here before ids can exceed 255. */
+  if (user_by_id((u8)author_id, &u, bbs_cfg.device_system) == BBS_OK) {
+    u8 j;
+    memcpy(s_author_memo[i].handle, u.handle, 7);
+    for (j = 0; j < 7; j++)
+      if (!s_author_memo[i].handle[j]) s_author_memo[i].handle[j] = ' ';
+  }
+  s_author_memo[i].id = author_id;
+  if (s_author_memo_n < BULL_MEMO_SLOTS) s_author_memo_n++;
+  return s_author_memo[i].handle;
+}
+#pragma code(msgs_code)
+
 /* bull_list_messages — scan listing for the current board.
  * Format (39 col; col 40 left blank to avoid line-wrap):
  *   #    = right-justified msg id (4 chars)
  *   *    = yellow asterisk if unread by this user, space otherwise
  *   MM/DD= post date (5 chars)
  *   FROM = handle, 7 chars space-padded (longer handles truncated)
- *   SUBJ = rec.subj preview (20 chars)
+ *   SUBJ = subj preview (20 chars)
  * Layout: 4 + 1 + 5 + 1 + 7 + 1 + 20 = 39.
- * msg_index_get uses the REU cache (fast); one user_by_id disk op per message. */
+ * msg_index_page fetches one page per REL pass; bull_author7 memoizes handles. */
 static void bull_list_messages(const session_t *s) {
-  u16 i, limit; u8 row; msg_index_record_t rec;
-  char numstr[8]; char hbuf[8]; char d[6]; bool_t is_new;
+  u16 next_id; u8 nrows, i, row; char numstr[8]; char d[6]; bool_t is_new;
   u8 pg = (s->term_rows > 6u) ? (u8)(s->term_rows - 4u) : 20u;
   if (!s_board.msg_high_id && !s_board.msg_count) { bull_line("NO MSGS."); return; }
-  limit = s_board.msg_high_id ? s_board.msg_high_id : (u16)CFG_MSG_MAX_PER_BOARD;
+  s_author_memo_n = 0;
   bull_sep(); bull_line("   # MM/DD FROM    SUBJ"); bull_sep();
   row = 3;
-  for (i = 1; i <= limit; i++) {
+  next_id = 1;
+  for (;;) {
     if (!s->is_local && net_state() != NET_CONNECTED) break;
-    if (msg_index_get(s_board.id, i, &rec, bbs_cfg.device_msgs) != BBS_OK) break;
-    if (!rec.msg_id) break;              /* first unwritten slot — end of index */
-    if (rec.flags & MSG_F_DELETED) continue;
-    /* Handle: 13-char space-padded */
-    memset(hbuf, ' ', 7); hbuf[7] = '\0';
-    if (!rec.author_id || (rec.flags & MSG_F_ANON)) {
-      hbuf[0]='A'; hbuf[1]='N'; hbuf[2]='O'; hbuf[3]='N';
-    } else {
-      user_record_t uname;
-      if (user_by_id(rec.author_id, &uname, bbs_cfg.device_system) == BBS_OK)
-        memcpy(hbuf, uname.handle, 7);
-    }
-    is_new = (bool_t)(rec.msg_id > s_ptr->hwm[s_board.id - 1]);
-    /* msg# right-justified */
-    sprintf(numstr, "%4u", (unsigned)rec.msg_id);
-    bull_tx(numstr);
-    /* NEW indicator: yellow asterisk or space */
-    if (is_new) { bc(7); bull_tx("*"); bc(1); } else bull_tx(" ");
-    /* Date MM/DD — BCD-encoded nibbles, same as display_msg */
-    if (rec.month) {
-      d[0]='0'+(u8)(rec.month>>4); d[1]='0'+(rec.month&0x0F); d[2]='/';
-      d[3]='0'+(u8)(rec.day>>4);   d[4]='0'+(rec.day&0x0F);   d[5]='\0';
-    } else { d[0]='-'; d[1]='-'; d[2]='/'; d[3]='-'; d[4]='-'; d[5]='\0'; }
-    bull_tx(d); bull_tx(" ");
-    bull_tx(hbuf); bull_tx(" ");
-    /* Subject: truncate to 20 chars — scan is a directory, never wraps */
-    rec.subj[20] = '\0'; bull_line(rec.subj);
-    /* Paginate */
-    if (++row >= pg) {
-      u8 ch = 0;
-      bull_tx("-- MORE --");
-      while (!sess_getc(&ch)) {
-        if (!s->is_local && net_state() != NET_CONNECTED) { bull_nl(); bull_sep(); return; }
+    nrows = msg_index_page(s_board.id, next_id, BULL_PAGE_ROWS,
+                           s_list_rows, bbs_cfg.device_msgs);
+    if (nrows == 0) break;
+    /* Advance by slot count, not stored id — a corrupt record with a low
+     * msg_id must not regress next_id into an infinite loop. */
+    next_id = (u16)(next_id + nrows);
+    for (i = 0; i < nrows; i++) {
+      const msg_list_row_t *r = &s_list_rows[i];
+      if (r->flags & MSG_F_DELETED) continue;
+      is_new = (bool_t)(r->msg_id > s_ptr->hwm[s_board.id - 1]);
+      /* msg# right-justified */
+      sprintf(numstr, "%4u", (unsigned)r->msg_id);
+      bull_tx(numstr);
+      /* NEW indicator: yellow asterisk or space */
+      if (is_new) { bc(7); bull_tx("*"); bc(1); } else bull_tx(" ");
+      /* Date MM/DD — BCD-encoded nibbles, same as display_msg */
+      if (r->month) {
+        d[0]='0'+(u8)(r->month>>4); d[1]='0'+(r->month&0x0F); d[2]='/';
+        d[3]='0'+(u8)(r->day>>4);   d[4]='0'+(r->day&0x0F);   d[5]='\0';
+      } else { d[0]='-'; d[1]='-'; d[2]='/'; d[3]='-'; d[4]='-'; d[5]='\0'; }
+      bull_tx(d); bull_tx(" ");
+      if (!r->author_id || (r->flags & MSG_F_ANON))
+        bull_tx("ANON   ");
+      else
+        bull_tx(bull_author7(r->author_id));
+      bull_tx(" ");
+      bull_line(r->subj);
+      /* Paginate */
+      if (++row >= pg) {
+        u8 ch = 0;
+        bull_tx("-- MORE --");
+        while (!sess_getc(&ch)) {
+          if (!s->is_local && net_state() != NET_CONNECTED) { bull_nl(); bull_sep(); return; }
+        }
+        bull_nl();
+        if (ch == 'Q' || ch == 'q' || ch == 3 || ch == 27) goto done;
+        row = 0;
       }
-      bull_nl();
-      if (ch == 'Q' || ch == 'q' || ch == 3 || ch == 27) break;
-      row = 0;
     }
+    if (nrows < BULL_PAGE_ROWS) break;   /* short page = end of index */
   }
+done:
   bull_sep();
 }
 

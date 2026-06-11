@@ -46,6 +46,8 @@
 
 /* MSGS overlay: bulletin + messages + editor loaded on demand from disk.
  * $9700-$C000 = 10,496 bytes.
+ * NEARLY FULL as of v0.1.0 (<100 bytes) — after touching bulletin/messages/
+ * editor/usrptr, check the `regions` table in build/c64/BOOT-*.map.
  * Bank ID 1 → file "OVL_MSGS" on disk (oscar64: pragma name uppercased). */
 #pragma overlay( ovl_msgs, 1 )
 #pragma section( msgs_code, 0 )
