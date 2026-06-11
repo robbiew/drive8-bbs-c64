@@ -63,6 +63,20 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     exit 1
 fi
 
+# Refuse to release if the local branch is behind its upstream — tagging
+# here would publish stale code.
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
+    if ! git fetch --quiet origin "$BRANCH"; then
+        echo -e "${RED}ERROR: Could not fetch origin/$BRANCH. Check network/auth.${NC}" >&2
+        exit 1
+    fi
+    if ! git merge-base --is-ancestor "origin/$BRANCH" HEAD; then
+        echo -e "${RED}ERROR: Local $BRANCH is behind origin/$BRANCH. Pull/rebase first.${NC}" >&2
+        exit 1
+    fi
+fi
+
 # --- Version ---
 
 VERSION="$(grep 'BBS_RELEASE_VERSION_COMPACT' "$ROOT/include/bbs/version.h" | cut -d'"' -f2)"
