@@ -49,35 +49,6 @@ static void bull_sep(void) {
 /* Emit labeled header: green label, yellow for following data value. */
 static void bull_hdr(const char *label) { bc(13); bull_tx(label); bc(7); }
 
-static void bull_read_input(char *buf, u8 max, u8 uc) {
-  u8 len = 0, ch; char e[2];
-  memset(buf, 0, (u8)(max + 1));
-  while (len < max) {
-    if (!sess_getc(&ch)) {
-      if (!sess_carrier_ok(s_sess)) return;
-      continue;
-    }
-    if (ch == 10) continue;            /* skip LF — CRLF terminals send CR+LF */
-    if (ch == 13) { bull_nl(); return; }
-    if ((ch == 8 || ch == 20) && len > 0) {
-      len--; buf[len] = '\0'; sess_erase_char(s_sess); continue;
-    }
-    if (ch >= 0x20 && ch < 0x7f) {
-      if (uc && ch >= 'a' && ch <= 'z') ch = (u8)(ch - 32);
-      buf[len++] = (char)ch; buf[len] = '\0';
-      e[0] = (char)ch; e[1] = '\0'; bull_tx(e);
-    }
-  }
-  for (;;) {
-    if (!sess_getc(&ch)) {
-      if (!sess_carrier_ok(s_sess)) return;   /* full-buf wait must not outlive carrier */
-      continue;
-    }
-    if (ch == 10) continue;
-    if (ch == 13) { bull_nl(); return; }
-  }
-}
-
 /* bull_getkey — single-keypress input for the reading loop.
  * CR/LF fires immediately as an empty command (ENTER).  All other keys
  * fire on the first character.  'R' is special: digits may follow before
@@ -380,7 +351,7 @@ static void bull_do_post(u16 parent) {
 
   } else {
     /* ── New post ── */
-    bull_tx("TO  : ");   bull_read_input(s_msg_body,      15, TRUE);
+    bull_tx("TO  : ");   sess_read_line(s_sess, s_msg_body,      15, TRUE);
     if (!s_msg_body[0]) strcpy(s_msg_body, "ALL");
     /* Resolve handle to user_id so TO is stored in index (0 = ALL) */
     if (strcmp(s_msg_body, "ALL") != 0) {
@@ -389,7 +360,7 @@ static void bull_do_post(u16 parent) {
     }
     do {
       if (!sess_carrier_ok(s_sess)) return;
-      bull_tx("SUBJ: "); bull_read_input(s_msg_body + 17, 30, FALSE);
+      bull_tx("SUBJ: "); sess_read_line(s_sess, s_msg_body + 17, 30, FALSE);
     } while (!s_msg_body[17]);
   }
 

@@ -668,6 +668,43 @@ bool_t sess_getc(u8 *out)
   return FALSE;
 }
 
+/* Blocking line reader: collect a CR-terminated line into buf (up to max
+ * chars, always NUL-terminated), echoing each character as it is typed.
+ * Handles BS/DEL erase and skips the bare LF of a CRLF pair.  When uppercase
+ * is set, a-z fold to A-Z on entry.  Returns early with whatever was collected
+ * if carrier drops, so a full-buffer wait never outlives the caller.  Resident
+ * (costs no overlay space) and session-wide; promoted from the bulletin reader. */
+void sess_read_line(const session_t *s, char *buf, u8 max, bool_t uppercase)
+{
+  u8 len = 0, ch;
+  char e[2];
+  memset(buf, 0, (u8)(max + 1));
+  while (len < max) {
+    if (!sess_getc(&ch)) {
+      if (!sess_carrier_ok(s)) return;
+      continue;
+    }
+    if (ch == 10) continue;            /* skip LF — CRLF terminals send CR+LF */
+    if (ch == 13) { session_emit(s, "\n"); return; }
+    if ((ch == 8 || ch == 20) && len > 0) {
+      len--; buf[len] = '\0'; sess_erase_char(s); continue;
+    }
+    if (ch >= 0x20 && ch < 0x7f) {
+      if (uppercase && ch >= 'a' && ch <= 'z') ch = (u8)(ch - 32);
+      buf[len++] = (char)ch; buf[len] = '\0';
+      e[0] = (char)ch; e[1] = '\0'; session_emit(s, e);
+    }
+  }
+  for (;;) {                           /* buffer full: drain to CR for a clean line end */
+    if (!sess_getc(&ch)) {
+      if (!sess_carrier_ok(s)) return;
+      continue;
+    }
+    if (ch == 10) continue;
+    if (ch == 13) { session_emit(s, "\n"); return; }
+  }
+}
+
 bbs_err_t session_init(session_t *s, bool_t is_local) {
   if (!s) return BBS_EBADARG;
 

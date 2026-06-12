@@ -222,6 +222,9 @@ bool_t sess_getc(u8 *out);
  * always live; remote sessions require modem carrier. */
 bool_t sess_carrier_ok(const session_t *s);
 void sess_erase_char(const session_t *s);
+/* Blocking CR-terminated line reader with echo, BS/DEL erase, and optional
+ * a-z->A-Z folding. Stops early (keeping what was collected) if carrier drops. */
+void sess_read_line(const session_t *s, char *buf, u8 max, bool_t uppercase);
 /* Emit a terminal color/attribute byte (PETSCII) or ANSI escape.
  * No-op for ASCII mode. */
 void sess_color(const session_t *s, u8 petscii_code, const char *ansi_code);
