@@ -28,16 +28,23 @@ static u8                  s_board_idx;
 static u16                 s_cur_msg;
 static struct { u16 author_id; u8 flags; char subj[31]; } s_cur_info;
 static usr_ptr_record_t   *s_ptr;
-static char                s_msg_body[65]; /* layout: [0-15]=to [17-47]=subj [48-64]=area (compose scratchpad only) */
+static char                s_msg_body[48]; /* layout: [0-15]=to [17-47]=subj (compose scratchpad only) */
 static char                s_cmd[5];
 #pragma bss(msgs_bss)
 
-static void bull_tx(const char *s)   { sess_tx(s); }
-static void bull_nl(void)            { sess_tx("\r\n"); }
-static void bull_line(const char *s) { sess_tx(s); sess_tx("\r\n"); }
+/* One shared 39-char rule, resident in main data — bull_sep (overlay) and
+ * bull_sep_named (main) previously each carried their own copy; the overlay
+ * copy is dead weight in the full msgs region. */
+#pragma data(data)
+static const char s_dashes[] = "---------------------------------------";
+#pragma data(msgs_data)
+
+static void bull_tx(const char *s)   { session_emit(s_sess, s); }
+static void bull_nl(void)            { session_emit(s_sess, "\n"); }
+static void bull_line(const char *s) { session_emit(s_sess, s); bull_nl(); }
 static void bc(u8 n) { sess_pipe_color(s_sess, n); }
 static void bull_sep(void) {
-  bc(3); sess_tx("---------------------------------------"); bc(1); bull_nl();
+  bc(3); sess_tx(s_dashes); bc(1); bull_nl();
 }
 /* Emit labeled header: green label, yellow for following data value. */
 static void bull_hdr(const char *label) { bc(13); bull_tx(label); bc(7); }
@@ -144,13 +151,12 @@ static void bull_pad(u8 col, u8 target) { while (col < target) { sess_tx(" "); c
 
 /* Top rule: reverse-video cyan board name + cyan dashed fill (39-col safe width). */
 static void bull_sep_named(void) {
-  static const char dashes[] = "---------------------------------------"; /* 39 */
   char ttl[17]; u8 len, k;
   for (k = 0; k < 16; k++) ttl[k] = s_board.title[k] ? s_board.title[k] : ' ';
   for (len = 16; len != 0 && ttl[len - 1] == ' '; len--) {}
   ttl[len] = '\0';
   bc(3); bc(16); bull_tx(ttl); bc(17);   /* reverse-video name in cyan */
-  bull_tx(dashes + len);                  /* fill the rest of the 39-col rule */
+  bull_tx(s_dashes + len);                  /* fill the rest of the 39-col rule */
   bc(1); bull_nl();
 }
 
@@ -355,6 +361,7 @@ static void bull_do_post(u16 parent) {
   u16 new_id;
   u8  j;
   u16 to_id_val = 0;
+  char area[17];   /* board title for the AREA: header (display only) */
 
   if (parent > 0) {
     /* ── Reply: SUBJ from s_cur_info.subj (saved by display_msg); TO from author ── */
@@ -387,16 +394,16 @@ static void bull_do_post(u16 parent) {
   }
 
   /* AREA */
-  memcpy(s_msg_body + 48, s_board.title, 16); s_msg_body[64] = '\0';
-  for (j = 63; j > 48 && (s_msg_body[j] == ' ' || s_msg_body[j] == '\0'); j--)
-    s_msg_body[j] = '\0';
+  memcpy(area, s_board.title, 16); area[16] = '\0';
+  for (j = 15; j > 0 && (area[j] == ' ' || area[j] == '\0'); j--)
+    area[j] = '\0';
 
   /* ── Editor screen ── */
   session_clear_screen(s_sess);
   bull_sep();
   bull_hdr("TO  : "); bull_tx(s_msg_body);      bull_nl();
   bull_hdr("SUBJ: "); bull_tx(s_msg_body + 17); bull_nl();
-  bull_hdr("AREA: "); bull_tx(s_msg_body + 48); bull_nl();
+  bull_hdr("AREA: "); bull_tx(area);            bull_nl();
   bull_sep();
   bc(15);
   if (parent > 0) bull_tx("/S SAVE, /A ABORT, /Q QUOTE");
@@ -435,7 +442,7 @@ static void bull_do_post(u16 parent) {
 }   /* bull_do_post */
 
 /* Sized against main-region headroom — see map before growing. */
-#define BULL_PAGE_ROWS   4
+#define BULL_PAGE_ROWS   3
 #define BULL_MEMO_SLOTS  3
 
 /* Listing page buffer + author memo live in main bss — the msgs overlay
