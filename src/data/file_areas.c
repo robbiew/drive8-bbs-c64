@@ -41,6 +41,11 @@ static void file_area_unpack(ud_area_record_t *rec, const u8 *buf) {
   }
   rec->access_level = buf[21];
   rec->upload_level = buf[22];
+  /* access_level/upload_level are minimum-access thresholds; a corrupt
+   * out-of-range byte clamps to the highest valid level (SYSOP-only) so a
+   * damaged record fails safe by hiding the area rather than exposing it. */
+  if (rec->access_level > CFG_ACCESS_SYSOP) rec->access_level = CFG_ACCESS_SYSOP;
+  if (rec->upload_level > CFG_ACCESS_SYSOP) rec->upload_level = CFG_ACCESS_SYSOP;
   rec->device = buf[23];
   rec->flags = buf[24];
   rec->free_blocks = (u16)buf[25] | ((u16)buf[26] << 8);
