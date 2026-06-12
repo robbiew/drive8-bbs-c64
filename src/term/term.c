@@ -21,3 +21,24 @@ u8 term_xlate_byte(term_mode_t mode, u8 cp437, u8 *out, u8 max)
     out[0] = cp437;
     return 1;
 }
+
+u8 term_unxlate_byte(term_mode_t mode, u8 wire)
+{
+    switch (mode) {
+    case TERM_PETSCII_LOWER:
+        /* text/lowercase charset: caller typed lowercase unshifted (0x41-0x5A)
+         * and uppercase shifted (0xC1-0xDA); map both back to CP437. */
+        if (wire >= 0x41u && wire <= 0x5Au) return (u8)(wire + 0x20u);
+        if (wire >= 0xC1u && wire <= 0xDAu) return (u8)(wire - 0x80u);
+        return wire;
+    case TERM_PETSCII:
+    case TERM_ANSI_CP437:
+    case TERM_ASCII:
+        break;
+    }
+    /* PETSCII uppercase/graphics, ANSI/CP437, ASCII, and unknown modes:
+     * identity over the typeable range (uppercase PETSCII letters already
+     * equal CP437). Mirrors term_xlate_byte's switch so -Wswitch flags any
+     * future mode that needs a non-identity inverse. */
+    return wire;
+}

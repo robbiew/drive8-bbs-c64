@@ -36,7 +36,7 @@ static u8 sess_reg_collect(session_t *s, u8 ch, char *buf, u8 max, u8 mask)
         if (ch >= 'a' && ch <= 'z') ch -= 0x20;
         buf[len] = (char)ch;
         buf[len + 1] = 0;
-        { char e[2]; e[0] = mask ? (char)'*' : (char)ch; e[1] = 0; sess_tx(e); }
+        { char e[2]; e[0] = mask ? (char)'*' : (char)ch; e[1] = 0; session_emit(s, e); }
     }
     return 0;
 }
@@ -59,7 +59,7 @@ static void sess_reg_show_confirm(const session_t *s)
     RC_RVOFF(s);
 
     RC_LTBLUE(s); sess_tx("1"); RC_CYAN(s); sess_tx(". HANDLE:   ");
-    RC_WHITE(s);  sess_tx(s->handle); sess_tx("\r\n");
+    RC_WHITE(s);  session_emit(s, s->handle); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("2"); RC_CYAN(s); sess_tx(". PASSWORD: ");
     RC_WHITE(s);
@@ -70,16 +70,16 @@ static void sess_reg_show_confirm(const session_t *s)
     sess_tx(stars); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("3"); RC_CYAN(s); sess_tx(". EMAIL:    ");
-    RC_WHITE(s);  sess_tx(s->reg_email[0]     ? s->reg_email     : "(NONE)"); sess_tx("\r\n");
+    RC_WHITE(s);  session_emit(s, s->reg_email[0] ? s->reg_email : "(NONE)"); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("4"); RC_CYAN(s); sess_tx(". FIRST:    ");
-    RC_WHITE(s);  sess_tx(s->reg_firstname[0] ? s->reg_firstname : "(NONE)"); sess_tx("\r\n");
+    RC_WHITE(s);  session_emit(s, s->reg_firstname[0] ? s->reg_firstname : "(NONE)"); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("5"); RC_CYAN(s); sess_tx(". LAST:     ");
-    RC_WHITE(s);  sess_tx(s->reg_lastname[0]  ? s->reg_lastname  : "(NONE)"); sess_tx("\r\n");
+    RC_WHITE(s);  session_emit(s, s->reg_lastname[0] ? s->reg_lastname : "(NONE)"); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("6"); RC_CYAN(s); sess_tx(". LOCATION: ");
-    RC_WHITE(s);  sess_tx(s->reg_location[0]  ? s->reg_location  : "(NONE)"); sess_tx("\r\n");
+    RC_WHITE(s);  session_emit(s, s->reg_location[0] ? s->reg_location : "(NONE)"); sess_tx("\r\n");
 
     RC_LTBLUE(s); sess_tx("7"); RC_CYAN(s); sess_tx(". GRAPHICS: ");
     RC_WHITE(s);  sess_tx(reg_mode_name(s->term_mode)); sess_tx("\r\n");

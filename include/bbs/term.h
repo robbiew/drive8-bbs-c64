@@ -25,4 +25,9 @@ typedef enum {
  * Multi-byte output only occurs for PETSCII escape sequences. */
 u8 term_xlate_byte(term_mode_t mode, u8 cp437, u8 *out, u8 max);
 
+/* Translate one inbound WIRE byte to its canonical CP437 value, per the
+ * caller's terminal mode.  True inverse for TERM_PETSCII_LOWER letter bytes;
+ * identity for all other modes and for non-letter/control bytes. */
+u8 term_unxlate_byte(term_mode_t mode, u8 wire);
+
 #endif /* BBS_TERM_H */

@@ -30,6 +30,11 @@ run test_at_response -I"$ROOT/src/net" \
 run test_user_hash \
     "$ROOT/tests/test_user_hash.c" "$ROOT/src/data/user_hash.c"
 
+run test_term_unxlate -I"$ROOT/src/term" \
+    "$ROOT/tests/test_term_unxlate.c" \
+    "$ROOT/src/term/term.c" "$ROOT/src/term/cp437_petscii.c" \
+    "$ROOT/src/term/cp437_ascii.c" "$ROOT/src/term/ansi.c"
+
 # Characterization: full CP437 translation matrix vs committed golden.
 # shellcheck disable=SC2086
 "$CC" $CFLAGS -I"$ROOT/src/term" -o "$OUT/test_term_xlate" \
