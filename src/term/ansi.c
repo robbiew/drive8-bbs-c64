@@ -30,6 +30,10 @@ static u8 emit_byte(const term_filter_t *f, u8 b, u8 *out, u8 max)
     case TERM_PETSCII:    return term_xlate_byte_petscii(b, out, max);
     case TERM_ANSI_CP437: if (max < 1) return 0; out[0] = b; return 1;
     case TERM_ASCII:      return term_xlate_byte_ascii(b, out, max);
+    /* TERM_PETSCII_LOWER: this streaming filter is unused today (session_emit
+     * calls term_xlate_byte directly); make the drop explicit so -Wswitch is
+     * quiet without adding a handler the cramped overlay can't fit. */
+    default:              return 0;
     }
     return 0;
 }
