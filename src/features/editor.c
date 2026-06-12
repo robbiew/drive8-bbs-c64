@@ -75,7 +75,7 @@ editor_result_t editor_run(const session_t *s, const char *context_line)
 
   if (context_line) {
     sess_tx("\r\n");
-    sess_tx(context_line); sess_tx("\r\n");
+    session_emit(s, context_line); sess_tx("\r\n");
     sess_tx("/S=SAVE /A=ABORT\r\n: ");
   } else {
     sess_tx(": ");
@@ -94,7 +94,7 @@ editor_result_t editor_run(const session_t *s, const char *context_line)
         sess_erase_char(s);
       } else if (s_line_count > 0) {
         linelen = editor_crossline_bs(s_linebuf, &s_line_count);
-        sess_tx("\r\n: "); sess_tx(s_linebuf);
+        sess_tx("\r\n: "); session_emit(s, s_linebuf);
       }
       continue;
     }
@@ -135,7 +135,7 @@ editor_result_t editor_run(const session_t *s, const char *context_line)
 
     if (ch >= 0x20 && ch < 0x7f && linelen < 37) {
       char e[2]; s_linebuf[linelen++] = (char)ch; s_linebuf[linelen] = '\0';
-      e[0] = (char)ch; e[1] = '\0'; sess_tx(e);
+      e[0] = (char)ch; e[1] = '\0'; session_emit(s, e);
       /* Line full — auto-commit and start a new prompt line.
        * Limit is 37: 40-col display minus 2-char ": " prompt, minus 1
        * to keep the rightmost column visually empty. */
