@@ -10,6 +10,7 @@ BOOT_PRG        := $(OUTDIR)/BOOT-$(VERSION).prg
 CONFIGURE_PRG   := $(OUTDIR)/CONFIGURE-$(VERSION).prg
 OVERLAYS_D64 := $(OUTDIR)/overlays.d64
 MSGS_OVL_PRG := $(OUTDIR)/ovl_msgs.prg
+BOOT_OVL_PRG := $(OUTDIR)/ovl_boot.prg
 
 INCLUDES    := -i=$(ROOT)include -i=$(ROOT)vendor/oscar64/include -i=$(ROOT)src -i=$(ROOT)src/data
 OFLAGS      := -Os -Oo
@@ -19,7 +20,7 @@ OFLAGS      := -Os -Oo
 # NOTE: -dNOLONG also applies (no %l in source) but currently crashes oscar64's
 # code generator (assertion in NativeCodeGenerator.cpp CopyCode), so it's left
 # off; NOFLOAT alone frees ~2.4KB, ample for current needs.
-BOOT_DEFS   := -dNOFLOAT
+BOOT_DEFS   := -dNOFLOAT -dT64_BOOT_OVERLAY
 
 DRVFLAGS    :=
 ifdef T64_DRIVE_SYSTEM
@@ -72,9 +73,13 @@ $(BOOT_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
 	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) -o=$@ -d64=$(OVERLAYS_D64) $< $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
 	@echo "Built: $@"
 
-# ovl_msgs.prg is produced as a side-effect of the BOOT_PRG -d64 build.
-# The MSGS_OVL target just verifies it exists after the build.
+# ovl_msgs.prg / ovl_boot.prg are produced as side-effects of the BOOT_PRG -d64
+# build. These targets just verify they exist after the build.
 $(MSGS_OVL_PRG): $(BOOT_PRG)
+	@test -f "$@" || { echo "ERROR: overlay file not produced by oscar64"; exit 1; }
+	@echo "Overlay: $@"
+
+$(BOOT_OVL_PRG): $(BOOT_PRG)
 	@test -f "$@" || { echo "ERROR: overlay file not produced by oscar64"; exit 1; }
 	@echo "Overlay: $@"
 
@@ -93,6 +98,6 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG)
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG)
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."

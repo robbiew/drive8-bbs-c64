@@ -64,6 +64,16 @@
 #pragma section( wfc_bss,  0, , , bss )
 #pragma region( wfc, 0x9700, 0xC000, , 2, {wfc_code, wfc_data, wfc_bss} )
 
+/* BOOT overlay: config-load code (cfg_init + its parse helpers) runs once at
+ * boot and is then dead weight in the resident region.  Bank 3 — same address
+ * zone as MSGS/WFC; boot strictly precedes any session, so wfc_init/the first
+ * session freely overwrites it.  Frees ~1.7 KB of the cramped main region. */
+#pragma overlay( ovl_boot, 3 )
+#pragma section( boot_code, 0 )
+#pragma section( boot_data, 0 )
+#pragma section( boot_bss,  0, , , bss )
+#pragma region( boot, 0x9700, 0xC000, , 3, {boot_code, boot_data, boot_bss} )
+
 /**
  * main_print()
  *

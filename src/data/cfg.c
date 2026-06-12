@@ -12,6 +12,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef T64_BOOT_OVERLAY
+#include <c64/kernalio.h>
+#endif
 
 /* Global config instance */
 cfg_t bbs_cfg;
@@ -21,6 +24,15 @@ cfg_t bbs_cfg;
  *
  * Initialize with compile-time defaults.
  */
+/* cfg_set_defaults .. cfg_parse_device_spec and cfg_apply .. cfg_init are
+ * boot-only: they run once from main()'s cfg_init() call and are never used
+ * again, so they live in the ovl_boot overlay (freed after boot).  bbs_cfg
+ * (the live config), cfg_send_drive_init (called before every disk op), and
+ * the editor-path cfg_save/cfg_format stay resident. */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(boot_code)
+#pragma data(boot_data)
+#endif
 static void cfg_set_defaults(void) {
   strcpy(bbs_cfg.bbs_name, "TURBO/64 BBS");
   strcpy(bbs_cfg.bbs_city, "COMMODORE 64");
@@ -182,6 +194,10 @@ bool_t cfg_parse_device_spec(const char *value, u8 *device, u8 *drive,
   return TRUE;
 }
 
+#ifdef T64_BOOT_OVERLAY
+#pragma code(code)
+#pragma data(data)
+#endif
 void cfg_format_device_spec(char *buf, u8 device, u8 drive, const char *init) {
   if (!buf) {
     return;
@@ -207,6 +223,10 @@ bbs_err_t cfg_send_drive_init(u8 device, const char *init) {
  *
  * Take a parsed key=value pair and update bbs_cfg.
  */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(boot_code)
+#pragma data(boot_data)
+#endif
 static void cfg_apply(const char *key, const char *value) {
   if (strcmp(key, "BBS_NAME") == 0) {
     strncpy(bbs_cfg.bbs_name, value, sizeof(bbs_cfg.bbs_name) - 1);
@@ -293,11 +313,12 @@ static void cfg_apply(const char *key, const char *value) {
 }
 
 /**
- * cfg_init()
+ * cfg_load_impl()
  *
- * Load configuration from disk.
+ * Read and parse the config file from disk into bbs_cfg.  Boot-only: lives in
+ * the ovl_boot overlay; reached solely through the resident cfg_init() wrapper.
  */
-bbs_err_t cfg_init(void) {
+static bbs_err_t cfg_load_impl(void) {
   bbs_err_t err;
   i16 nread;
   char cfg_line[96];
@@ -323,6 +344,30 @@ bbs_err_t cfg_init(void) {
 
   disk_close();
   return BBS_OK;
+}
+
+#ifdef T64_BOOT_OVERLAY
+#pragma code(code)
+#pragma data(data)
+#endif
+
+/**
+ * cfg_init()
+ *
+ * Resident entry point for config load.  In the BOOT build it pulls the
+ * ovl_boot overlay into the shared $9700 region before running the boot-only
+ * parse code, then returns — the overlay is dead weight afterward and the wfc/
+ * msgs overlays freely overwrite it.  The overlay loads from the kernal current
+ * device ($BA, the disk the BBS booted from) because bbs_cfg.device_system is
+ * not populated until cfg_load_impl() runs.  The editor build has no overlay,
+ * so this is a thin pass-through.
+ */
+bbs_err_t cfg_init(void) {
+#ifdef T64_BOOT_OVERLAY
+  krnio_setnam(P"OVL_BOOT");
+  krnio_load(1, (*(volatile u8 *)0xBA), 1);
+#endif
+  return cfg_load_impl();
 }
 
 /* First disk_puts failure across a whole cfg_save pass; later writes are

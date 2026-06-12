@@ -193,6 +193,7 @@ PYPATCH
     "$C1541" "$OUTPUT_DISK" -delete "$EDIT_CBM" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_boot" >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
         if [[ "$line" =~ \"([^\"]+)\"[[:space:]]+seq ]]; then
@@ -225,6 +226,14 @@ if [ -f "$WFC_OVL_PRG" ]; then
     echo "Adding WFC overlay..."
     "$C1541" "$OUTPUT_DISK" -write "$WFC_OVL_PRG" "ovl_wfc" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write WFC overlay" >&2; }
+fi
+
+# Add BOOT overlay (config-load code: cfg_init + boot-only parse helpers)
+BOOT_OVL_PRG="$ROOT/build/c64/ovl_boot.prg"
+if [ -f "$BOOT_OVL_PRG" ]; then
+    echo "Adding BOOT overlay..."
+    "$C1541" "$OUTPUT_DISK" -write "$BOOT_OVL_PRG" "ovl_boot" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write BOOT overlay" >&2; }
 fi
 
 # Add config data file if present
