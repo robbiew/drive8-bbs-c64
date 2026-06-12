@@ -193,7 +193,17 @@ void menu_dispatch(session_t *s, char ch) {
     }
   }
 
-  /* Command not found */
+  /* Command not found.  Remote sessions get a hard cap: if NO CARRIER is ever
+   * missed (the only hangup signal under VICE/tcpser), the far modem sits in
+   * command mode echoing our replies back as input — an endless loop that also
+   * defeats the idle watchdog, since echoed bytes count as activity.  The cap
+   * is total, not consecutive: the reflected reply text contains valid command
+   * letters that would keep resetting a consecutive counter. */
+  if (!s->is_local && ++s->menu_state.unknown_count >= MENU_GARBAGE_LIMIT) {
+    session_emit(s, "\r\nLINE NOISE - DROPPING CARRIER\r\n");
+    s->state = SESS_LOGOFF;
+    return;
+  }
   session_emit(s, "\r\nUNKNOWN COMMAND. [?] FOR HELP\r\n");
 }
 

@@ -27,6 +27,9 @@ run test_telnet_iac -I"$ROOT/src/net" \
 run test_at_response -I"$ROOT/src/net" \
     "$ROOT/tests/test_at_response.c" "$ROOT/src/net/at_response.c"
 
+run test_menu_garbage \
+    "$ROOT/tests/test_menu_garbage.c" "$ROOT/src/features/menu.c"
+
 run test_user_hash \
     "$ROOT/tests/test_user_hash.c" "$ROOT/src/data/user_hash.c"
 

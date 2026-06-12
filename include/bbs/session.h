@@ -22,6 +22,7 @@ typedef struct menu_state_s {
   char    current_menu[16];    /* ID of currently displayed menu */
   u8      depth;               /* Nesting depth (0 = MAIN menu) */
   char    parent_menus[5][16]; /* Stack of parent menu IDs (5-level max) */
+  u8      unknown_count;       /* Unknown commands this session; cap forces logoff */
 } menu_state_t;
 
 /**

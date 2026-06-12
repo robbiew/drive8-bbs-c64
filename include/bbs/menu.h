@@ -15,6 +15,10 @@
 struct session_s;
 typedef struct session_s session_t;
 
+/* Unknown menu commands allowed per session before the line is presumed dead
+ * (missed NO CARRIER + modem command-mode echo) and the caller is dropped. */
+#define MENU_GARBAGE_LIMIT 20
+
 /**
  * Menu command entry descriptor
  *

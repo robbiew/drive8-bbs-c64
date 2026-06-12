@@ -948,7 +948,11 @@ bbs_err_t session_step(session_t *s) {
         sess_color(s, 0x9f, "\x1b[36m");
         session_emit(s, "\r\n[PRESS ANY KEY]");
         sess_color(s, 0x05, "\x1b[37m");
-        while (!sess_rx_byte(&pause_ch)) { /* spin */ }
+        /* sess_getc keeps the sysop spy/idle checks live; the carrier test
+         * prevents an infinite spin if the line drops while paused. */
+        while (!sess_getc(&pause_ch)) {
+          if (!sess_carrier_ok(s)) break;
+        }
       }
       s->menu_displayed = TRUE;
       menu_display(s);
