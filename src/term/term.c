@@ -26,10 +26,14 @@ u8 term_unxlate_byte(term_mode_t mode, u8 wire)
 {
     switch (mode) {
     case TERM_PETSCII_LOWER:
-        /* text/lowercase charset: caller typed lowercase unshifted (0x41-0x5A)
-         * and uppercase shifted (0xC1-0xDA); map both back to CP437. */
-        if (wire >= 0x41u && wire <= 0x5Au) return (u8)(wire + 0x20u);
-        if (wire >= 0xC1u && wire <= 0xDAu) return (u8)(wire - 0x80u);
+        /* Text/lowercase charset.  In this charset 0x41-0x5A render as
+         * lowercase and BOTH 0x61-0x7A and 0xC1-0xDA render as uppercase, and
+         * terminals send the matching code: unshifted letters arrive as
+         * 0x41-0x5A (lowercase), Shift-ed letters as 0x61-0x7A (SyncTerm) or
+         * 0xC1-0xDA.  Map all three ranges back to CP437. */
+        if (wire >= 0x41u && wire <= 0x5Au) return (u8)(wire + 0x20u); /* lower */
+        if (wire >= 0x61u && wire <= 0x7Au) return (u8)(wire - 0x20u); /* UPPER */
+        if (wire >= 0xC1u && wire <= 0xDAu) return (u8)(wire - 0x80u); /* UPPER */
         return wire;
     case TERM_PETSCII:
     case TERM_ANSI_CP437:

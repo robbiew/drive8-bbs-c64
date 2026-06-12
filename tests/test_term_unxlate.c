@@ -24,6 +24,16 @@ int main(void) {
     EXPECT_EQ("pl.upper_A", term_unxlate_byte(TERM_PETSCII_LOWER, 0xC1), 0x41);
     EXPECT_EQ("pl.digit",   term_unxlate_byte(TERM_PETSCII_LOWER, 0x31), 0x31);
 
+    /* Real terminal encoding (verified by byte-capture from SyncTerm in
+     * Commodore mode): unshifted letters arrive as 0x41-0x5A (lowercase),
+     * Shift-ed letters as 0x61-0x7A (uppercase). Both must round-trip to the
+     * correct CP437 case — the 0x61-0x7A uppercase range is the one the
+     * output path never produces, so only this inbound test guards it. */
+    EXPECT_EQ("pl.synct_lower_a", term_unxlate_byte(TERM_PETSCII_LOWER, 0x41), 0x61); /* a */
+    EXPECT_EQ("pl.synct_UPPER_A", term_unxlate_byte(TERM_PETSCII_LOWER, 0x61), 0x41); /* A */
+    EXPECT_EQ("pl.synct_lower_z", term_unxlate_byte(TERM_PETSCII_LOWER, 0x5A), 0x7A); /* z */
+    EXPECT_EQ("pl.synct_UPPER_Z", term_unxlate_byte(TERM_PETSCII_LOWER, 0x7A), 0x5A); /* Z */
+
     /* Control bytes pass through unchanged (so CR/backspace/DEL survive). */
     EXPECT_EQ("ctl.cr",  term_unxlate_byte(TERM_PETSCII_LOWER, 0x0D), 0x0D);
     EXPECT_EQ("ctl.bs",  term_unxlate_byte(TERM_PETSCII_LOWER, 0x08), 0x08);
