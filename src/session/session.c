@@ -1223,9 +1223,15 @@ bbs_err_t session_display_file(const session_t *s, char prefix, const char *base
         disk_close();
         continue;
       }
-      /* PETSCII CHR$(142): uppercase/graphics charset */
+      /* Select the gfile charset. Default art is uppercase/graphics, so emit
+       * CHR$(142) (0x8E). When the sysop sets PETSCII_LOWER_ART, the gfiles are
+       * authored in the text charset (mixed-case letters + the text-mode
+       * graphics subset — the RetroCampus look), so emit CHR$(14) (0x0E) to
+       * force text mode for the caller. Scoped to remote callers; the local
+       * sysop console stays graphics (its WFC chrome is graphics-charset). */
+      bool_t lower_art = (!s->is_local && bbs_cfg.petscii_lower_art);
       if (!restore_petscii_lower) {
-        u8 uc = 0x8E;
+        u8 uc = lower_art ? (u8)0x0Eu : (u8)0x8Eu;
         session_emit_raw(s, &uc, 1);
       }
       raw_len = 0;

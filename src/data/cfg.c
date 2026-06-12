@@ -68,6 +68,7 @@ static void cfg_set_defaults(void) {
   bbs_cfg.allow_new_users = TRUE;
   bbs_cfg.allow_uploads = TRUE;
   bbs_cfg.prompt_cursor = FALSE;
+  bbs_cfg.petscii_lower_art = TRUE;   /* default: lowercase/mixed-case PETSCII art */
 
   /* REU is auto-detected at boot; not persisted in config */
   bbs_cfg.reu_enabled = FALSE;
@@ -309,6 +310,8 @@ static void cfg_apply(const char *key, const char *value) {
     bbs_cfg.allow_uploads = (atoi(value) != 0) ? TRUE : FALSE;
   } else if (strcmp(key, "PROMPT_CURSOR") == 0) {
     bbs_cfg.prompt_cursor = (atoi(value) != 0) ? TRUE : FALSE;
+  } else if (strcmp(key, "PETSCII_LOWER_ART") == 0) {
+    bbs_cfg.petscii_lower_art = (atoi(value) != 0) ? TRUE : FALSE;
   }
 }
 
@@ -426,6 +429,7 @@ bbs_err_t cfg_save(u8 device) {
   sprintf(line, "ALLOW_NEW_USERS=%u\n",(unsigned)(bbs_cfg.allow_new_users ? 1 : 0));  cfg_put(line);
   sprintf(line, "ALLOW_UPLOADS=%u\n",  (unsigned)(bbs_cfg.allow_uploads   ? 1 : 0));  cfg_put(line);
   sprintf(line, "PROMPT_CURSOR=%u\n",  (unsigned)(bbs_cfg.prompt_cursor    ? 1 : 0));  cfg_put(line);
+  sprintf(line, "PETSCII_LOWER_ART=%u\n",(unsigned)(bbs_cfg.petscii_lower_art ? 1 : 0)); cfg_put(line);
 
   disk_close();
 

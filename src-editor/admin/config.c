@@ -26,6 +26,7 @@ static char s_sysop_status[21];
 static char s_new_lvl[2];
 static char s_allow[4];   /* "ON" / "OFF" */
 static char s_promptcur[4];   /* "ON" / "OFF" */
+static char s_lowart[4];   /* "ON" / "OFF" — PETSCII lowercase/mixed-case art */
 static char s_idle[4];
 static char s_dev_sys[CFG_VALUE_MAX];
 static char s_dev_msgs[CFG_VALUE_MAX];
@@ -146,7 +147,7 @@ static const char *validate_lvl_mins(const char *val, void *ctx)
 
 static void do_settings(u8 device)
 {
-  ui_edit_field_t f[7];
+  ui_edit_field_t f[8];
   bbs_err_t err;
   int sel;
 
@@ -158,6 +159,7 @@ static void do_settings(u8 device)
   s_new_lvl[1] = '\0';
   strcpy(s_allow, bbs_cfg.allow_new_users ? "ON" : "OFF");
   strcpy(s_promptcur, bbs_cfg.prompt_cursor ? "ON" : "OFF");
+  strcpy(s_lowart, bbs_cfg.petscii_lower_art ? "ON" : "OFF");
 
   FIELD_INIT(f[0], "BBSNAME",  s_bbs_name, 31);
   FIELD_INIT(f[1], "BBSCITY",  s_bbs_city, 31);
@@ -166,13 +168,14 @@ static void do_settings(u8 device)
   FIELD_INIT(f[4], "ALLOWNEW", s_allow,      3); f[4].is_toggle = 1;
   FIELD_INIT(f[5], "SYSOPSTAT", s_sysop_status, 20);
   FIELD_INIT(f[6], "PROMPTCUR", s_promptcur, 3); f[6].is_toggle = 1;
+  FIELD_INIT(f[7], "LOWERART", s_lowart, 3); f[7].is_toggle = 1;
 
   f[0].case_mode = UI_CASE_MIXED;  /* BBSNAME */
   f[1].case_mode = UI_CASE_MIXED;  /* BBSCITY */
   f[2].case_mode = UI_CASE_MIXED;  /* SYSOPNAME */
   f[5].case_mode = UI_CASE_MIXED;  /* SYSOPSTAT */
 
-  sel = ui_edit_form("CONFIG: SETTINGS", f, 7);
+  sel = ui_edit_form("CONFIG: SETTINGS", f, 8);
   if (sel == -1) return;
 
   strncpy(bbs_cfg.bbs_name,   s_bbs_name, sizeof(bbs_cfg.bbs_name)   - 1);
@@ -184,6 +187,7 @@ static void do_settings(u8 device)
   bbs_cfg.new_user_level  = (u8)(s_new_lvl[0] - '0');
   bbs_cfg.allow_new_users = (strcmp(s_allow, "ON") == 0) ? TRUE : FALSE;
   bbs_cfg.prompt_cursor   = (strcmp(s_promptcur, "ON") == 0) ? TRUE : FALSE;
+  bbs_cfg.petscii_lower_art = (strcmp(s_lowart, "ON") == 0) ? TRUE : FALSE;
 
   err = cfg_save(device);
   if (err != BBS_OK) { ui_error("SAVE FAILED."); return; }

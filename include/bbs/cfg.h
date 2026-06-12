@@ -66,6 +66,8 @@ typedef struct {
   bool_t allow_new_users;    /* Enable new user registration */
   bool_t allow_uploads;      /* Enable file uploads */
   bool_t prompt_cursor;      /* Animated color-cycling block cursor at the menu prompt */
+  bool_t petscii_lower_art;  /* PETSCII gfiles are lowercase/text-charset art (mixed case)
+                                rather than the default uppercase/graphics charset */
 
   /* RAM Expansion Unit (REU) — auto-detected at boot, not persisted */
   bool_t reu_enabled;        /* TRUE if REU was detected and is active */
