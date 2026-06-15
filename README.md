@@ -14,6 +14,25 @@ Not working: Private mail, file transfers, SysOp chat, polls/voting, doors and l
 
 ---
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="data/git-screens/PETSCII-1.png" alt="Login screen in PETSCII mode" /><br /><sub><b>Login (PETSCII)</b> — the TURBO/64 logo and handle prompt as seen by a Commodore-mode caller.</sub></td>
+    <td width="50%"><img src="data/git-screens/PETSCII-2.png" alt="Main menu in PETSCII mode" /><br /><sub><b>Main menu (PETSCII)</b> — mixed-case art and hotkey commands.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="data/git-screens/ANSI-1.png" alt="Main menu in ANSI/CP437 mode" /><br /><sub><b>Main menu (ANSI/CP437)</b> — the same BBS served to an ANSI terminal over telnet.</sub></td>
+    <td width="50%"><img src="data/git-screens/boot.png" alt="Local SysOp console" /><br /><sub><b>Local console</b> — the waiting-for-caller screen with live stats and recent callers.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="data/git-screens/configure.png" alt="CONFIGURE editor main menu" /><br /><sub><b>CONFIGURE</b> — the on-C64 SysOp editor for boards, users, and config.</sub></td>
+    <td width="50%"></td>
+  </tr>
+</table>
+
+---
+
 ## Requirements
 
 **Hardware / emulator**
