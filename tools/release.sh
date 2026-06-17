@@ -6,6 +6,11 @@
 #        tools/release.sh --skip-tag   # build + publish to existing tag
 #        tools/release.sh --force      # delete existing release + recreate from scratch
 #        tools/release.sh --force --skip-tag  # recreate release on existing tag
+#        tools/release.sh --prerelease # mark the GitHub release as a pre-release
+#        tools/release.sh --no-prerelease  # force a full (non-pre) release
+#
+# Pre-release: by default any 0.x version is published as a GitHub pre-release
+# (the project is pre-1.0); --prerelease/--no-prerelease override that.
 
 set -euo pipefail
 
@@ -20,19 +25,22 @@ NC='\033[0m'
 DRY_RUN=0
 SKIP_TAG=0
 FORCE=0
+PRERELEASE=auto   # auto = pre-release iff version is 0.x; or 1 / 0 to force
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)  DRY_RUN=1; shift ;;
         --skip-tag) SKIP_TAG=1; shift ;;
         --force)    FORCE=1; shift ;;
+        --prerelease)    PRERELEASE=1; shift ;;
+        --no-prerelease) PRERELEASE=0; shift ;;
         -h|--help)
-            sed -n '2,8p' "$0"
+            sed -n '2,12p' "$0"
             exit 0
             ;;
         *)
             echo "Unknown option: $1" >&2
-            echo "Usage: tools/release.sh [--dry-run|--skip-tag|--force]" >&2
+            echo "Usage: tools/release.sh [--dry-run|--skip-tag|--force|--prerelease|--no-prerelease]" >&2
             exit 1
             ;;
     esac
@@ -86,9 +94,18 @@ if [ -z "$VERSION" ]; then
 fi
 TAG="v$VERSION"
 
+# Resolve pre-release: default to pre-release for any pre-1.0 (0.x) version.
+if [ "$PRERELEASE" = "auto" ]; then
+    case "$VERSION" in
+        0.*) PRERELEASE=1 ;;
+        *)   PRERELEASE=0 ;;
+    esac
+fi
+
 echo -e "${BLUE}TURBO/64 BBS release pipeline${NC}"
 echo -e "  Version: ${GREEN}$VERSION${NC}"
 echo -e "  Tag:     ${GREEN}$TAG${NC}"
+echo -e "  Pre-release: ${GREEN}$([ "$PRERELEASE" = 1 ] && echo yes || echo no)${NC}"
 echo ""
 
 # --- Tag check ---
@@ -201,7 +218,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "  3. gh release create \"$TAG\" \\"
     echo "       TURBO64-${VERSION}.zip \\"
     echo "       --title \"TURBO/64 BBS v$VERSION\" \\"
-    echo "       --notes \"<from notes.md or git log>\""
+    echo "       --notes \"<from notes.md or git log>\" \\"
+    echo "       $([ "$PRERELEASE" = 1 ] && echo --prerelease)"
     echo ""
     echo -e "Release notes preview:"
     echo "---"
@@ -228,7 +246,8 @@ echo -e "${BLUE}Creating GitHub release $TAG...${NC}"
 gh release create "$TAG" \
     "$ZIP_FILE" \
     --title "TURBO/64 BBS v$VERSION" \
-    --notes "$RELEASE_NOTES"
+    --notes "$RELEASE_NOTES" \
+    $([ "$PRERELEASE" = 1 ] && echo --prerelease)
 
 echo ""
 echo -e "${GREEN}Release v$VERSION published!${NC}"
