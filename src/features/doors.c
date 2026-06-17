@@ -30,7 +30,14 @@ static void w_print_n(const char *b, u8 n)    { char t[81]; if(n>80)n=80; memcpy
 static void w_display(u8 cat, const char *nm) { session_display_file(g_door_sess, (char)cat, nm); }
 static void w_clear(void)                     { session_clear_screen(g_door_sess); }
 static u8   w_getkey(void)                    { u8 c; return sess_read_key(g_door_sess, &c) ? c : 0; }
-static i8   w_read_line(char *b, u8 max)      { if(!sess_carrier_ok(g_door_sess)) return -1; sess_read_line(g_door_sess, b, max, FALSE); return (i8)strlen(b); }
+static i8   w_read_line(char *b, u8 max)      {
+  if (!sess_carrier_ok(g_door_sess)) return -1;          /* carrier absent at entry */
+  sess_read_line(g_door_sess, b, max, FALSE);
+  /* sess_read_line returns on a mid-read carrier drop leaving partial bytes in b;
+   * surface that as 0 (empty) so the door treats it as "carrier lost, exit now". */
+  if (!sess_carrier_ok(g_door_sess)) { b[0] = 0; return 0; }
+  return (i8)strlen(b);
+}
 static void w_get_caller(bbs_caller_t *o) {
   memset(o, 0, sizeof(*o));
   strncpy(o->handle,    g_door_sess->handle,        sizeof(o->handle)    - 1);
@@ -92,7 +99,9 @@ static void enter_door(void) {
  * (load failure, ABI mismatch) also reload because the door file load may have
  * already partially overwritten the overlay. */
 __noinline void door_run(session_t *s, const door_record_t *rec) {
-  char name[20];
+  /* "<drive>:<filename>" — drive is a u8 (≤3 digits even if a record is corrupt)
+   * + ':' + up to 16 filename chars + NUL = 21 worst case; 24 leaves margin. */
+  char name[24];
   const volatile u8 *hdr = (const volatile u8 *)DOOR_ENTRY;
 
   g_door_sess = s;

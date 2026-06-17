@@ -64,7 +64,7 @@ All functions are called through the pointer returned by `bbs()`:
 | Field | Type | Notes |
 |---|---|---|
 | `handle` | `char[16]` | Caller's login handle (NUL-terminated) |
-| `access_level` | `u8` | Access level (1-9) |
+| `access_level` | `u8` | Access level (0-5: 0=deleted, 1=new, 2=user, 3=power, 4=co-sysop, 5=sysop) |
 | `firstname` | `char[16]` | |
 | `lastname` | `char[16]` | |
 | `location` | `char[21]` | |
@@ -79,11 +79,14 @@ All functions are called through the pointer returned by `bbs()`:
 
 - `getkey` returns `0` if the carrier drops mid-wait.  Check and return immediately.
 - `read_line` returns `-1` if carrier is absent at entry.
+- `read_line` returns `0` if the carrier drops in the middle of the read. (The
+  underlying line reader bails out leaving a partial buffer; the wrapper detects
+  the dropped carrier, clears the buffer, and returns `0`.)
 
-**Task-4 carry-forward**: `read_line` also returns `0` (not `-1`) if the carrier
-drops in the middle of the read (the BBS's `sess_read_line` returns an empty buffer
-in that case; the wrapper then returns `strlen("") = 0`).  Treat both `0` and `-1`
-as "carrier lost, exit now."
+Treat both `0` and `-1` from `read_line` as "carrier lost, exit now."  Note a
+genuine empty line (the caller just pressed RETURN with no text) also returns `0`,
+and the wrapper does not distinguish it from a carrier drop — so a door that must
+accept empty input cannot rely on `read_line` alone.
 
 ```c
 /* Safe getkey pattern */
