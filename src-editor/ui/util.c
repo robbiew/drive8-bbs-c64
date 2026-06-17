@@ -82,3 +82,32 @@ void ui_beep(void)
 {
   printf("\x07");
 }
+
+/* Edit-screen field label: " <key> LABEL   : " — reverse hotkey, green 8-wide
+ * label, colon; leaves color white for the caller's value. Shared by the
+ * message-area and door editors. */
+void ui_edit_label(char key, const char *label)
+{
+  putchar(' ');
+  ui_print_hotkey(key);
+  textcolor(COLOR_LT_GREEN);
+  printf(" %-8s: ", label);
+  textcolor(COLOR_WHITE);
+}
+
+/* Backspace-aware unsigned-number entry; -1 if left blank, else 0..255. */
+int ui_read_num(const char *prompt)
+{
+  char c[4] = { 0, 0, 0, 0 };
+  int len = 0, v = 0, i;
+  printf("%s", prompt);
+  for (;;) {
+    char ch = getch();
+    if (ch == 13 || ch == '\n') { printf("\n"); break; }
+    if ((ch == 20 || ch == 8) && len > 0) { len--; c[len] = 0; printf("\x14"); continue; }
+    if (ch >= '0' && ch <= '9' && len < 3) { c[len++] = ch; putchar(ch); }
+  }
+  if (len == 0) return -1;
+  for (i = 0; c[i]; i++) v = v * 10 + (c[i] - '0');
+  return v > 255 ? 255 : v;
+}

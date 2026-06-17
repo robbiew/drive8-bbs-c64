@@ -2,12 +2,14 @@
  * CONFIGURE — Door Programs Admin Module
  *
  * List, create, edit, delete door program slots (1..DOORS_MAX).
+ * Mirrors the message-areas editor: a paged columnar LIST, a "# TO SELECT"
+ * pick screen, and an interactive field-per-line EDIT screen (press a hotkey
+ * to edit one field, re-render) with the same color/prompt conventions.
  */
 
 #include <conio.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include <ctype.h>
 #include "bbs/records.h"
 #include "bbs/err.h"
@@ -17,145 +19,229 @@
 /* Forward-declare only the data-layer functions needed here; avoids pulling in
  * bbs/doors.h → bbs/session.h which is BOOT-only and not linked in CONFIGURE. */
 u8        door_count(u8 device);
+bbs_err_t door_by_index(u8 n, door_record_t *out, u8 device);
 bbs_err_t door_by_id(u8 id, door_record_t *out, u8 device);
 bbs_err_t door_save(const door_record_t *rec, u8 device);
 bbs_err_t door_delete(u8 id, u8 device);
 
-/* -------------------------------------------------------------------------
- * Edit a door record field-by-field (sequential input, no form widget).
- * Used for both CREATE and EDIT.
- * ---------------------------------------------------------------------- */
-static void doors_edit(door_record_t *d, u8 device)
+#define DOORS_PER_PAGE  10
+
+/* ------------------------------------------------------------------ */
+/* Shared helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+/* Copy a 16-byte field into a trimmed, NUL-terminated display string. */
+static void door_trim(const char *src, char *dst)
 {
-  char buf[17];
-  char ch;
-  int len;
-  bbs_err_t err;
-
-  ui_screen_header("EDIT DOOR");
-  printf("SLOT: %u\n\n", (unsigned)d->id);
-
-  /* Title (mixed case) */
-  printf("TITLE (16): ");
-  len = ui_read_line(buf, 16, UI_CASE_MIXED);
-  printf("\n");
-  if (len > 0) { strncpy(d->title, buf, 16); }
-
-  /* Filename (uppercase) */
-  printf("FILENAME (16): ");
-  len = ui_read_line(buf, 16, UI_CASE_UPPER);
-  printf("\n");
-  if (len > 0) { strncpy(d->filename, buf, 16); }
-
-  /* Device */
-  printf("DEVICE (8-30, ENTER=KEEP %u): ", (unsigned)d->device);
-  len = ui_read_line(buf, 2, UI_CASE_UPPER);
-  printf("\n");
-  if (len > 0) {
-    u8 v = (u8)atoi(buf);
-    if (v >= 8 && v <= 30) d->device = v;
-  }
-
-  /* Drive */
-  printf("DRIVE (0-1, ENTER=KEEP %u): ", (unsigned)d->drive);
-  ch = getch(); printf("\n");
-  if (ch == '0' || ch == '1') d->drive = (u8)(ch - '0');
-
-  /* cmd_key */
-  printf("CMD KEY (A-Z or - NONE, ENTER=KEEP %c): ",
-    d->cmd_key ? d->cmd_key : '-');
-  ch = (char)toupper((unsigned char)getch()); printf("\n");
-  if (ch == '-') d->cmd_key = 0;
-  else if (ch >= 'A' && ch <= 'Z') d->cmd_key = ch;
-
-  /* min_level */
-  printf("MIN LEVEL (0-5, ENTER=KEEP %u): ", (unsigned)d->min_level);
-  ch = getch(); printf("\n");
-  if (ch >= '0' && ch <= '5') d->min_level = (u8)(ch - '0');
-
-  /* login_order */
-  printf("LOGIN ORDER (0=NONE, ENTER=KEEP %u): ", (unsigned)d->login_order);
-  len = ui_read_line(buf, 3, UI_CASE_UPPER);
-  printf("\n");
-  if (len > 0) d->login_order = (u8)atoi(buf);
-
-  /* Flags toggles */
-  printf("ENABLED? (Y/N, ENTER=KEEP %s): ",
-    (d->flags & DOOR_F_ENABLED) ? "Y" : "N");
-  ch = (char)toupper((unsigned char)getch()); printf("\n");
-  if (ch == 'Y') d->flags |= DOOR_F_ENABLED;
-  else if (ch == 'N') d->flags &= (u8)(~DOOR_F_ENABLED);
-
-  printf("RUN AT LOGIN? (Y/N, ENTER=KEEP %s): ",
-    (d->flags & DOOR_F_LOGIN) ? "Y" : "N");
-  ch = (char)toupper((unsigned char)getch()); printf("\n");
-  if (ch == 'Y') d->flags |= DOOR_F_LOGIN;
-  else if (ch == 'N') d->flags &= (u8)(~DOOR_F_LOGIN);
-
-  /* Save */
-  printf("\n");
-  if (!ui_confirm("SAVE DOOR?")) return;
-
-  err = door_save(d, device);
-  if (err != BBS_OK) { ui_op_error("SAVE", (u8)err); return; }
-  printf("DOOR SAVED.\n");
-  ui_press_any_key();
+  u8 j;
+  for (j = 0; j < 16; j++) dst[j] = (src[j] == 0) ? ' ' : src[j];
+  dst[16] = '\0';
+  for (j = 15; j > 0 && (dst[j] == ' ' || dst[j] == '\0'); j--) dst[j] = '\0';
 }
 
-/* -------------------------------------------------------------------------
- * LIST — show all defined doors
- * ---------------------------------------------------------------------- */
-static void doors_do_list(u8 device)
+/* Number input and the edit-screen field label are shared helpers in ui/util.c
+ * (ui_read_num / ui_edit_label) — same code the message-area editor uses. */
+
+/* ------------------------------------------------------------------ */
+/* LIST / pick                                                          */
+/* ------------------------------------------------------------------ */
+
+/* Paged door browser.  out==NULL: plain list (Q=DONE).  out!=NULL: pick mode —
+ * `prompt` is shown and a slot # (1..page count) selects a door into *out.
+ * Renders rows directly via door_by_index (no page cache) to keep CONFIGURE's
+ * full main region within budget — doors are few and this is sysop-side. */
+static bbs_err_t doors_browse(const char *prompt, u8 device, door_record_t *out)
 {
-  u8 i, found = 0;
-  ui_screen_header("DOOR PROGRAMS");
-  for (i = 1; i <= DOORS_MAX; i++) {
+  u8 total = door_count(device);
+  u8 total_pages;
+  u8 page = 0;
+
+  if (total == 0) { ui_error("NO DOORS DEFINED."); return BBS_ENOTFOUND; }
+  total_pages = (u8)((total + DOORS_PER_PAGE - 1) / DOORS_PER_PAGE);
+
+  for (;;) {
+    char ch;
+    u8 i, shown = 0;
+    u8 start = (u8)(page * DOORS_PER_PAGE + 1);
     door_record_t r;
-    if (door_by_id(i, &r, device) == BBS_OK) {
-      printf("%2u %c %s %-12.12s\n",
-        (unsigned)i,
-        r.cmd_key ? r.cmd_key : '-',
-        (r.flags & DOOR_F_ENABLED) ? "Y" : "N",
-        r.title);
-      found = 1;
+
+    ui_screen_header("DOOR PROGRAMS");
+    printf("PAGE %u/%u\n\n", (unsigned)(page + 1), (unsigned)total_pages);
+    printf(" #  TITLE            K DEV LV FL\n");
+    for (i = 0; i < DOORS_PER_PAGE; i++) {
+      char t[17], fl[3];
+      u8 f;
+      if (door_by_index((u8)(start + i), &r, device) != BBS_OK) break;
+      shown++;
+      f = r.flags;
+      door_trim(r.title, t);
+      fl[0] = (f & DOOR_F_ENABLED) ? 'E' : '-';
+      fl[1] = (f & DOOR_F_LOGIN)   ? 'L' : '-';
+      fl[2] = '\0';
+      printf(" %u  %-16s %c %3u %2u %s\n",
+        (unsigned)(i + 1), t, r.cmd_key ? r.cmd_key : '-',
+        (unsigned)r.device, (unsigned)r.min_level, fl);
+    }
+    printf("\n");
+
+    if (page > 0)                     ui_hotkey_label('P', "PREV");
+    if (page < (u8)(total_pages - 1)) ui_hotkey_label('N', "NEXT");
+    ui_hotkey_label('Q', out ? "BACK" : "DONE");
+    if (out) printf("\n\n%s\n# TO SELECT: ", prompt);
+    else     printf("\n\nCMD?:");
+
+    ch = (char)toupper((unsigned char)getch());
+    printf("\n");
+
+    if (ch == 'Q') return BBS_ENOTFOUND;
+    if (ch == 'N' && page < (u8)(total_pages - 1)) { page++; continue; }
+    if (ch == 'P' && page > 0)                      { page--; continue; }
+    if (out && ch >= '1' && ch <= (char)('0' + shown)) {
+      return door_by_index((u8)(start + (ch - '1')), out, device);
+    }
+    ui_beep();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* EDIT screen + loop                                                   */
+/* ------------------------------------------------------------------ */
+
+static void doors_show_edit_screen(const door_record_t *d)
+{
+  char buf[40];
+  char t[17];
+
+  sprintf(buf, "EDIT DOOR #%u", (unsigned)d->id);
+  ui_screen_header(buf);
+
+  door_trim(d->title, t);
+  ui_edit_label('T', "TITLE");    printf("%s\n", t);
+  door_trim(d->filename, t);
+  ui_edit_label('F', "FILE");     printf("%s\n", t);
+  ui_edit_label('D', "DEVICE");   printf("%u\n", (unsigned)d->device);
+  ui_edit_label('R', "DRIVE");    printf("%u\n", (unsigned)d->drive);
+  ui_edit_label('K', "CMD KEY");  printf("%c\n", d->cmd_key ? d->cmd_key : '-');
+  ui_edit_label('L', "MIN LVL");  printf("%u\n", (unsigned)d->min_level);
+  ui_edit_label('O', "LOGIN #");
+  if (d->login_order == 0) printf("(NONE)\n");
+  else                     printf("%u\n", (unsigned)d->login_order);
+  ui_edit_label('E', "ENABLED");  printf("%c\n", (d->flags & DOOR_F_ENABLED) ? 'Y' : 'N');
+  ui_edit_label('G', "AT LOGIN"); printf("%c\n", (d->flags & DOOR_F_LOGIN)   ? 'Y' : 'N');
+
+  printf("\n ");
+  ui_print_hotkey('S'); textcolor(COLOR_LT_GREEN); printf(" SAVE   ");
+  ui_print_hotkey('C'); textcolor(COLOR_LT_GREEN); printf(" CANCEL\n");
+  textcolor(COLOR_WHITE);
+  printf("\n");
+}
+
+/* Returns TRUE if the record was saved, FALSE if cancelled. */
+static bool_t doors_edit_record(door_record_t *d, u8 device)
+{
+  for (;;) {
+    char ch;
+    doors_show_edit_screen(d);
+    textcolor(COLOR_WHITE);
+    printf("CMD?:");
+    ch = (char)toupper((unsigned char)getch());
+    printf("\n");
+
+    switch (ch) {
+      case 'T': {
+        char newt[17];
+        int len, i;
+        printf("TITLE (16 CHARS MAX): ");
+        len = ui_read_line(newt, 16, UI_CASE_MIXED);
+        printf("\n");
+        if (len > 0) {
+          strncpy(d->title, newt, 16);
+          for (i = len; i < 16; i++) d->title[i] = 0;
+        }
+        break;
+      }
+
+      case 'F': {
+        char newf[17];
+        int len, i;
+        printf("FILENAME (16 CHARS MAX): ");
+        len = ui_read_line(newf, 16, UI_CASE_UPPER);
+        printf("\n");
+        if (len > 0) {
+          strncpy(d->filename, newf, 16);
+          for (i = len; i < 16; i++) d->filename[i] = 0;
+        }
+        break;
+      }
+
+      case 'D': {
+        int v = ui_read_num("DEVICE (8-30): ");
+        if (v < 0) break;                 /* blank = keep */
+        if (v >= 8 && v <= 30) d->device = (u8)v;
+        else ui_error("INVALID DEVICE.");
+        break;
+      }
+
+      case 'R': {
+        char lc;
+        printf("DRIVE (0-1): ");
+        lc = getch(); putchar(lc); printf("\n");
+        if (lc == '0' || lc == '1') d->drive = (u8)(lc - '0');
+        else ui_error("INVALID DRIVE.");
+        break;
+      }
+
+      case 'K': {
+        char lc;
+        printf("CMD KEY (A-Z, OR - FOR NONE): ");
+        lc = (char)toupper((unsigned char)getch()); putchar(lc); printf("\n");
+        if (lc == '-') d->cmd_key = 0;
+        else if (lc >= 'A' && lc <= 'Z') d->cmd_key = lc;
+        else ui_error("INVALID KEY.");
+        break;
+      }
+
+      case 'L': {
+        char lc;
+        printf("MIN LEVEL (0-5): ");
+        lc = getch(); putchar(lc); printf("\n");
+        if (lc >= '0' && lc <= '5') d->min_level = (u8)(lc - '0');
+        else ui_error("INVALID LEVEL.");
+        break;
+      }
+
+      case 'O': {
+        int v = ui_read_num("LOGIN ORDER (0=NONE, 1-255): ");
+        if (v < 0) break;                 /* blank = keep */
+        d->login_order = (u8)v;
+        break;
+      }
+
+      case 'E': d->flags ^= DOOR_F_ENABLED; break;
+      case 'G': d->flags ^= DOOR_F_LOGIN;   break;
+
+      case 'S': {
+        bbs_err_t err;
+        if (d->title[0] == 0 || d->title[0] == ' ') { ui_error("TITLE REQUIRED."); break; }
+        if (d->filename[0] == 0 || d->filename[0] == ' ') { ui_error("FILENAME REQUIRED."); break; }
+        err = door_save(d, device);
+        if (err != BBS_OK) { ui_op_error("SAVE", (u8)err); break; }
+        printf("\nDOOR SAVED.\n");
+        ui_press_any_key();
+        return TRUE;
+      }
+
+      case 'C': return FALSE;
+
+      default: ui_beep(); break;
     }
   }
-  if (!found) printf("NO DOORS DEFINED.\n");
-  printf("\n");
-  ui_press_any_key();
 }
 
-/* -------------------------------------------------------------------------
- * Pick a door slot: show all defined doors then ask for slot number.
- * Returns 0 if cancelled, else the door id.
- * ---------------------------------------------------------------------- */
-static u8 doors_pick(u8 device)
-{
-  char buf[3];
-  int len;
-  u8 i, idx;
-  door_record_t r;
+/* ------------------------------------------------------------------ */
+/* CREATE / EDIT / DELETE                                               */
+/* ------------------------------------------------------------------ */
 
-  ui_screen_header("DOOR PROGRAMS");
-  for (i = 1; i <= DOORS_MAX; i++) {
-    if (door_by_id(i, &r, device) == BBS_OK)
-      printf("%2u %-14.14s\n", (unsigned)i, r.title);
-  }
-  printf("\n");
-  ui_hotkey_label('Q', "CANCEL");
-  printf("\nSLOT # (Q=CANCEL): ");
-  len = ui_read_line(buf, 2, UI_CASE_UPPER);
-  printf("\n");
-  if (!len || buf[0] == 'Q') return 0;
-  idx = (u8)atoi(buf);
-  if (door_by_id(idx, &r, device) == BBS_OK) return idx;
-  ui_error("NOT FOUND.");
-  return 0;
-}
-
-/* -------------------------------------------------------------------------
- * CREATE
- * ---------------------------------------------------------------------- */
 static void doors_do_create(u8 device)
 {
   door_record_t rec;
@@ -169,47 +255,38 @@ static void doors_do_create(u8 device)
   memset(&rec, 0, sizeof(rec));
   rec.id     = slot;
   rec.flags  = DOOR_F_ENABLED;
-  rec.device = 10;
-  doors_edit(&rec, device);
+  rec.device = device;        /* default to the door device; editable below */
+  /* Nothing is written until SAVE in the edit screen. */
+  doors_edit_record(&rec, device);
 }
 
-/* -------------------------------------------------------------------------
- * EDIT
- * ---------------------------------------------------------------------- */
 static void doors_do_edit(u8 device)
 {
   door_record_t door;
-  u8 id = doors_pick(device);
-  if (!id) return;
-  if (door_by_id(id, &door, device) != BBS_OK) { ui_error("NOT FOUND."); return; }
-  doors_edit(&door, device);
+  if (doors_browse("SELECT DOOR TO EDIT", device, &door) != BBS_OK) return;
+  doors_edit_record(&door, device);
 }
 
-/* -------------------------------------------------------------------------
- * DELETE
- * ---------------------------------------------------------------------- */
 static void doors_do_delete(u8 device)
 {
   door_record_t door;
-  u8 id = doors_pick(device);
   bbs_err_t err;
   char prompt[24];
 
-  if (!id) return;
-  if (door_by_id(id, &door, device) != BBS_OK) { ui_error("NOT FOUND."); return; }
+  if (doors_browse("SELECT DOOR TO DELETE", device, &door) != BBS_OK) return;
 
-  sprintf(prompt, "DELETE DOOR %u?", (unsigned)id);
+  sprintf(prompt, "DELETE DOOR %u?", (unsigned)door.id);
   if (!ui_confirm(prompt)) return;
 
-  err = door_delete(id, device);
+  err = door_delete(door.id, device);
   if (err != BBS_OK) { ui_op_error("DELETE", (u8)err); return; }
   printf("DOOR DELETED.\n");
   ui_press_any_key();
 }
 
-/* -------------------------------------------------------------------------
- * Public entry point
- * ---------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Public entry point                                                   */
+/* ------------------------------------------------------------------ */
 void admin_doors_menu(u8 device)
 {
   static const ui_menu_item_t items[] = {
@@ -225,7 +302,7 @@ void admin_doors_menu(u8 device)
     ui_menu_display("DOOR PROGRAMS", items, 5);
     ch = ui_menu_input("CHOICE:", "LCEDQ");
     switch (ch) {
-      case 'L': doors_do_list(device);   break;
+      case 'L': doors_browse(NULL, device, NULL); break;
       case 'C': doors_do_create(device); break;
       case 'E': doors_do_edit(device);   break;
       case 'D': doors_do_delete(device); break;

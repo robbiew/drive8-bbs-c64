@@ -183,17 +183,6 @@ static void boards_do_create(u8 device)
   }
 }
 
-/* " <key> LABEL   : " — reverse hotkey, green padded label; leaves color white
- * for the caller to print the value. Fixed 8-wide label keeps colons aligned. */
-static void edit_row_label(char key, const char *label)
-{
-  putchar(' ');
-  ui_print_hotkey(key);
-  textcolor(COLOR_LT_GREEN);
-  printf(" %-8s: ", label);
-  textcolor(COLOR_WHITE);
-}
-
 static void boards_show_edit_screen(const board_dir_record_t *b)
 {
   char buf[48];
@@ -207,14 +196,14 @@ static void boards_show_edit_screen(const board_dir_record_t *b)
   t[16] = '\0';
   for (j = 15; j > 0 && (t[j] == ' ' || t[j] == '\0'); j--) t[j] = '\0';
 
-  edit_row_label('T', "TITLE");    printf("%s\n", t);
-  edit_row_label('L', "LIST ORD"); printf("%u\n", (unsigned)b->display_order);
-  edit_row_label('R', "READ");     printf("%u\n", (unsigned)b->read_level);
-  edit_row_label('W', "WRITE");    printf("%u\n", (unsigned)b->write_level);
-  edit_row_label('A', "ANON");     printf("%c\n", (b->flags & BOARD_F_ANON) ? 'Y' : 'N');
-  edit_row_label('N', "NET");      printf("%c\n", (b->flags & BOARD_F_NET)  ? 'Y' : 'N');
+  ui_edit_label('T', "TITLE");    printf("%s\n", t);
+  ui_edit_label('L', "LIST ORD"); printf("%u\n", (unsigned)b->display_order);
+  ui_edit_label('R', "READ");     printf("%u\n", (unsigned)b->read_level);
+  ui_edit_label('W', "WRITE");    printf("%u\n", (unsigned)b->write_level);
+  ui_edit_label('A', "ANON");     printf("%c\n", (b->flags & BOARD_F_ANON) ? 'Y' : 'N');
+  ui_edit_label('N', "NET");      printf("%c\n", (b->flags & BOARD_F_NET)  ? 'Y' : 'N');
 
-  edit_row_label('O', "SUBOP");
+  ui_edit_label('O', "SUBOP");
   if (s_edit_subop_id != 0)
     printf("%s (ID %u)\n", s_edit_subop_name, (unsigned)s_edit_subop_id);
   else
@@ -226,16 +215,16 @@ static void boards_show_edit_screen(const board_dir_record_t *b)
     textcolor(COLOR_WHITE);
   }
 
-  edit_row_label('M', "MAX MSG");
+  ui_edit_label('M', "MAX MSG");
   if (s_edit_max_msgs == 0) printf("DEFAULT\n");
   else                      printf("%u\n", (unsigned)s_edit_max_msgs);
 
-  edit_row_label('D', "MAX DAYS");
+  ui_edit_label('D', "MAX DAYS");
   if (s_edit_max_age == 0) printf("OFF\n");
   else                     printf("%u\n", (unsigned)s_edit_max_age);
 
   if (b->flags & BOARD_F_NET) {
-    edit_row_label('G', "NET TAG");
+    ui_edit_label('G', "NET TAG");
     printf("%s\n", s_edit_net_tag[0] ? s_edit_net_tag : "(NONE)");
   }
 
@@ -343,55 +332,24 @@ static bool_t boards_edit_record(board_dir_record_t *board, u8 device)
       }
 
       case 'M': {
-        char mc[4];
-        int mlen = 0, mv = 0, mi;
-        memset(mc, 0, sizeof(mc));
-        printf("MAX MSGS (0=DEFAULT, 1-255): ");
-        for (;;) {
-          char mc2 = getch();
-          if (mc2 == 13 || mc2 == '\n') { printf("\n"); break; }
-          if ((mc2 == 20 || mc2 == 8) && mlen > 0) { mlen--; mc[mlen] = 0; printf("\x14"); continue; }
-          if (mc2 >= '0' && mc2 <= '9' && mlen < 3) { mc[mlen++] = mc2; putchar(mc2); }
-        }
-        for (mi = 0; mc[mi]; mi++) mv = mv * 10 + (mc[mi] - '0');
-        s_edit_max_msgs = (u8)(mv > 255 ? 255 : mv);
+        int v = ui_read_num("MAX MSGS (0=DEFAULT, 1-255): ");
+        s_edit_max_msgs = (u8)(v < 0 ? 0 : v);
         board->max_msgs = s_edit_max_msgs;
         break;
       }
 
       case 'D': {
-        char dc[4];
-        int dlen = 0, dv = 0, di;
-        memset(dc, 0, sizeof(dc));
-        printf("MAX DAYS (0=DISABLED, 1-255): ");
-        for (;;) {
-          char dc2 = getch();
-          if (dc2 == 13 || dc2 == '\n') { printf("\n"); break; }
-          if ((dc2 == 20 || dc2 == 8) && dlen > 0) { dlen--; dc[dlen] = 0; printf("\x14"); continue; }
-          if (dc2 >= '0' && dc2 <= '9' && dlen < 3) { dc[dlen++] = dc2; putchar(dc2); }
-        }
-        for (di = 0; dc[di]; di++) dv = dv * 10 + (dc[di] - '0');
-        s_edit_max_age = (u8)(dv > 255 ? 255 : dv);
+        int v = ui_read_num("MAX DAYS (0=DISABLED, 1-255): ");
+        s_edit_max_age = (u8)(v < 0 ? 0 : v);
         board->max_age_days = s_edit_max_age;
         break;
       }
 
       case 'L': {
-        char oc[4];
-        int olen = 0, ov = 0, oi;
-        memset(oc, 0, sizeof(oc));
-        printf("ORDER (1-255): ");
-        for (;;) {
-          char c2 = getch();
-          if (c2 == 13 || c2 == '\n') { printf("\n"); break; }
-          if ((c2 == 20 || c2 == 8) && olen > 0) { olen--; oc[olen] = 0; printf("\x14"); continue; }
-          if (c2 >= '0' && c2 <= '9' && olen < 3) { oc[olen++] = c2; putchar(c2); }
-        }
-        if (olen == 0) break;                 /* blank = keep current */
-        for (oi = 0; oc[oi]; oi++) ov = ov * 10 + (oc[oi] - '0');
-        if (ov < 1) ov = 1;
-        if (ov > 255) ov = 255;
-        board->display_order = (u8)ov;
+        int v = ui_read_num("ORDER (1-255): ");
+        if (v < 0) break;                     /* blank = keep current */
+        if (v < 1) v = 1;
+        board->display_order = (u8)v;
         break;
       }
 
@@ -457,78 +415,6 @@ static void boards_do_delete(u8 device)
   ui_press_any_key();
 }
 
-static void boards_do_maint(u8 device)
-{
-  board_dir_record_t board;
-  bbs_err_t err;
-
-  if (boards_pick("SELECT AREA FOR MAINTENANCE", device, &board) != BBS_OK)
-    return;
-
-  for (;;) {
-    u16 total_msgs = 0, deleted_msgs = 0;
-    char ch;
-    char buf[48];
-
-    msg_index_stats(board.id, device, &total_msgs, &deleted_msgs);
-
-    sprintf(buf, "MAINTENANCE: BOARD #%u", (unsigned)board.id);
-    ui_screen_header(buf);
-
-    {
-      char title[17];
-      u8 j;
-      for (j = 0; j < 16; j++) title[j] = (board.title[j] == 0) ? ' ' : board.title[j];
-      title[16] = '\0';
-      for (j = 15; j > 0 && (title[j] == ' ' || title[j] == '\0'); j--) title[j] = '\0';
-      printf(" BOARD    : %s\n", title);
-    }
-    printf(" TOTAL    : %u  DELETED: %u\n",
-           (unsigned)total_msgs, (unsigned)deleted_msgs);
-    if (total_msgs > 0) {
-      u8 waste_pct = (u8)((u16)(deleted_msgs * 100) / total_msgs);
-      printf(" WASTE    : %u%%\n", (unsigned)waste_pct);
-      if (waste_pct >= 25) printf(" [!] COMPACT RECOMMENDED\n");
-    }
-    printf("\n ");
-    ui_hotkey_label('C', "COMPACT");
-    ui_hotkey_label('P', "PRUNE");
-    ui_hotkey_label('Q', "QUIT");
-    printf("\n\nCMD?:");
-    ch = (char)toupper((unsigned char)getch());
-    printf("\n");
-
-    if (ch == 'Q') break;
-
-    if (ch == 'C') {
-      printf("COMPACTING...\n");
-      err = msg_compact(board.id, device);
-      if (err == BBS_ENOTIMPL) {
-        ui_error("COMPACT NOT IMPLEMENTED.");
-      } else if (err != BBS_OK) {
-        ui_op_error("COMPACT", (u8)err);
-      } else {
-        printf("COMPACT DONE.\n");
-        ui_press_any_key();
-        board_by_id(board.id, &board, device);
-      }
-      continue;
-    }
-
-    if (ch == 'P') {
-      printf("PRUNING...\n");
-      err = msg_prune_quantity(board.id, device);
-      if (err != BBS_OK && err != BBS_ENOTFOUND) ui_op_error("PRUNE-QTY", (u8)err);
-      printf("PRUNE DONE.\n");
-      ui_press_any_key();
-      board_by_id(board.id, &board, device);
-      continue;
-    }
-
-    ui_beep();
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Public entry point                                                   */
 /* ------------------------------------------------------------------ */
@@ -540,20 +426,18 @@ void admin_messages_menu(u8 device)
     { 'C', "CREATE AREA"  },
     { 'E', "EDIT AREA"    },
     { 'D', "DELETE AREA"  },
-    { 'M', "MAINTENANCE"  },
     { 'B', "BACK"         },
   };
 
   for (;;) {
     char ch;
-    ui_menu_display("MESSAGE AREAS", items, 6);
-    ch = ui_menu_input("CHOICE:", "LCEDMB");
+    ui_menu_display("MESSAGE AREAS", items, 5);
+    ch = ui_menu_input("CHOICE:", "LCEDB");
     switch (ch) {
       case 'L': boards_do_list(device);   break;
       case 'C': boards_do_create(device); break;
       case 'E': boards_do_edit(device);   break;
       case 'D': boards_do_delete(device); break;
-      case 'M': boards_do_maint(device);  break;
       case 'B': return;
       default:  break;
     }

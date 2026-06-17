@@ -62,6 +62,9 @@ void ui_print_header_bar(const char *text);
 void ui_print_hotkey(char key);
 /* Inline reverse-hotkey + green label for footers/action prompts, e.g. "N NEXT". */
 void ui_hotkey_label(char key, const char *label);
+/* One edit-screen field label: " <key> LABEL   : " (reverse hotkey, green
+ * 8-wide label, colon), leaving color white for the caller to print the value. */
+void ui_edit_label(char key, const char *label);
 /* Clear screen, draw the green app-header bar, then the centered screen title. */
 void ui_screen_header(const char *title);
 void ui_print_line(const char *text);
@@ -84,6 +87,9 @@ int ui_list_page_end(const ui_list_state_t *state);
  * touppered before echo, so they display uppercase while typing. Handles
  * DEL/BS, echoes the terminating newline. Returns the final length. */
 int ui_read_line(char *buf, int max, u8 case_mode);
+/* Backspace-aware unsigned-number prompt (1-3 digits). Returns -1 if left blank
+ * (caller keeps current), else 0..255. Echoes the prompt and input. */
+int ui_read_num(const char *prompt);
 int ui_edit_form(const char *title, ui_edit_field_t *fields, int count);
 void ui_edit_field_single(ui_edit_field_t *field);
 /* Select a value from a fixed list. Updates value buffer with the chosen option. */
