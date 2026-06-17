@@ -138,7 +138,7 @@ void action_doors_menu(session_t *s) {
   u8 i, key;
   session_emit(s, "\r\nDOOR PROGRAMS\r\n\r\n");
   for (i = 1; i <= DOORS_MAX; i++) {
-    if (door_by_id(i, &d, bbs_cfg.device_system) != BBS_OK) continue;
+    if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
     if (!door_visible(&d, s->user.access_level)) continue;
     { char line[40]; sprintf(line, " [%c] %s\r\n", d.cmd_key, d.title);
       session_emit(s, line); }
@@ -146,7 +146,7 @@ void action_doors_menu(session_t *s) {
   session_emit(s, "\r\nSELECT (RETURN=BACK): ");
   { u8 c; if (!sess_read_key(s, &c)) return; key = c; }
   if (key == '\r' || key == '\n') { s->menu_displayed = FALSE; return; }
-  if (door_by_key((char)key, &d, bbs_cfg.device_system) == BBS_OK
+  if (door_by_key((char)key, &d, bbs_cfg.device_doors) == BBS_OK
       && door_visible(&d, s->user.access_level)) {
     door_run(s, &d);
   }
@@ -157,7 +157,7 @@ void login_doors_iter(session_t *s) {
   u8 order, i; door_record_t d;
   for (order = 1; order <= DOORS_MAX; order++) {    /* ascending login_order */
     for (i = 1; i <= DOORS_MAX; i++) {
-      if (door_by_id(i, &d, bbs_cfg.device_system) != BBS_OK) continue;
+      if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
       if (!(d.flags & DOOR_F_LOGIN)) continue;
       if (!door_visible(&d, s->user.access_level)) continue;
       if (d.login_order != order) continue;
@@ -179,5 +179,6 @@ void session_run_login_doors(session_t *s) {
   krnio_setnam(P"OVL_DOORS");
   krnio_load(1, bbs_cfg.device_system, 1);
   login_doors_iter(s);
-  wfc.ovl_wfc_loaded = FALSE;  /* iterator + door loads displaced wfc; reload on demand */
+  wfc.ovl_wfc_loaded = FALSE;  /* iterator + door loads displaced wfc */
+  wfc_reload();                /* restore 40-col spy footer before the menu */
 }
