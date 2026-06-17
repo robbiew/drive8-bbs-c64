@@ -1,6 +1,3 @@
-TURBO/64 BBS v__VERSION__ — PRE-RELEASE
-========================================
-
 This is an early pre-release for testing and feedback. It is incomplete — many features are stubbed out and there are known rough edges. Expect bugs.
 
 If you run into problems or have suggestions, please open an issue on GitHub:
