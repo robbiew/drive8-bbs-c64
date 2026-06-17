@@ -180,6 +180,6 @@ $9705: 01         ; BBS_ABI_VERSION  — checked before entry
 
 | File | Purpose |
 |---|---|
-| `door_sdk.h` | Include in your door — re-exports ABI types + `bbs()` accessor |
-| `door_crt.h` | Startup: header, bcexec, door_entry.  Link automatically via `make door` |
-| `examples/fortune.c` | Worked example |
+| `door_crt.h` | **Include this in your door.** Pulls in the SDK + all `$9700` startup (header, bcexec, door_entry) and makes the door sections active so your code+data land in the image |
+| `door_sdk.h` | API types (`bbs_api_t`/`bbs_caller_t`) + the `bbs()` accessor — included by `door_crt.h` |
+| `examples/fortune.c` | Worked example (the door bundled on the release disk) |

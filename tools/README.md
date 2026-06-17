@@ -48,18 +48,26 @@ tools/build.sh <command> [options]
 |--------|--------|
 | `--fetch-users` | Fetch live USR LOG/PROF from U64 → `data/users-seed.d81`, then assemble |
 | `--seed-users` | Assemble using existing `data/users-seed.d81` |
+| `--seed-doors` | Assemble from `data/doors-seed.d81` — carries the registered DOORS table forward too (implies seeding). Create it with `capture-doors-seed.sh`. |
 
 Neither flag → fresh disk (prompts for confirmation before wiping user data on U64).
+
+`vice` also accepts `--fresh-users`, `--no-build`, `--jiffydos`, `--trace`,
+`--no-tcpser`, `--tcpser-port`, `-f`, `-p`, `-d`, `--no-autostart`, `-c` (all
+forwarded to `deploy-vice.sh`); `u64` accepts `-l/--location` and `--boards`
+(forwarded to `deploy-u64.sh`). Run `tools/build.sh help` for the full list.
 
 **Examples:**
 
 ```bash
 tools/build.sh vice                   # build and launch VICE
 tools/build.sh vice -f                # fullscreen
+tools/build.sh vice --seed-doors      # ...and carry the registered doors forward
 tools/build.sh u64                    # fresh disk (prompts)
 tools/build.sh u64 -l sd             # deploy to SD card
 tools/build.sh u64 --fetch-users     # preserve live user DB
 tools/build.sh u64 --seed-users      # restore from data/users-seed.d81
+tools/build.sh u64 --seed-doors -l usb1  # deploy with users + doors table
 tools/build.sh disk --seed-users     # assemble only, with user data
 tools/build.sh build                 # compile BOOT-<ver>.prg + CONFIGURE-<ver>.prg
 tools/build.sh clean                 # wipe build/
@@ -199,6 +207,29 @@ tools/extract-users.sh [options]
 - `users-seed.d81` — full disk image; auto-used by `assemble-d81.sh` when present
 - `usr_log` — raw USR LOG bytes (flat, no CBM overhead)
 - `usr_prof` — raw USR PROF bytes
+
+---
+
+### `capture-doors-seed.sh` — Snapshot the DOORS Table into a Seed
+
+Saves a disk that has door programs registered (via CONFIGURE → DOOR PROGRAMS)
+to `data/doors-seed.d81`, so `build.sh ... --seed-doors` carries the door table
+forward and you never re-register. The DOORS table is a real CBM REL created by
+the BBS; this snapshots the whole `.d81` (same idea as `users-seed.d81`), and
+`--seed-doors` uses it as the assemble base — preserving its REL files (USR
+LOG/PROF + DOORS) while rebuilding the PRGs.
+
+```bash
+tools/capture-doors-seed.sh                 # from the VICE working disk (build/c64/TURBO64-<ver>.d81)
+tools/capture-doors-seed.sh path/to.d81     # from a specific local image
+tools/capture-doors-seed.sh --from-u64      # fetch the live U64 disk first (default /USB1/BBS)
+tools/capture-doors-seed.sh --from-u64 -l sd
+```
+
+Verifies a `doors` REL is present before writing the seed. Typical flow: register
+a door once, quit VICE (or run on the U64), capture, then build with
+`--seed-doors`. `data/doors-seed.d81` is gitignored by default (`*.D81`); to
+commit it like `users-seed.d81`, `git add -f data/doors-seed.d81`.
 
 ---
 

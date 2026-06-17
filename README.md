@@ -6,9 +6,9 @@
 
 TURBO/64 BBS is a Commodore 64 BBS written in C for the [Oscar64 compiler](https://github.com/drmortalwombat/oscar64). It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
 
-**Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, and the "Configure" editor are working. 
+**Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), and the "Configure" editor are working. 
 
-Not working: Private mail, file transfers, SysOp chat, polls/voting, doors and lots more remain stubbed.
+Not working: Private mail, file transfers, SysOp chat, polls/voting, and lots more remain stubbed.
 
 > **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to First-Time Setup below.
 
@@ -234,10 +234,59 @@ CONFIGURE MAIN MENU
   M — MSG AREAS       Create/edit/delete message boards; compact and prune
   F — FILE AREAS      Create/edit upload/download areas (stub)
   V — VOTE MGMT       Create/edit polls (stub)
+  D — DOOR PROGRAMS   Register/edit/delete door programs (see Door Programs below)
   C — CONFIG OPTIONS  Edit BBS name, devices, baud rate
   S — STATISTICS      Show user/area counts (basic)
   Q — QUIT
 ```
+
+---
+
+## Door Programs
+
+Doors are external programs the BBS loads and runs during a call — games,
+utilities, info screens. A door is a separate Oscar64 `.prg` built to load at
+`$9700`; the BBS hands it a small SDK (print, read input, display a file, caller
+info) and reloads itself when the door exits. They're configured in CONFIGURE
+and run from the **`!` (DOOR PROGRAMS)** entry on the main menu, or automatically
+at login.
+
+The release disk bundles an example door, **`FORTUNE`** (`FORTUNE.PRG`), so you
+can try the system without writing any code.
+
+### Try the example door (released `.d81`)
+
+1. **Boot CONFIGURE** and choose **`D` — DOOR PROGRAMS**, then **`C` (Create)**.
+   Fill in:
+
+   | Field | Value | Notes |
+   |---|---|---|
+   | TITLE | `FORTUNE` | shown in the door menu |
+   | FILENAME | `FORTUNE` | the bundled `FORTUNE.PRG` on the disk |
+   | DEVICE | `8` | device the door PRG lives on (the release disk is device 8) |
+   | DRIVE | `0` | |
+   | CMD KEY | `F` | the key that runs it from the menu |
+   | MIN LEVEL | `0` | minimum access level |
+   | ENABLED | `Y` | must be Y to appear |
+   | RUN AT LOGIN | `N` | `Y` runs it automatically after login |
+
+   Save. (Confirm `DEV_DOORS=8` under CONFIG OPTIONS so the BBS reads the door
+   table from the same drive — on a single-drive setup that's device 8.)
+
+2. **Run the BBS** and log in. At the main menu press **`!`** (DOOR PROGRAMS) —
+   you should see `[F] FORTUNE`. Press **`F`** to run it: it greets you, shows a
+   fortune, and returns to the menu on a keypress.
+
+> The door **table** (your registrations) is created by CONFIGURE and lives on
+> the disk; it persists between boots of the same disk. Re-assembling a fresh
+> disk starts with no doors registered — re-register, or see
+> `tools/README.md` (`--seed-doors`) to carry the table across rebuilds.
+
+### Writing your own door
+
+See **[`devkit/README.md`](devkit/README.md)** — the dev kit ships an SDK header
+and a one-file build (`make door DOOR=<name>`). Doors get ~10 KB and a small
+versioned API; the guide covers the authoring contract and constraints.
 
 ---
 
@@ -467,7 +516,6 @@ The following features return a placeholder message:
 - SysOp chat / page
 - Polls and votes
 - Last caller display
-- Door games
 - System info
 - Grafitti wall 
 - Preferences (can't edit)
