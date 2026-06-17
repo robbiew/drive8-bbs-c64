@@ -18,6 +18,7 @@
 #include "bbs/newuser.h"
 #include "bbs/spy80.h"
 #include "bbs/sysop.h"
+#include "bbs/doors.h"
 #include "bbs/prompt_cursor.h"
 #include "bbs/usrday.h"
 #include "bbs/access.h"
@@ -668,6 +669,17 @@ bool_t sess_getc(u8 *out)
   return FALSE;
 }
 
+/* Blocking single-key read; pumps modem/spy/idle, honors carrier.
+ * Returns FALSE immediately when carrier drops so callers avoid spinning. */
+bool_t sess_read_key(const session_t *s, u8 *out)
+{
+  u8 ch;
+  for (;;) {
+    if (sess_getc(&ch)) { *out = ch; return TRUE; }
+    if (!sess_carrier_ok(s)) return FALSE;
+  }
+}
+
 /* Blocking line reader: collect a CR-terminated line into buf (up to max
  * chars, always NUL-terminated), echoing each character as it is typed.
  * Handles BS/DEL erase and skips the bare LF of a CRLF pair.  When uppercase
@@ -680,10 +692,7 @@ void sess_read_line(const session_t *s, char *buf, u8 max, bool_t uppercase)
   char e[2];
   memset(buf, 0, (u8)(max + 1));
   while (len < max) {
-    if (!sess_getc(&ch)) {
-      if (!sess_carrier_ok(s)) return;
-      continue;
-    }
+    if (!sess_read_key(s, &ch)) return;
     if (ch == 10) continue;            /* skip LF — CRLF terminals send CR+LF */
     if (ch == 13) { session_emit(s, "\n"); return; }
     if ((ch == 8 || ch == 20) && len > 0) {
@@ -696,10 +705,7 @@ void sess_read_line(const session_t *s, char *buf, u8 max, bool_t uppercase)
     }
   }
   for (;;) {                           /* buffer full: drain to CR for a clean line end */
-    if (!sess_getc(&ch)) {
-      if (!sess_carrier_ok(s)) return;
-      continue;
-    }
+    if (!sess_read_key(s, &ch)) return;
     if (ch == 10) continue;
     if (ch == 13) { session_emit(s, "\n"); return; }
   }
@@ -852,6 +858,7 @@ bbs_err_t session_step(session_t *s) {
           session_emit(s, s->handle);
           sess_color(s, 0x9f, "\x1b[36m");
           session_emit(s, "!\r\n\r\n");
+          session_run_login_doors(s);  /* run DOOR_F_LOGIN doors in login_order before menu */
           s->menu_needs_pause = TRUE;  /* "[PRESS ANY KEY]" before first menu */
           s->state = SESS_IN_MENU;
         } else if (err == BBS_ENOTFOUND) {
@@ -948,11 +955,8 @@ bbs_err_t session_step(session_t *s) {
         sess_color(s, 0x9f, "\x1b[36m");
         session_emit(s, "\r\n[PRESS ANY KEY]");
         sess_color(s, 0x05, "\x1b[37m");
-        /* sess_getc keeps the sysop spy/idle checks live; the carrier test
-         * prevents an infinite spin if the line drops while paused. */
-        while (!sess_getc(&pause_ch)) {
-          if (!sess_carrier_ok(s)) break;
-        }
+        /* sess_read_key keeps sysop spy/idle checks live while paused. */
+        sess_read_key(s, &pause_ch);
       }
       s->menu_displayed = TRUE;
       menu_display(s);

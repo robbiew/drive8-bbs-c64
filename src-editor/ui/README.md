@@ -234,7 +234,7 @@ make all       # Build both BOOT and CONFIGURE
 Launch CONFIGURE in the VICE C64 emulator:
 
 ```bash
-x64sc -autostart build/c64/CONFIGURE-0.1.0.prg
+x64sc -autostart build/c64/CONFIGURE-0.2.0.prg
 ```
 
 ### Test Checklist

@@ -81,6 +81,19 @@ while [[ $# -gt 0 ]]; do
             SEED=1   # explicit; this is already the default
             shift
             ;;
+        --seed-doors)
+            # Assemble from the doors seed (a snapshot that also has the DOORS
+            # table), so registered door programs survive rebuilds. Same base
+            # mechanism as --seed-users; assemble preserves its REL files.
+            SEED=1
+            if [ -f "$ROOT/data/doors-seed.d81" ]; then
+                SEED_FILE="$ROOT/data/doors-seed.d81"
+            else
+                echo "  NOTE: data/doors-seed.d81 not found — register a door in CONFIGURE then run" >&2
+                echo "        tools/capture-doors-seed.sh; falling back to users-seed.d81 for now." >&2
+            fi
+            shift
+            ;;
         --no-tcpser)
             USE_TCPSER=0
             shift
@@ -110,6 +123,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --no-build               Skip rebuild+assemble; boot existing disk"
             echo "  --fresh-users            Assemble a FRESH disk (no USR LOG/PROF;"
             echo "                           boot halts until you run CONFIGURE's INIT)"
+            echo "  --seed-doors             Assemble from data/doors-seed.d81 so the"
+            echo "                           DOORS table persists (see capture-doors-seed.sh)"
             echo "  -c, --config <path>      Custom config file"
             echo "  --no-tcpser              Skip tcpser modem bridge"
             echo "  --tcpser-port <port>     Telnet port for tcpser (default: 6400)"

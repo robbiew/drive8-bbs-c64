@@ -15,6 +15,7 @@
 #include "bbs/users.h"
 #include "bbs/cfg.h"
 #include "bbs/records.h"
+#include "bbs/doors.h"
 #include <c64/kernalio.h>
 
 /**
@@ -175,6 +176,20 @@ void action_search_files(session_t *s) {
 /**
  * DOOR Menu Actions
  */
+
+/* action_doors — resident shim that loads OVL_DOORS then calls action_doors_menu.
+ * Mirrors action_list_boards: load overlay, call overlay entry, reload WFC,
+ * clear menu_displayed.  door_run (called inside action_doors_menu) reloads
+ * OVL_DOORS after a door runs, so action_doors_menu's code is always valid
+ * when it returns here. */
+void action_doors(session_t *s) {
+  krnio_setnam(P"OVL_DOORS");
+  krnio_load(1, bbs_cfg.device_system, 1);
+  wfc.ovl_wfc_loaded = FALSE;  /* OVL_DOORS displaced OVL_WFC */
+  action_doors_menu(s);
+  wfc_reload();
+  s->menu_displayed = FALSE;
+}
 
 void action_run_door(session_t *s) {
   if (!s) return;

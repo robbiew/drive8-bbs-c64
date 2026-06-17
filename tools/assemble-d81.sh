@@ -191,9 +191,11 @@ PYPATCH
     EDIT_CBM="$(cbm_name "$CONFIGURE_PRG")"
     "$C1541" "$OUTPUT_DISK" -delete "$BOOT_CBM" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "$EDIT_CBM" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"  >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_boot" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"   >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_boot"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_doors" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "fortune"   >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
         if [[ "$line" =~ \"([^\"]+)\"[[:space:]]+seq ]]; then
@@ -236,6 +238,24 @@ if [ -f "$BOOT_OVL_PRG" ]; then
         { echo "WARNING: failed to write BOOT overlay" >&2; }
 fi
 
+# Add DOORS overlay (door menu UI: action_doors_menu)
+DOORS_OVL_PRG="$ROOT/build/c64/ovl_doors.prg"
+if [ -f "$DOORS_OVL_PRG" ]; then
+    echo "Adding DOORS overlay..."
+    "$C1541" "$OUTPUT_DISK" -write "$DOORS_OVL_PRG" "ovl_doors" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write DOORS overlay" >&2; }
+fi
+
+# Add the bundled example door (built by `make all` via the door-example target).
+# Doors are normally sysop-supplied; this one ships so the DOOR PROGRAMS feature
+# is demonstrable out of the box (register it in CONFIGURE: device 8, key F).
+EXAMPLE_DOOR_PRG="$ROOT/build/c64/FORTUNE.prg"
+if [ -f "$EXAMPLE_DOOR_PRG" ]; then
+    echo "Adding example door (fortune)..."
+    "$C1541" "$OUTPUT_DISK" -write "$EXAMPLE_DOOR_PRG" "fortune" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write example door" >&2; }
+fi
+
 # Add config data file if present
 if [ -f "$DATA_DIR/config" ]; then
     echo "Adding config..."
@@ -275,6 +295,12 @@ fi
 #   Without --seed-users/--fetch-users, the REL file is absent from this image.
 #   Run CONFIGURE [I]nitialize on the C64 to create it, or use --fetch-users to
 #   preserve the live copy from the U64.
+
+# NOTE: the DOORS table (registration) is created by the real BBS via CONFIGURE
+# (a correct CBM REL with valid side sectors).  A hand-built REL passed c1541
+# -validate but DOS could not read its records, so there is no host-side seed.
+# Register the bundled example door once in CONFIGURE > DOOR PROGRAMS; the table
+# then persists across --seed-users builds (REL files are not deleted on reseed).
 
 echo "✓ Disk image created: $OUTPUT_DISK"
 "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | head -20

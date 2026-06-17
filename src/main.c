@@ -74,6 +74,17 @@
 #pragma section( boot_bss,  0, , , bss )
 #pragma region( boot, 0x9700, 0xC000, , 3, {boot_code, boot_data, boot_bss} )
 
+/* DOORS overlay: door menu UI (action_doors_menu).  Bank 4 — same address zone.
+ * door_run + wrappers + enter_door stay RESIDENT because door_run's krnio_load
+ * overwrites $9700-$BFFF (this overlay's code), so the caller must not be in
+ * the overlay while the door is running.  door_run reloads OVL_DOORS after
+ * enter_door() returns, before returning to action_doors_menu's call site. */
+#pragma overlay( ovl_doors, 4 )
+#pragma section( doors_code, 0 )
+#pragma section( doors_data, 0 )
+#pragma section( doors_bss,  0, , , bss )
+#pragma region( doors, 0x9700, 0xC000, , 4, {doors_code, doors_data, doors_bss} )
+
 /**
  * main_print()
  *

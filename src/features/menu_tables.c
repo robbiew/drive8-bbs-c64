@@ -1,7 +1,7 @@
 /**
  * TURBO/64 BBS — Static Menu & Command Tables (v1)
  *
- * Hardcoded menu and command definitions for TURBO/64 v0.1.0.
+ * Hardcoded menu and command definitions for TURBO/64 v0.2.0.
  * v1.1+: These will be migrated to disk-based REL records.
  *
  * Action handlers are forward-declared as extern and defined in menu_actions.c.
@@ -10,6 +10,7 @@
 #include "bbs/menu.h"
 #include "bbs/session.h"
 #include "bbs/menu_actions.h"
+#include "bbs/doors.h"
 
 /**
  * MAIN Menu Commands
@@ -22,6 +23,7 @@ static menu_cmd_t main_commands[] = {
   { 'P', "PREFERENCES",       "prefs", 0, FALSE, NULL },
   { 'F', "FILES",             "files", 0, FALSE, NULL },
   { 'D', "DOORS",             "door",  0, FALSE, NULL },
+  { '!', "DOOR PROGRAMS",    "",      0, TRUE,  action_doors },
   { 'L', "LAST CALLERS",      "",      0, TRUE,  action_last_callers },
   { 'U', "USERS ONLINE",      "",      0, TRUE,  action_user_list },
   { 'I', "SYSTEM INFO",       "",      0, TRUE,  action_system_info },
