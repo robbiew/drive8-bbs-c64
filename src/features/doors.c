@@ -154,14 +154,28 @@ void action_doors_menu(session_t *s) {
 }
 
 void login_doors_iter(session_t *s) {
-  u8 order, i; door_record_t d;
-  for (order = 1; order <= DOORS_MAX; order++) {    /* ascending login_order */
-    for (i = 1; i <= DOORS_MAX; i++) {
-      if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
-      if (!(d.flags & DOOR_F_LOGIN)) continue;
-      if (!door_visible(&d, s->user.access_level)) continue;
-      if (d.login_order != order) continue;
-      door_run(s, &d);                               /* reloads OVL_DOORS on return */
+  /* ONE pass over the slots collecting enabled+visible login doors, then run
+   * them in ascending login_order.  The old order*slot double loop re-opened
+   * the DOORS file up to 256 times (endless drive chatter).  ids/ords live on
+   * the BBS software stack ($C000+), which door_run's OVL_DOORS reload does not
+   * touch (the door's own stack is at $BFFE), so they survive each door_run. */
+  u8 ids[DOORS_MAX], ords[DOORS_MAX], n = 0, i, j;
+  door_record_t d;
+
+  for (i = 1; i <= DOORS_MAX; i++) {
+    if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
+    if (!(d.flags & DOOR_F_LOGIN)) continue;
+    if (!door_visible(&d, s->user.access_level)) continue;
+    ids[n] = i; ords[n] = d.login_order; n++;
+  }
+
+  for (i = 0; i < n; i++) {            /* selection sort by login_order, run in place */
+    u8 best = i;
+    for (j = (u8)(i + 1); j < n; j++) if (ords[j] < ords[best]) best = j;
+    { u8 t = ids[i]; ids[i] = ids[best]; ids[best] = t;
+      t = ords[i]; ords[i] = ords[best]; ords[best] = t; }
+    if (door_by_id(ids[i], &d, bbs_cfg.device_doors) == BBS_OK) {
+      door_run(s, &d);               /* reloads OVL_DOORS on return */
     }
   }
 }
