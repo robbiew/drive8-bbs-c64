@@ -10,6 +10,7 @@
 #include "bbs/menu.h"
 #include "bbs/session.h"
 #include "bbs/menu_actions.h"
+#include "bbs/doors.h"
 
 /**
  * MAIN Menu Commands
@@ -22,6 +23,7 @@ static menu_cmd_t main_commands[] = {
   { 'P', "PREFERENCES",       "prefs", 0, FALSE, NULL },
   { 'F', "FILES",             "files", 0, FALSE, NULL },
   { 'D', "DOORS",             "door",  0, FALSE, NULL },
+  { '!', "DOOR PROGRAMS",    "",      0, TRUE,  action_doors_menu },
   { 'L', "LAST CALLERS",      "",      0, TRUE,  action_last_callers },
   { 'U', "USERS ONLINE",      "",      0, TRUE,  action_user_list },
   { 'I', "SYSTEM INFO",       "",      0, TRUE,  action_system_info },

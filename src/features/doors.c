@@ -3,6 +3,7 @@
 #include "bbs/door_abi.h"
 #include "bbs/net.h"
 #include "bbs/sysop.h"
+#include "bbs/cfg.h"
 #include <c64/kernalio.h>
 #include <string.h>
 #include <stdio.h>
@@ -113,8 +114,23 @@ reload:
 }
 
 void action_doors_menu(session_t *s) {
-  (void)s;
-  /* stub: door menu listing and dispatch (future task) */
+  door_record_t d;
+  u8 i, key;
+  session_emit(s, "\r\nDOOR PROGRAMS\r\n\r\n");
+  for (i = 1; i <= DOORS_MAX; i++) {
+    if (door_by_id(i, &d, bbs_cfg.device_system) != BBS_OK) continue;
+    if (!door_visible(&d, s->user.access_level)) continue;
+    { char line[40]; sprintf(line, " [%c] %s\r\n", d.cmd_key, d.title);
+      session_emit(s, line); }
+  }
+  session_emit(s, "\r\nSELECT (RETURN=BACK): ");
+  { u8 c; if (!sess_read_key(s, &c)) return; key = c; }
+  if (key == '\r' || key == '\n') { s->menu_displayed = FALSE; return; }
+  if (door_by_key((char)key, &d, bbs_cfg.device_system) == BBS_OK
+      && door_visible(&d, s->user.access_level)) {
+    door_run(s, &d);
+  }
+  s->menu_displayed = FALSE;
 }
 
 void session_run_login_doors(session_t *s) {
