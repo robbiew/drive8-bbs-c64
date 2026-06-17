@@ -7,26 +7,27 @@ If you run into problems or have suggestions, please open an issue on GitHub:
 
   https://github.com/robbiew/turbo64/issues
 
-Breaking Changes in v__VERSION__
----------------------------------
-The password hash algorithm changed in this release. ALL stored password
-hashes are invalid — existing user files will not authenticate.
-
-Recovery steps:
-1. In CONFIGURE, run CREATE USER DATABASE to reinitialise the user file
-   (this reseeds SYSOP with password PASS).
-2. Reset each remaining user's password through the sysop user editor.
-
-There is no migration path. This is pre-release software with no installed
-base, so a clean reset is the correct approach.
+New in v__VERSION__
+-------------------
+- Door programs: the BBS now loads and runs external Oscar64 plug-ins
+  ("doors") during a call. Register them in CONFIGURE (D — DOOR PROGRAMS):
+  title, filename, device/drive, command key, min access level, and an
+  optional run-at-login flag.
+- Door author dev kit: write a door as a single C file against a small
+  versioned SDK (caller info + core I/O), build with `make door`. See
+  devkit/README.md. The example FORTUNE door ships on the disk image.
+- CONFIGURE message-area editor reworked to a paged list + interactive
+  field editor (the manual compact/prune screen was retired; pruning
+  still runs automatically at runtime).
 
 What works in v__VERSION__:
 
 - Login and new-user registration
 - Terminal auto-detection (PETSCII, ANSI/CP437, ASCII)
-- Bulletin boards (read, post, maintenance)
+- Bulletin boards (read, post)
+- Door programs (run external plug-ins; dev kit for authors)
 - SysOp Configure editor (init files, user mgmt, board mgmt,
-  config, access levels)
+  door mgmt, config, access levels)
 - 80-column SysOp spy mode (ANSI callers, REU required)
 - SwiftLink/ACIA modem support, VICE tcpser bridge
 
@@ -36,7 +37,6 @@ What is NOT yet working:
 - File transfers (upload/download)
 - SysOp chat / page
 - Polls and votes
-- Door games
 - Several smaller features (see README.txt)
 
 Installation

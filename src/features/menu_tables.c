@@ -1,7 +1,7 @@
 /**
  * TURBO/64 BBS — Static Menu & Command Tables (v1)
  *
- * Hardcoded menu and command definitions for TURBO/64 v0.1.0.
+ * Hardcoded menu and command definitions for TURBO/64 v0.2.0.
  * v1.1+: These will be migrated to disk-based REL records.
  *
  * Action handlers are forward-declared as extern and defined in menu_actions.c.

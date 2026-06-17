@@ -162,8 +162,8 @@ tools/deploy-u64.sh --boards -l bbs # also restore boards disk
 
 On U64 after deploying:
 ```
-@0 "TURBO64-0.1.0.D81"
-LOAD "BOOT-0.1.0",8
+@0 "TURBO64-0.2.0.D81"
+LOAD "BOOT-0.2.0",8
 RUN
 ```
 

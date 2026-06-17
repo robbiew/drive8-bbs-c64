@@ -6,7 +6,7 @@
 
 TURBO/64 BBS is a Commodore 64 BBS written in C for the [Oscar64 compiler](https://github.com/drmortalwombat/oscar64). It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
 
-**Current status:** v0.1.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), and the "Configure" editor are working. 
+**Current status:** v0.2.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), and the "Configure" editor are working. 
 
 Not working: Private mail, file transfers, SysOp chat, polls/voting, and lots more remain stubbed.
 
@@ -69,7 +69,7 @@ See [`tools/README.md`](tools/README.md) for the full reference.
 On the C64, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
 
 ```
-LOAD "CONFIGURE-0.1.0",8
+LOAD "CONFIGURE-0.2.0",8
 RUN
 ```
 
@@ -127,14 +127,14 @@ Then mount `BOARDS-<ver>.D81` on C64U device 9.
 Outside CONFIGURE, on the C64:
 
 ```
-LOAD "BOOT-0.1.0",8
+LOAD "BOOT-0.2.0",8
 RUN
 ```
 
 Expected startup output:
 
 ```
-TURBO/64 BBS V0.1.0
+TURBO/64 BBS V0.2.0
 
 LOADING SETUP...
   BBS: <your bbs name>
@@ -496,7 +496,7 @@ Device 9 is not mounted or has no boards configured. Mount `BOARDS-<ver>.D81` on
 
 ---
 
-## What Is Not Yet Implemented (v0.1.0)
+## What Is Not Yet Implemented (v0.2.0)
 
 The following features return a placeholder message:
 
