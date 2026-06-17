@@ -27,7 +27,7 @@ Not working: Private mail, file transfers, SysOp chat, polls/voting, and lots mo
   </tr>
   <tr>
     <td width="50%"><img src="data/git-screens/configure.png" alt="CONFIGURE editor main menu" /><br /><sub><b>CONFIGURE</b> — the on-C64 SysOp editor for boards, users, and config.</sub></td>
-    <td width="50%"></td>
+    <td width="50%"><img src="data/git-screens/door-config.png" alt="CONFIGURE door program editor" /><br /><sub><b>Door programs (CONFIGURE)</b> — registering an external door plug-in: title, file, device, command key, and access level.</sub></td>
   </tr>
 </table>
 
