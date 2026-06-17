@@ -200,13 +200,6 @@ if [ $PAUSED -eq 1 ]; then
     VICE_ARGS+=("-pause")
 fi
 
-# Force unit 8 to the attached disk image.  A stale global VICE config can leave
-# the IEC "virtual"/filesystem device enabled for unit 8 (e.g. FSDevice8Dir
-# pointing at another project's directory); that shadows the BBS .d81 so BOOT's
-# files aren't found and the machine drops to a DOS prompt.  +busdevice8 disables
-# IEC device emulation for unit 8 so the true drive (the disk image) is used.
-VICE_ARGS+=("+busdevice8")
-
 # Add disk image
 if [ $AUTOSTART -eq 1 ]; then
     VICE_ARGS+=("-autostart" "$DISK_IMAGE")
