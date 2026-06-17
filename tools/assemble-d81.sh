@@ -296,5 +296,14 @@ fi
 #   Run CONFIGURE [I]nitialize on the C64 to create it, or use --fetch-users to
 #   preserve the live copy from the U64.
 
+# Pre-register the bundled example door so DOOR PROGRAMS works without a manual
+# CONFIGURE step.  No-op if a DOORS table already exists (preserves real sysop
+# registrations carried in --seed-users/--fetch-users base images).
+if [ -f "$EXAMPLE_DOOR_PRG" ] && command -v python3 >/dev/null 2>&1; then
+    echo "Seeding DOORS table (fortune)..."
+    python3 "$ROOT/tools/seed-doors.py" "$OUTPUT_DISK" || \
+        echo "  WARNING: failed to seed DOORS table"
+fi
+
 echo "✓ Disk image created: $OUTPUT_DISK"
 "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | head -20
