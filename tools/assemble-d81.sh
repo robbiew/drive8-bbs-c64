@@ -290,7 +290,7 @@ if [ -d "$GFILES_DIR" ]; then
         "$C1541" "$OUTPUT_DISK" -write "$f" "$cbm,s" >/dev/null 2>&1 || \
             echo "  WARNING: failed to write gfile: $cbm"
         echo "  + $cbm"
-    done < <(find "$GFILES_DIR" -maxdepth 1 -type f -print0 | sort -z)
+    done < <(find "$GFILES_DIR" -maxdepth 1 -type f ! -name '.*' -print0 | sort -z)
 fi
 #   Without --seed-users/--fetch-users, the REL file is absent from this image.
 #   Run CONFIGURE [I]nitialize on the C64 to create it, or use --fetch-users to

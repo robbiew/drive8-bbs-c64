@@ -123,7 +123,7 @@ live in the stub (below $9700).  Known offenders:
 | `/` (division) | `divmod` | Same |
 | 32-bit arithmetic | various | Avoid `u32`/`i32` in doors |
 
-The spike's verification command (check the door ASM for sub-$9700 calls):
+Verification command (check the door ASM for sub-$9700 calls):
 
 ```bash
 grep -E "01:[0-9a-f]+ :.*JSR \$[0-8]" build/c64/_door_stub.asm
