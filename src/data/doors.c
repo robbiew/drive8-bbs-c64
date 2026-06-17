@@ -9,6 +9,7 @@
 
 static void door_pack(const door_record_t *rec, u8 *buf) {
   u8 i;
+  char cmd_key;
   memset(buf, 0, RECORD_SIZE_DOOR);
   buf[0] = rec->id;
   buf[1] = rec->flags;
@@ -24,7 +25,10 @@ static void door_pack(const door_record_t *rec, u8 *buf) {
   }
   buf[34] = rec->device;
   buf[35] = rec->drive;
-  buf[36] = (u8)rec->cmd_key;
+  /* Normalize cmd_key to uppercase before storing. */
+  cmd_key = rec->cmd_key;
+  if (cmd_key >= 'a' && cmd_key <= 'z') cmd_key = (char)(cmd_key - 'a' + 'A');
+  buf[36] = (u8)cmd_key;
   buf[37] = rec->min_level;
   buf[38] = rec->login_order;
   /* byte 39: reserved, left zeroed */
