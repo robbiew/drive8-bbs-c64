@@ -7,7 +7,7 @@
 #       #pragma overlay( DOOR, 1 )  +  #pragma region( door, 0x9700, 0xC000, , 1, ... )
 #     This causes oscar64 to emit build/c64/DOOR.prg (load addr $9700) as a side-effect
 #     of compiling the door stub.  The door_main symbol lands at exactly $9700.
-#   * -n (native code) is required; default bytecode mode + overlay region crashes.
+#   * -n (native code) is required for the door; default bytecode mode + overlay crashes.
 #   * The combined c1541 -format ... -write ... chained form does not work with the
 #     homebrew c1541 build; format and write must be separate invocations.
 #
@@ -24,6 +24,15 @@
 #     via #pragma bss(door_bss) / #pragma bss(bss) guards.
 #   * Host saves/restores ZP $02-$8F around JSR $9700 to protect all oscar64 runtime
 #     state (highest observed ZP var in HOST.asm: $54; $8F is generous headroom).
+#
+# Round 3 — BBS build mode:
+#   * HOST now built with -Os -Oo (no -n) matching the real BBS build configuration.
+#   * host_print is #pragma native: door indirect-calls it; it calls bytecode host_emit
+#     (proving native door → native wrapper → bytecode body chain).
+#   * call_door is #pragma native with hand __asm X-indexed ZP save/restore (no ZP
+#     scratch used in the saved $02-$8F range; uses only A and X registers).
+#   * ZP save range widened evidence: BOOT-0.1.0.asm highest named ZP var is T12=$64;
+#     $8F upper bound remains generous headroom.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,9 +43,13 @@ OUT="$ROOT/build/c64"
 mkdir -p "$OUT"
 
 echo "--- Building HOST.prg ---"
-# host: normal C64 PRG; uses inline __asm { jsr $9700 } to enter the door
-# (direct function-pointer cast to fixed address crashes the oscar64 compiler)
-"$OSCAR" $INC -n -O2 -o="$OUT/HOST.prg" "$ROOT/spike/host.c"
+# Round 3: HOST built with BBS build flags (-Os -Oo, no -n) to match the real BBS.
+# host_print and call_door are #pragma native to ensure:
+#   - host_print: native entry point so the door's indirect call (JMP ACCU) lands correctly,
+#     and it can internally call the bytecode host_emit (native→bytecode intra-host chain).
+#   - call_door: native so the inline __asm ZP save/restore uses no ZP scratch (self-corruption
+#     safe) and the JSR $9700 works in native context.
+"$OSCAR" $INC -Os -Oo -o="$OUT/HOST.prg" "$ROOT/spike/host.c"
 
 echo "--- Building DOOR.prg (overlay at \$9700) ---"
 # door: oscar64 overlay mechanism pins door_main at exactly $9700.
