@@ -191,9 +191,10 @@ PYPATCH
     EDIT_CBM="$(cbm_name "$CONFIGURE_PRG")"
     "$C1541" "$OUTPUT_DISK" -delete "$BOOT_CBM" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "$EDIT_CBM" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"  >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_boot" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"   >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_boot"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_doors" >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
         if [[ "$line" =~ \"([^\"]+)\"[[:space:]]+seq ]]; then
@@ -234,6 +235,14 @@ if [ -f "$BOOT_OVL_PRG" ]; then
     echo "Adding BOOT overlay..."
     "$C1541" "$OUTPUT_DISK" -write "$BOOT_OVL_PRG" "ovl_boot" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write BOOT overlay" >&2; }
+fi
+
+# Add DOORS overlay (door menu UI: action_doors_menu)
+DOORS_OVL_PRG="$ROOT/build/c64/ovl_doors.prg"
+if [ -f "$DOORS_OVL_PRG" ]; then
+    echo "Adding DOORS overlay..."
+    "$C1541" "$OUTPUT_DISK" -write "$DOORS_OVL_PRG" "ovl_doors" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write DOORS overlay" >&2; }
 fi
 
 # Add config data file if present

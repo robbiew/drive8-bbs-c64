@@ -15,7 +15,8 @@ bbs_err_t door_save(const door_record_t *rec, u8 device);
 bool_t    door_visible(const door_record_t *rec, u8 level);
 
 void      door_run(session_t *s, const door_record_t *rec);
-void      action_doors_menu(session_t *s);
+void      action_doors_menu(session_t *s);  /* OVL_DOORS overlay — call via action_doors shim */
+void      action_doors(session_t *s);       /* resident shim: loads OVL_DOORS, calls action_doors_menu */
 void      session_run_login_doors(session_t *s);
 
 #endif /* INCLUDE_BBS_DOORS_H */

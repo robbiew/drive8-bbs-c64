@@ -21,4 +21,9 @@
 #pragma section( wfc_data, 0 )
 #pragma section( wfc_bss,  0, , , bss )
 
+/* DOORS overlay sections — included by doors.c before #pragma code(doors_code) */
+#pragma section( doors_code, 0 )
+#pragma section( doors_data, 0 )
+#pragma section( doors_bss,  0, , , bss )
+
 #endif /* INCLUDE_BBS_OVERLAY_H */

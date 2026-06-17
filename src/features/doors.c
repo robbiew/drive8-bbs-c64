@@ -4,6 +4,7 @@
 #include "bbs/net.h"
 #include "bbs/sysop.h"
 #include "bbs/cfg.h"
+#include "bbs/overlay.h"
 #include <c64/kernalio.h>
 #include <string.h>
 #include <stdio.h>
@@ -83,7 +84,14 @@ static void enter_door(void) {
 }
 #pragma native(enter_door)
 
-void door_run(session_t *s, const door_record_t *rec) {
+/* door_run must NOT be inlined: action_doors_menu lives in OVL_DOORS ($9700),
+ * and krnio_load inside door_run overwrites that region.  If door_run were
+ * inlined into action_doors_menu the load would clobber its own running code.
+ * After enter_door() returns (door exited), we reload OVL_DOORS so that the
+ * return address back into action_doors_menu is valid.  All early-exit paths
+ * (load failure, ABI mismatch) also reload because the door file load may have
+ * already partially overwritten the overlay. */
+__noinline void door_run(session_t *s, const door_record_t *rec) {
   char name[20];
   const volatile u8 *hdr = (const volatile u8 *)DOOR_ENTRY;
 
@@ -98,20 +106,32 @@ void door_run(session_t *s, const door_record_t *rec) {
   krnio_setnam(name);
   if (!krnio_load(1, rec->device, 1)) {
     session_emit(s, "\r\nDOOR LOAD FAILED.\r\n");
-    goto reload;
+    goto reload_ovl;
   }
   if (!door_abi_check(hdr[BBS_DOOR_HDR_MAGIC], hdr[BBS_DOOR_HDR_MAGIC+1],
                       hdr[BBS_DOOR_HDR_VER])) {
     session_emit(s, "\r\nDOOR ABI MISMATCH.\r\n");
-    goto reload;
+    goto reload_ovl;
   }
   enter_door();                      /* save ZP, JSR $9700, restore ZP */
 
-reload:
-  /* mark overlays displaced so the next msgs/wfc call reloads */
+reload_ovl:
+  /* Reload OVL_DOORS so action_doors_menu's code is back at its load address
+   * before we return into it.  The door load (and the failed-load path above)
+   * clobbered $9700-$BFFF.  Mark WFC displaced too — it needs reload later. */
+  krnio_setnam(P"OVL_DOORS");
+  krnio_load(1, bbs_cfg.device_system, 1);
   wfc.ovl_wfc_loaded = FALSE;
-  wfc_reload();
 }
+
+/* ── OVL_DOORS overlay: door menu UI ────────────────────────────────────────
+ * action_doors_menu lives in the doors overlay so it doesn't consume resident
+ * space.  door_run (above) reloads OVL_DOORS before returning here, so this
+ * code is valid at the return address despite the door having overwritten
+ * $9700-$BFFF during its execution. */
+#pragma code(doors_code)
+#pragma data(doors_data)
+#pragma bss(doors_bss)
 
 void action_doors_menu(session_t *s) {
   door_record_t d;
@@ -132,6 +152,10 @@ void action_doors_menu(session_t *s) {
   }
   s->menu_displayed = FALSE;
 }
+
+#pragma code(code)
+#pragma data(data)
+#pragma bss(bss)
 
 void session_run_login_doors(session_t *s) {
   (void)s;

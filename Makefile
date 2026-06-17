@@ -11,6 +11,7 @@ CONFIGURE_PRG   := $(OUTDIR)/CONFIGURE-$(VERSION).prg
 OVERLAYS_D64 := $(OUTDIR)/overlays.d64
 MSGS_OVL_PRG := $(OUTDIR)/ovl_msgs.prg
 BOOT_OVL_PRG := $(OUTDIR)/ovl_boot.prg
+DOORS_OVL_PRG := $(OUTDIR)/ovl_doors.prg
 
 INCLUDES    := -i=$(ROOT)include -i=$(ROOT)vendor/oscar64/include -i=$(ROOT)src -i=$(ROOT)src/data
 OFLAGS      := -Os -Oo
@@ -83,6 +84,10 @@ $(BOOT_OVL_PRG): $(BOOT_PRG)
 	@test -f "$@" || { echo "ERROR: overlay file not produced by oscar64"; exit 1; }
 	@echo "Overlay: $@"
 
+$(DOORS_OVL_PRG): $(BOOT_PRG)
+	@test -f "$@" || { echo "ERROR: overlay file not produced by oscar64"; exit 1; }
+	@echo "Overlay: $@"
+
 EDITOR_HAL_SRCS := src/err.c src/hal/disk.c src/hal/rel.c
 EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c
 
@@ -98,6 +103,6 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG)
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG)
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."
