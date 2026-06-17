@@ -35,6 +35,9 @@ run test_user_hash \
 
 run test_door_abi "$ROOT/tests/test_door_abi.c"
 
+run test_door_visible \
+    "$ROOT/tests/test_door_visible.c" "$ROOT/src/data/door_visible.c"
+
 run test_term_unxlate -I"$ROOT/src/term" \
     "$ROOT/tests/test_term_unxlate.c" \
     "$ROOT/src/term/term.c" "$ROOT/src/term/cp437_petscii.c" \
