@@ -147,6 +147,10 @@ static u8 doors_scan(door_record_t *out, u8 max) {
   if (door_open_rel(bbs_cfg.device_doors, &h) != BBS_OK) return 0;
   rel_position(h, 1);
   while (n < max) {
+    /* Zero before each read: CBM REL rel_read returns a short count, leaving
+     * the tail bytes (min_level/login_order) unread — without this they'd hold
+     * stack garbage (door_by_id/door_count memset for the same reason). */
+    memset(buf, 0, RECORD_SIZE_DOOR);
     if (rel_read(h, (void *)buf, RECORD_SIZE_DOOR, &got) != BBS_OK || got < 8) break;
     door_unpack(&out[n], buf);
     n++;
