@@ -124,11 +124,11 @@ reload_ovl:
   wfc.ovl_wfc_loaded = FALSE;
 }
 
-/* ── OVL_DOORS overlay: door menu UI ────────────────────────────────────────
- * action_doors_menu lives in the doors overlay so it doesn't consume resident
- * space.  door_run (above) reloads OVL_DOORS before returning here, so this
- * code is valid at the return address despite the door having overwritten
- * $9700-$BFFF during its execution. */
+/* ── OVL_DOORS overlay: door menu UI + login iterator ────────────────────────
+ * Both action_doors_menu and login_doors_iter live in the doors overlay so
+ * they don't consume resident space.  door_run (above) reloads OVL_DOORS
+ * before returning here, so this code is valid at the return address despite
+ * the door having overwritten $9700-$BFFF during its execution. */
 #pragma code(doors_code)
 #pragma data(doors_data)
 #pragma bss(doors_bss)
@@ -153,11 +153,31 @@ void action_doors_menu(session_t *s) {
   s->menu_displayed = FALSE;
 }
 
+void login_doors_iter(session_t *s) {
+  u8 order, i; door_record_t d;
+  for (order = 1; order <= DOORS_MAX; order++) {    /* ascending login_order */
+    for (i = 1; i <= DOORS_MAX; i++) {
+      if (door_by_id(i, &d, bbs_cfg.device_system) != BBS_OK) continue;
+      if (!(d.flags & DOOR_F_LOGIN)) continue;
+      if (!door_visible(&d, s->user.access_level)) continue;
+      if (d.login_order != order) continue;
+      door_run(s, &d);                               /* reloads OVL_DOORS on return */
+    }
+  }
+}
+
 #pragma code(code)
 #pragma data(data)
 #pragma bss(bss)
 
+/* (resident) Load OVL_DOORS and run any doors flagged DOOR_F_LOGIN in
+ * ascending login_order.  The iterator itself lives in OVL_DOORS (overlay)
+ * so it survives the door_run reloads; this shim just bootstraps it.
+ * With no login doors registered the iterator's flag/visibility checks are
+ * all skipped, so login proceeds unchanged. */
 void session_run_login_doors(session_t *s) {
-  (void)s;
-  /* stub: run any doors flagged for login execution (future task) */
+  krnio_setnam(P"OVL_DOORS");
+  krnio_load(1, bbs_cfg.device_system, 1);
+  login_doors_iter(s);
+  wfc.ovl_wfc_loaded = FALSE;  /* iterator + door loads displaced wfc; reload on demand */
 }

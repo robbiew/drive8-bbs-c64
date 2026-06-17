@@ -18,6 +18,7 @@
 #include "bbs/newuser.h"
 #include "bbs/spy80.h"
 #include "bbs/sysop.h"
+#include "bbs/doors.h"
 #include "bbs/prompt_cursor.h"
 #include "bbs/usrday.h"
 #include "bbs/access.h"
@@ -857,6 +858,7 @@ bbs_err_t session_step(session_t *s) {
           session_emit(s, s->handle);
           sess_color(s, 0x9f, "\x1b[36m");
           session_emit(s, "!\r\n\r\n");
+          session_run_login_doors(s);  /* run DOOR_F_LOGIN doors in login_order before menu */
           s->menu_needs_pause = TRUE;  /* "[PRESS ANY KEY]" before first menu */
           s->state = SESS_IN_MENU;
         } else if (err == BBS_ENOTFOUND) {
