@@ -53,9 +53,14 @@ if [ ! -f "$SRC" ]; then
     exit 1
 fi
 
-# Require a DOORS REL on the source, or the capture is pointless.
-if ! "$C1541" "$SRC" -dir 2>/dev/null | grep -qiE '"doors"[[:space:]]+rel'; then
-    echo "ERROR: no DOORS REL on $SRC." >&2
+# Require a DOORS REL on the source, or the capture is pointless.  Capture both
+# streams (some c1541 builds print the listing to stderr) and grep the text, so
+# this doesn't depend on stdout/stderr or the pipeline exit code.
+DIR_OUT="$("$C1541" "$SRC" -dir 2>&1 || true)"
+if ! printf '%s\n' "$DIR_OUT" | grep -qiE '"doors"[[:space:]]+rel'; then
+    echo "ERROR: no DOORS REL found on $SRC." >&2
+    echo "       c1541 directory listing:" >&2
+    printf '%s\n' "$DIR_OUT" | sed 's/^/         /' >&2
     echo "       Register a door in CONFIGURE > DOOR PROGRAMS first, then re-run." >&2
     exit 1
 fi
