@@ -284,6 +284,28 @@ typedef struct {
  * Append-only; offsets tracked in REL index.
  */
 
+/**
+ * DOOR_RECORD — 40 bytes (REL file record)
+ *
+ * Stored in "DOORS,L,40". One slot per door (1-DOORS_MAX); empty slots have id 0.
+ */
+typedef struct {
+  u8   id;            /* 1-DOORS_MAX (0 = empty slot) */
+  u8   flags;         /* DOOR_F_* bitmask */
+  char title[16];     /* menu label, mixed-case (human-facing) */
+  char filename[16];  /* CBM PRG name, uppercase-normalized, null-terminated */
+  u8   device;        /* IEC device 8-30 */
+  u8   drive;         /* drive/partition */
+  char cmd_key;       /* menu hotkey; 0 = login-only */
+  u8   min_level;     /* min access level to run (0-5) */
+  u8   login_order;   /* run order when DOOR_F_LOGIN set */
+  u8   reserved[1];   /* pad to 40 bytes */
+} door_record_t;      /* 40 bytes */
+
+#define DOOR_F_ENABLED 0x01
+#define DOOR_F_LOGIN   0x02
+#define DOORS_MAX      16
+
 /* Record size constants (matching GST BBS on-disk format, extended for terminal settings) */
 #define RECORD_SIZE_USER         30  /* id(1)+handle(15)+password(4)+access(1)+credit(1)+calls(2)+dl(1)+ul(1)+mode(1)+width(1)+rows(1)=29, padded to 30 */
 #define RECORD_SIZE_USER_PROFILE 86  /* id + email[32] + firstname[16] + lastname[16] + location[21] */
@@ -295,6 +317,7 @@ typedef struct {
 #define RECORD_SIZE_MSG_IDX     63   /* msg_index_record_t */
 #define RECORD_SIZE_USR_PTR     40   /* usr_ptr_record_t */
 #define RECORD_SIZE_USR_DAY      8    /* usr_day_record_t */
+#define RECORD_SIZE_DOOR        40   /* door_record_t */
 
 /* Maximum users in the user database.
  * Must be specified at REL file creation time (all records are pre-allocated
