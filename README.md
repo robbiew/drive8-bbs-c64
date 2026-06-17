@@ -12,6 +12,8 @@ Not working: Private mail, file transfers, SysOp chat, polls/voting, and lots mo
 
 > **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to First-Time Setup below.
 
+> 💬 **Join the community on [Discord](https://discord.gg/AkKC2gKKuH)** — for support, feature ideas, or just to chat C64 BBSing.
+
 ---
 
 ## Screenshots
@@ -592,3 +594,7 @@ Real-hardware and emulator coverage is critical. Specifically needed:
 - **Terminal clients** — SyncTerm, PuTTY, netcat, and real C64 terminals over a nullmodem or SwiftLink.
 
 File issues on GitHub with hardware/firmware versions, a description of what you did, and the exact error or unexpected behaviour.
+
+### Chat
+
+Prefer to talk it through? Join the [TURBO/64 Discord](https://discord.gg/AkKC2gKKuH) for support, feature ideas, and general C64 BBS chatter.
