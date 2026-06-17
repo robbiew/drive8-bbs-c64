@@ -285,22 +285,27 @@ typedef struct {
  */
 
 /**
- * DOOR_RECORD — 40 bytes (REL file record)
+ * DOOR_RECORD — 40 bytes on disk (REL file record)
  *
  * Stored in "DOORS,L,40". One slot per door (1-DOORS_MAX); empty slots have id 0.
+ *
+ * title[17] and filename[17]: 16 bytes are stored on disk (NUL-padded by door_pack);
+ * byte [16] is an in-memory NUL terminator added by door_unpack. The on-disk record
+ * is unchanged at 40 bytes; RECORD_SIZE_DOOR and door_pack/door_unpack use fixed
+ * byte offsets, not sizeof(door_record_t).
  */
 typedef struct {
   u8   id;            /* 1-DOORS_MAX (0 = empty slot) */
   u8   flags;         /* DOOR_F_* bitmask */
-  char title[16];     /* menu label, mixed-case (human-facing) */
-  char filename[16];  /* CBM PRG name, uppercase-normalized, null-terminated */
+  char title[17];     /* menu label, mixed-case; 16 on-disk + 1 in-memory NUL */
+  char filename[17];  /* CBM PRG name, uppercase-normalized; 16 on-disk + 1 in-memory NUL */
   u8   device;        /* IEC device 8-30 */
   u8   drive;         /* drive/partition */
   char cmd_key;       /* menu hotkey; 0 = login-only */
   u8   min_level;     /* min access level to run (0-5) */
   u8   login_order;   /* run order when DOOR_F_LOGIN set */
   u8   reserved[1];   /* pad to 40 bytes */
-} door_record_t;      /* 40 bytes */
+} door_record_t;      /* on-disk: 40 bytes; in-memory: 42 bytes (2 extra NUL bytes) */
 
 #define DOOR_F_ENABLED 0x01
 #define DOOR_F_LOGIN   0x02

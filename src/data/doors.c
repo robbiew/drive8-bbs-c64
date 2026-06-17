@@ -13,15 +13,12 @@ static void door_pack(const door_record_t *rec, u8 *buf) {
   memset(buf, 0, RECORD_SIZE_DOOR);
   buf[0] = rec->id;
   buf[1] = rec->flags;
-  for (i = 0; i < 16; i++) {
-    char c = rec->title[i];
-    if (c == 0) c = ' ';
-    buf[2 + i] = (u8)c;
+  /* NUL-pad: copy until NUL or 16 chars; remainder stays zero from memset. */
+  for (i = 0; i < 16 && rec->title[i] != 0; i++) {
+    buf[2 + i] = (u8)rec->title[i];
   }
-  for (i = 0; i < 16; i++) {
-    char c = rec->filename[i];
-    if (c == 0) c = ' ';
-    buf[18 + i] = (u8)c;
+  for (i = 0; i < 16 && rec->filename[i] != 0; i++) {
+    buf[18 + i] = (u8)rec->filename[i];
   }
   buf[34] = rec->device;
   buf[35] = rec->drive;
@@ -40,7 +37,9 @@ static void door_unpack(door_record_t *rec, const u8 *buf) {
   rec->id         = buf[0];
   rec->flags      = buf[1];
   for (i = 0; i < 16; i++) rec->title[i]    = (char)buf[2 + i];
+  rec->title[16]    = 0;  /* guarantee NUL terminator */
   for (i = 0; i < 16; i++) rec->filename[i] = (char)buf[18 + i];
+  rec->filename[16] = 0;  /* guarantee NUL terminator */
   rec->device      = buf[34];
   rec->drive       = buf[35];
   rec->cmd_key     = (char)buf[36];

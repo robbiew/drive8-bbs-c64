@@ -107,7 +107,7 @@ static void doors_edit(door_record_t *d, u8 device)
  * ---------------------------------------------------------------------- */
 static void doors_do_list(u8 device)
 {
-  u8 i;
+  u8 i, found = 0;
   ui_screen_header("DOOR PROGRAMS");
   for (i = 1; i <= DOORS_MAX; i++) {
     door_record_t r;
@@ -117,8 +117,10 @@ static void doors_do_list(u8 device)
         r.cmd_key ? r.cmd_key : '-',
         (r.flags & DOOR_F_ENABLED) ? "Y" : "N",
         r.title);
+      found = 1;
     }
   }
+  if (!found) printf("NO DOORS DEFINED.\n");
   printf("\n");
   ui_press_any_key();
 }
