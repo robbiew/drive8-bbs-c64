@@ -219,6 +219,9 @@ void sess_tx(const char *text);
 /* Read one byte from the caller (keyboard in local mode, modem otherwise).
  * Returns TRUE if a byte was read, FALSE if no carrier / timeout. */
 bool_t sess_getc(u8 *out);
+/* Blocking single-key read that pumps the modem, honors carrier/idle, and
+ * feeds the sysop spy. Returns FALSE if carrier dropped / caller timed out. */
+bool_t sess_read_key(const session_t *s, u8 *out);
 /* TRUE while the session can still talk to the caller: local sessions are
  * always live; remote sessions require modem carrier. */
 bool_t sess_carrier_ok(const session_t *s);
