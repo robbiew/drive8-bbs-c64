@@ -109,13 +109,14 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRC
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg
 # For a door not under devkit/examples/, pass SRC=<path> override.
 # Flags: -n (native; bytecode+overlay crashes oscar64) -O2 (optimize).
-# The $9700 overlay (#pragma overlay(DOOR,1) in door_crt.c) is always
-# emitted as DOOR.prg by oscar64; -o names the discardable stub.
-# After the build, move DOOR.prg to <NAME>.prg.
+# A door is ONE translation unit: the source #includes devkit/door_crt.h (which
+# brings in the $9700 overlay/sections + startup) so the author's code AND data
+# land in the loaded image.  The $9700 overlay is emitted as DOOR.prg by oscar64;
+# -o names the discardable stub.  After the build, move DOOR.prg to <NAME>.prg.
 door:
 	$(OSCAR64) $(INCLUDES) -i=$(ROOT)devkit -n -O2 \
 	  -o=$(OUTDIR)/_door_stub.prg \
-	  devkit/door_crt.c $(if $(SRC),$(SRC),devkit/examples/$(DOOR).c)
+	  $(if $(SRC),$(SRC),devkit/examples/$(DOOR).c)
 	@mv $(OUTDIR)/DOOR.prg $(OUTDIR)/$(shell echo $(DOOR) | tr a-z A-Z).prg
 	@$(RM) $(OUTDIR)/_door_stub.prg $(OUTDIR)/_door_stub.asm \
 	        $(OUTDIR)/_door_stub.int $(OUTDIR)/_door_stub.lbl \

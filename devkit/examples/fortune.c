@@ -1,5 +1,6 @@
-/* fortune.c — example T/64 door: display a fortune and wait for a keypress. */
-#include "door_sdk.h"
+/* fortune.c — example T/64 door: display a fortune and wait for a keypress.
+ * Build: make door DOOR=fortune  (compiles this single file). */
+#include "door_crt.h"
 
 static const char *FORTUNES[] = {
     "YOU WILL FIX THE BUG.",
