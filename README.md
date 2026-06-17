@@ -231,7 +231,7 @@ level,name,calls_per_day,mins_per_day,flags
 CONFIGURE MAIN MENU
   I — INIT BBS        Initialize USR LOG, USR PROF, and CALLERS
   U — USER MGMT       List, delete, reset passwords
-  M — MSG AREAS       Create/edit/delete message boards; compact and prune
+  M — MSG AREAS       Create/edit/delete message boards
   F — FILE AREAS      Create/edit upload/download areas (stub)
   V — VOTE MGMT       Create/edit polls (stub)
   D — DOOR PROGRAMS   Register/edit/delete door programs (see Door Programs below)
@@ -292,8 +292,7 @@ versioned API; the guide covers the authoring contract and constraints.
 
 ## Message Boards
 
-Manage boards in CONFIGURE → **M — MSG BOARDS** (List, Create, Edit, Delete,
-Maintenance).
+Manage boards in CONFIGURE → **M — MSG BOARDS** (List, Create, Edit, Delete).
 
 **Creating a board.** Create asks only for a **title**, then drops you into the
 board editor where you set everything else. (Cancelling the editor right after
@@ -329,18 +328,8 @@ bound (compile-time defaults in `include/bbs/config.h`):
   count on the board.
 
 So out of the box a board keeps ~100 messages (auto-pruning the oldest above
-that, hard stop at 200) with no age limit.
-
-**Maintenance.** CONFIGURE → M → **MAINTENANCE** picks a board and shows its
-total and soft-deleted message counts, with a waste estimate:
-
-- `C` — **COMPACT**: reclaim space from soft-deleted messages (rewrites the
-  board's index/text files; recommended when waste ≥ 25%).
-- `P` — **PRUNE NOW**: immediately soft-delete the oldest messages over the
-  board's limit (one batch).
-- `Q` — **QUIT** back to the menu.
-
-Soft-deleted messages still occupy slots until a COMPACT reclaims them.
+that, hard stop at 200) with no age limit. Pruning is automatic at runtime;
+there is no manual compact/prune step in CONFIGURE.
 
 ---
 
