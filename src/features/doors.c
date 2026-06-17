@@ -173,21 +173,11 @@ void login_doors_iter(session_t *s) {
 /* (resident) Load OVL_DOORS and run any doors flagged DOOR_F_LOGIN in
  * ascending login_order.  The iterator itself lives in OVL_DOORS (overlay)
  * so it survives the door_run reloads; this shim just bootstraps it.
- * Guard: skip overlay load if no enabled login doors exist. */
+ * With no login doors registered the iterator's flag/visibility checks are
+ * all skipped, so login proceeds unchanged. */
 void session_run_login_doors(session_t *s) {
-  u8 i;
-  door_record_t rec;
-  /* Quick scan: if any slot has an enabled login door, load overlay. */
-  for (i = 1; i <= DOORS_MAX; i++) {
-    if (door_by_id(i, &rec, bbs_cfg.device_system) == BBS_OK &&
-        (rec.flags & DOOR_F_ENABLED) && (rec.flags & DOOR_F_LOGIN)) {
-      /* Found at least one; load overlay and run iterator. */
-      krnio_setnam(P"OVL_DOORS");
-      krnio_load(1, bbs_cfg.device_system, 1);
-      login_doors_iter(s);
-      wfc.ovl_wfc_loaded = FALSE;  /* iterator + door loads displaced wfc; reload on demand */
-      return;
-    }
-  }
-  /* No login doors: skip overlay load and return silently. */
+  krnio_setnam(P"OVL_DOORS");
+  krnio_load(1, bbs_cfg.device_system, 1);
+  login_doors_iter(s);
+  wfc.ovl_wfc_loaded = FALSE;  /* iterator + door loads displaced wfc; reload on demand */
 }
