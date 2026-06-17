@@ -106,7 +106,7 @@ case "$COMMAND" in
         done
 
         echo -e "${BLUE}Building D8 BBS...${NC}"
-        cd "$ROOT" && make clean && make c64 && make editor
+        cd "$ROOT" && make clean && make c64 && make editor && make door-example
         echo ""
 
         if [ "$FETCH_USERS" -eq 0 ] && [ "$SEED_USERS" -eq 0 ]; then
@@ -191,7 +191,7 @@ case "$COMMAND" in
     
     build)
         echo -e "${BLUE}Building D8 BBS...${NC}"
-        cd "$ROOT" && make clean && make c64 && make editor
+        cd "$ROOT" && make clean && make c64 && make editor && make door-example
         echo ""
         echo -e "${GREEN}Build complete!${NC}"
         echo "Binaries:"

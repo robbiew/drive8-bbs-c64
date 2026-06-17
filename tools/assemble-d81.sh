@@ -195,6 +195,7 @@ PYPATCH
     "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"   >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_boot"  >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_doors" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "fortune"   >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
         if [[ "$line" =~ \"([^\"]+)\"[[:space:]]+seq ]]; then
@@ -243,6 +244,16 @@ if [ -f "$DOORS_OVL_PRG" ]; then
     echo "Adding DOORS overlay..."
     "$C1541" "$OUTPUT_DISK" -write "$DOORS_OVL_PRG" "ovl_doors" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write DOORS overlay" >&2; }
+fi
+
+# Add the bundled example door (built by `make all` via the door-example target).
+# Doors are normally sysop-supplied; this one ships so the DOOR PROGRAMS feature
+# is demonstrable out of the box (register it in CONFIGURE: device 8, key F).
+EXAMPLE_DOOR_PRG="$ROOT/build/c64/FORTUNE.prg"
+if [ -f "$EXAMPLE_DOOR_PRG" ]; then
+    echo "Adding example door (fortune)..."
+    "$C1541" "$OUTPUT_DISK" -write "$EXAMPLE_DOOR_PRG" "fortune" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write example door" >&2; }
 fi
 
 # Add config data file if present
