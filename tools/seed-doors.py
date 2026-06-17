@@ -111,47 +111,63 @@ def main():
         print("  seed-doors: DOORS already present — leaving it untouched")
         return
 
-    (dt, ds), (st, ss) = bam_alloc(img, 2)   # data block, side sector
+    # A fully-formed DOORS_MAX-record table: record 1 = FORTUNE, records 2..16
+    # all-zero (id 0 => empty).  Seeding ALL records (not just one) means the
+    # BBS reads 16 distinct records on a sequential scan regardless of how its
+    # DOS signals end-of-file on this hand-built REL — empty slots read id 0 and
+    # are skipped, so the menu shows exactly one door.
+    DOORS_MAX = 16
+    DATA_BYTES = BPS - 2                       # 254 record-bytes per data block
+    stream = bytearray(fortune_record())       # record 1
+    stream += bytes(RECLEN * (DOORS_MAX - 1))  # records 2..16 = empty
+    nblocks = (len(stream) + DATA_BYTES - 1) // DATA_BYTES   # 640/254 -> 3
 
-    # Data block: link [0-1] = (0, last-used-byte-index); records start at byte 2.
-    rec = fortune_record()
-    do = off(dt, ds)
-    img[do:do + BPS] = bytes(BPS)
-    img[do + 0] = 0                          # track 0 => last block in chain
-    img[do + 1] = 2 + RECLEN - 1             # index of last used byte (=41)
-    img[do + 2:do + 2 + RECLEN] = rec
+    blocks = bam_alloc(img, nblocks + 1)       # n data blocks + 1 side sector
+    data_ts = blocks[:nblocks]
+    st, ss = blocks[nblocks]
+
+    # Write the data blocks, chaining each to the next.
+    for i, (dt, dsx) in enumerate(data_ts):
+        o = off(dt, dsx)
+        img[o:o + BPS] = bytes(BPS)
+        chunk = stream[i * DATA_BYTES:(i + 1) * DATA_BYTES]
+        if i + 1 < nblocks:                    # not last: link to next block
+            nt, ns = data_ts[i + 1]
+            img[o + 0] = nt
+            img[o + 1] = ns
+        else:                                  # last block: track 0, last byte index
+            img[o + 0] = 0
+            img[o + 1] = 2 + len(chunk) - 1
+        img[o + 2:o + 2 + len(chunk)] = chunk
 
     # Side sector: [0-1] next SS (none), [2] SS#=0, [3] reclen, [4-5] this SS T/S,
-    # [16-17] first data block T/S.
+    # [16..] track/sector pairs of every data block.
     so = off(st, ss)
     img[so:so + BPS] = bytes(BPS)
-    img[so + 0] = 0
-    img[so + 1] = 0
-    img[so + 2] = 0
     img[so + 3] = RECLEN
     img[so + 4] = st
     img[so + 5] = ss
-    img[so + 16] = dt
-    img[so + 17] = ds
+    for i, (dt, dsx) in enumerate(data_ts):
+        img[so + 16 + i * 2] = dt
+        img[so + 17 + i * 2] = dsx
 
-    # Directory entry: REL (0x84), data T/S, name, side-sector T/S, reclen, blocks.
+    # Directory entry: REL (0x84), first data T/S, name, side-sector T/S, reclen, blocks.
     dofs, base = free_dir_slot(img)
     e = dofs + base
-    img[e + 0] = 0x84                        # closed REL
-    img[e + 1] = dt
-    img[e + 2] = ds
-    nm = b"DOORS".ljust(16, b'\xa0')
-    img[e + 3:e + 19] = nm
+    img[e + 0] = 0x84                          # closed REL
+    img[e + 1], img[e + 2] = data_ts[0]
+    img[e + 3:e + 19] = b"DOORS".ljust(16, b'\xa0')
     img[e + 19] = st
     img[e + 20] = ss
     img[e + 21] = RECLEN
     img[e + 22:e + 28] = bytes(6)
-    img[e + 28] = 2                          # block count lo (2 blocks)
-    img[e + 29] = 0                          # block count hi
+    total_blocks = nblocks + 1
+    img[e + 28] = total_blocks & 0xFF
+    img[e + 29] = total_blocks >> 8
 
     with open(path, 'r+b') as f:
         f.write(bytes(img))
-    print(f"  seed-doors: wrote DOORS REL (data {dt}/{ds}, side {st}/{ss}) — FORTUNE registered")
+    print(f"  seed-doors: wrote DOORS REL ({DOORS_MAX} records, {nblocks} data + 1 side) — FORTUNE registered")
 
 
 if __name__ == "__main__":

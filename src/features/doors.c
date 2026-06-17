@@ -133,50 +133,66 @@ reload_ovl:
 #pragma data(doors_data)
 #pragma bss(doors_bss)
 
+/* doors_scan — ONE rel_open, sequentially read up to `max` door records into
+ * out[], return the count read.  Lives in the overlay and calls the resident
+ * primitives door_open_rel/door_unpack (already linked — door_count uses them),
+ * so it adds no resident code and lets door_by_id/index/key DCE away.  A single
+ * open (vs one per slot) is why login no longer chatters the drive for minutes,
+ * and reading distinct records (never re-positioning into absent slots) is why a
+ * one-door table no longer lists DOORS_MAX times. */
+static u8 doors_scan(door_record_t *out, u8 max) {
+  rel_handle_t h;
+  u8 n = 0, got;
+  u8 buf[RECORD_SIZE_DOOR];
+  if (door_open_rel(bbs_cfg.device_doors, &h) != BBS_OK) return 0;
+  rel_position(h, 1);
+  while (n < max) {
+    if (rel_read(h, (void *)buf, RECORD_SIZE_DOOR, &got) != BBS_OK || got < 8) break;
+    door_unpack(&out[n], buf);
+    n++;
+  }
+  rel_close(h);
+  return n;
+}
+
 void action_doors_menu(session_t *s) {
-  door_record_t d;
-  u8 i, key;
+  door_record_t arr[DOORS_MAX];   /* on the BBS stack ($C000+); survives door_run reloads */
+  u8 n, i, key;
+
+  n = doors_scan(arr, DOORS_MAX);
   session_emit(s, "\r\nDOOR PROGRAMS\r\n\r\n");
-  for (i = 1; i <= DOORS_MAX; i++) {
-    if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
-    if (!door_visible(&d, s->user.access_level)) continue;
-    { char line[40]; sprintf(line, " [%c] %s\r\n", d.cmd_key, d.title);
+  for (i = 0; i < n; i++) {
+    if (!door_visible(&arr[i], s->user.access_level)) continue;
+    { char line[40]; sprintf(line, " [%c] %s\r\n", arr[i].cmd_key, arr[i].title);
       session_emit(s, line); }
   }
   session_emit(s, "\r\nSELECT (RETURN=BACK): ");
   { u8 c; if (!sess_read_key(s, &c)) return; key = c; }
   if (key == '\r' || key == '\n') { s->menu_displayed = FALSE; return; }
-  if (door_by_key((char)key, &d, bbs_cfg.device_doors) == BBS_OK
-      && door_visible(&d, s->user.access_level)) {
-    door_run(s, &d);
+  if (key >= 'a' && key <= 'z') key = (u8)(key - 0x20);   /* fold to match stored cmd_key */
+  for (i = 0; i < n; i++) {                                 /* select from memory — no extra open */
+    if (door_visible(&arr[i], s->user.access_level) && arr[i].cmd_key == (char)key) {
+      door_run(s, &arr[i]);
+      break;
+    }
   }
   s->menu_displayed = FALSE;
 }
 
 void login_doors_iter(session_t *s) {
-  /* ONE pass over the slots collecting enabled+visible login doors, then run
-   * them in ascending login_order.  The old order*slot double loop re-opened
-   * the DOORS file up to 256 times (endless drive chatter).  ids/ords live on
-   * the BBS software stack ($C000+), which door_run's OVL_DOORS reload does not
-   * touch (the door's own stack is at $BFFE), so they survive each door_run. */
-  u8 ids[DOORS_MAX], ords[DOORS_MAX], n = 0, i, j;
-  door_record_t d;
+  /* One scan, then run login-flagged visible doors in slot order.  The old
+   * per-slot door_by_id(1..MAX) loop re-opened the DOORS file 16 times even
+   * with no login doors (a ~2-minute login on a real-speed drive).  door_run
+   * reloads OVL_DOORS before returning, so this overlay code and arr (on the
+   * BBS stack) survive each call. */
+  door_record_t arr[DOORS_MAX];
+  u8 n, i;
 
-  for (i = 1; i <= DOORS_MAX; i++) {
-    if (door_by_id(i, &d, bbs_cfg.device_doors) != BBS_OK) continue;
-    if (!(d.flags & DOOR_F_LOGIN)) continue;
-    if (!door_visible(&d, s->user.access_level)) continue;
-    ids[n] = i; ords[n] = d.login_order; n++;
-  }
-
-  for (i = 0; i < n; i++) {            /* selection sort by login_order, run in place */
-    u8 best = i;
-    for (j = (u8)(i + 1); j < n; j++) if (ords[j] < ords[best]) best = j;
-    { u8 t = ids[i]; ids[i] = ids[best]; ids[best] = t;
-      t = ords[i]; ords[i] = ords[best]; ords[best] = t; }
-    if (door_by_id(ids[i], &d, bbs_cfg.device_doors) == BBS_OK) {
-      door_run(s, &d);               /* reloads OVL_DOORS on return */
-    }
+  n = doors_scan(arr, DOORS_MAX);
+  for (i = 0; i < n; i++) {
+    if (!(arr[i].flags & DOOR_F_LOGIN)) continue;
+    if (!door_visible(&arr[i], s->user.access_level)) continue;
+    door_run(s, &arr[i]);
   }
 }
 

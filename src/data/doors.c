@@ -31,7 +31,7 @@ static void door_pack(const door_record_t *rec, u8 *buf) {
   /* byte 39: reserved, left zeroed */
 }
 
-static void door_unpack(door_record_t *rec, const u8 *buf) {
+void door_unpack(door_record_t *rec, const u8 *buf) {
   u8 i;
   memset(rec, 0, sizeof(*rec));
   rec->id         = buf[0];
@@ -48,7 +48,7 @@ static void door_unpack(door_record_t *rec, const u8 *buf) {
   /* byte 39: reserved, ignored */
 }
 
-static bbs_err_t door_open_rel(u8 device, rel_handle_t *h)
+bbs_err_t door_open_rel(u8 device, rel_handle_t *h)
 {
   char fname[32];
   bbs_err_t err;

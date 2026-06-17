@@ -5,6 +5,13 @@
 #include "bbs/types.h"
 #include "bbs/records.h"
 #include "bbs/session.h"
+#include "bbs/rel.h"
+
+/* Low-level REL primitives, exposed so the OVL_DOORS overlay can do its own
+ * single-open sequential scan (door_open_rel/door_unpack are already resident —
+ * door_count uses them — so referencing them adds no resident code). */
+bbs_err_t door_open_rel(u8 device, rel_handle_t *h);
+void      door_unpack(door_record_t *rec, const u8 *buf);
 
 u8        door_count(u8 device);
 bbs_err_t door_by_index(u8 n, door_record_t *out, u8 device);
