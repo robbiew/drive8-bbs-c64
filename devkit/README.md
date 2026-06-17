@@ -8,8 +8,8 @@ A T/64 door is a native 6502 PRG that the BBS loads at $9700 and enters via
 ## Quick start
 
 ```c
-/* mydoor.c */
-#include "door_sdk.h"
+/* mydoor.c — one file: include door_crt.h, then write door_main. */
+#include "door_crt.h"
 
 void door_main(void) {
     const bbs_api_t *b = bbs();
@@ -39,7 +39,7 @@ make door DOOR=<name> SRC=path/to/foo.c  # source: any path
 ```
 
 Flags: `-n -O2` (native; bytecode mode + the $9700 overlay region crashes oscar64).
-The $9700 load address comes from `#pragma overlay/region` in `door_crt.c`, not a
+The $9700 load address comes from `#pragma overlay/region` in `door_crt.h`, not a
 CLI flag.  Oscar64 emits the door overlay as `DOOR.prg`; the Makefile renames it
 to `<NAME>.prg`.
 
@@ -99,7 +99,7 @@ if (n <= 0) return;   /* 0 = carrier lost mid-read; -1 = carrier absent */
 
 ## Size budget
 
-The door region is `$9700-$C000` — approximately **10 KB**.  `door_crt.c` uses
+The door region is `$9700-$C000` — approximately **10 KB**.  `door_crt.h` uses
 roughly 50 bytes for the header, bcexec, door_entry, and scratch.  The rest is
 yours.  If your door grows beyond the budget, oscar64 will error at link time.
 
@@ -171,7 +171,7 @@ $9703: 44 36      ; 'D','6'          — BBS_DOOR_MAGIC0/1
 $9705: 01         ; BBS_ABI_VERSION  — checked before entry
 ```
 
-`door_crt.c` produces this layout automatically.  `door_run` validates offsets
+`door_crt.h` produces this layout automatically.  `door_run` validates offsets
 3-5 before calling `enter_door()`.
 
 ---
@@ -181,5 +181,5 @@ $9705: 01         ; BBS_ABI_VERSION  — checked before entry
 | File | Purpose |
 |---|---|
 | `door_sdk.h` | Include in your door — re-exports ABI types + `bbs()` accessor |
-| `door_crt.c` | Startup: header, bcexec, door_entry.  Link automatically via `make door` |
+| `door_crt.h` | Startup: header, bcexec, door_entry.  Link automatically via `make door` |
 | `examples/fortune.c` | Worked example |
