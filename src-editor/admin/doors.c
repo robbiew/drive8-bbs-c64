@@ -150,11 +150,12 @@ static bool_t doors_edit_record(door_record_t *d, u8 device)
     switch (ch) {
       case 'T': {
         char newt[17];
-        int len, i;
+        int len;
         printf("TITLE (16 CHARS MAX): ");
         len = ui_read_line(newt, 16, UI_CASE_MIXED);
         printf("\n");
         if (len > 0) {
+          int i;
           strncpy(d->title, newt, 16);
           for (i = len; i < 16; i++) d->title[i] = 0;
         }
@@ -163,11 +164,12 @@ static bool_t doors_edit_record(door_record_t *d, u8 device)
 
       case 'F': {
         char newf[17];
-        int len, i;
+        int len;
         printf("FILENAME (16 CHARS MAX): ");
         len = ui_read_line(newf, 16, UI_CASE_UPPER);
         printf("\n");
         if (len > 0) {
+          int i;
           strncpy(d->filename, newf, 16);
           for (i = len; i < 16; i++) d->filename[i] = 0;
         }
