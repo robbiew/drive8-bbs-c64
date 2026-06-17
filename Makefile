@@ -89,11 +89,13 @@ $(DOORS_OVL_PRG): $(BOOT_PRG)
 	@echo "Overlay: $@"
 
 EDITOR_HAL_SRCS := src/err.c src/hal/disk.c src/hal/rel.c
-EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c
+EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c src-editor/admin/doors.c
+# No %f used in the editor, so strip the float printf path (~1.8 KB) as BOOT does.
+EDITOR_DEFS := -dNOFLOAT
 
 $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
 	@mkdir -p $(OUTDIR)
-	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) -o=$@ $< $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS)
+	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) $(EDITOR_DEFS) -o=$@ $< $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS)
 	@echo "Built: $@"
 
 test:

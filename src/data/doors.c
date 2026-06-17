@@ -241,6 +241,34 @@ bbs_err_t door_by_key(char key, door_record_t *out, u8 device) {
   return BBS_ENOTFOUND;
 }
 
+bbs_err_t door_delete(u8 id, u8 device) {
+  bbs_err_t err;
+  rel_handle_t h;
+  u8 buf[RECORD_SIZE_DOOR];
+
+  if (id == 0 || id > DOORS_MAX) {
+    return BBS_EBADARG;
+  }
+
+  err = door_open_rel(device, &h);
+  if (err != BBS_OK) {
+    return err;
+  }
+
+  err = rel_position(h, id);
+  if (err != BBS_OK) {
+    rel_close(h);
+    return err;
+  }
+
+  /* Write all-zero record; id byte 0 = 0 marks the slot as empty. */
+  memset(buf, 0, RECORD_SIZE_DOOR);
+  err = rel_write(h, (const void *)buf, RECORD_SIZE_DOOR);
+  rel_close(h);
+
+  return err;
+}
+
 bbs_err_t door_save(const door_record_t *rec, u8 device) {
   bbs_err_t err;
   rel_handle_t h;

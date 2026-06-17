@@ -11,6 +11,7 @@ bbs_err_t door_by_index(u8 n, door_record_t *out, u8 device);
 bbs_err_t door_by_id(u8 id, door_record_t *out, u8 device);
 bbs_err_t door_by_key(char key, door_record_t *out, u8 device);
 bbs_err_t door_save(const door_record_t *rec, u8 device);
+bbs_err_t door_delete(u8 id, u8 device);
 
 bool_t    door_visible(const door_record_t *rec, u8 level);
 

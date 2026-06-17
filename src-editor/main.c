@@ -20,10 +20,8 @@
 #include "bbs/sstatus.h"
 #include "bbs/syscnt.h"
 
-/* Same two-region layout as BOOT: code/data/BSS in $0880-$BFFF (BASIC ROM
- * banked out via $01=$36 in main), stack in $C000-$CFFF. */
-/* Same two-region layout as BOOT: code/data/BSS in $0880-$BFFF (BASIC ROM
- * banked out via $01=$36 in main), stack in $C000-$CFFF.
+/* Code/data/BSS in $0880-$BFFF (BASIC ROM banked out via $01=$36 in main),
+ * stack in $C000-$CFFF.
  * msgs_code/msgs_data/msgs_bss are declared so messages.c/#pragma code(msgs_code)
  * compiles cleanly; they're added to the main region so their content folds in. */
 #pragma section( msgs_code, 0 )
@@ -114,6 +112,7 @@ static void main_menu(void)
         { 'U', "USER MGMT"      },
         { 'F', "FILE AREAS"     },
         { 'V', "VOTE MGMT"      },
+        { 'D', "DOOR PROGRAMS"  },
         { 'C', "CONFIG OPTIONS" },
         { 'S', "STATISTICS"     },
         { 'Q', "QUIT"           },
@@ -121,16 +120,17 @@ static void main_menu(void)
 
     for (;;) {
         char ch;
-        ui_menu_display("MAIN MENU", items, 8);
-        ch = ui_menu_input("CHOICE:", "IUMFVCSQ");
+        ui_menu_display("MAIN MENU", items, 9);
+        ch = ui_menu_input("CHOICE:", "IUMFVDCSQ");
         switch (ch) {
-            case 'I': do_init_disk(bbs_cfg.device_system);      break;
-            case 'U': admin_users_menu(bbs_cfg.device_system);  break;
-            case 'M': admin_messages_menu(bbs_cfg.device_msgs); break;
-            case 'F': admin_files_menu(bbs_cfg.device_files);   break;
-            case 'V': admin_votes_menu(bbs_cfg.device_msgs);    break;
-            case 'S': do_stats();                                break;
-            case 'C': admin_config_menu(bbs_cfg.device_system); break;
+            case 'I': do_init_disk(bbs_cfg.device_system);        break;
+            case 'U': admin_users_menu(bbs_cfg.device_system);    break;
+            case 'M': admin_messages_menu(bbs_cfg.device_msgs);   break;
+            case 'F': admin_files_menu(bbs_cfg.device_files);     break;
+            case 'V': admin_votes_menu(bbs_cfg.device_msgs);      break;
+            case 'D': admin_doors_menu(bbs_cfg.device_doors);     break;
+            case 'S': do_stats();                                  break;
+            case 'C': admin_config_menu(bbs_cfg.device_system);   break;
             case 'Q': return;
             default:  break;
         }
