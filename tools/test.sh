@@ -33,6 +33,8 @@ run test_menu_garbage \
 run test_user_hash \
     "$ROOT/tests/test_user_hash.c" "$ROOT/src/data/user_hash.c"
 
+run test_door_abi "$ROOT/tests/test_door_abi.c"
+
 run test_term_unxlate -I"$ROOT/src/term" \
     "$ROOT/tests/test_term_unxlate.c" \
     "$ROOT/src/term/term.c" "$ROOT/src/term/cp437_petscii.c" \
