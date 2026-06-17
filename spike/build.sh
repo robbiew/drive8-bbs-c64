@@ -10,6 +10,20 @@
 #   * -n (native code) is required; default bytecode mode + overlay region crashes.
 #   * The combined c1541 -format ... -write ... chained form does not work with the
 #     homebrew c1541 build; format and write must be separate invocations.
+#
+# Round 2 fix — self-contained door image (no sub-$9700 bcexec calls):
+#   * Root cause: oscar64 emits bcexec (indirect-call trampoline) in the stub MAIN
+#     region at $088a; the door overlay called JSR $088a → wild jump at runtime.
+#   * Fix: override bcexec with an in-region clone via:
+#       __asm door_bcexec { jmp (accu) }
+#       #pragma runtime(bcexec, door_bcexec)
+#     door_bcexec lands at $9788; all door JSR/JMP targets are now >= $9700.
+#   * door_entry() at $9700 saves host's oscar64 SP ($23/$24), installs door-local
+#     SP top ($BFFE), calls door_main, then restores host SP before RTS.
+#   * host_sp_lo/hi scratch variables placed in door_bss (in-region at $97a3/$97a4)
+#     via #pragma bss(door_bss) / #pragma bss(bss) guards.
+#   * Host saves/restores ZP $02-$8F around JSR $9700 to protect all oscar64 runtime
+#     state (highest observed ZP var in HOST.asm: $54; $8F is generous headroom).
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
