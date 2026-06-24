@@ -140,6 +140,6 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG)
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG)
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."

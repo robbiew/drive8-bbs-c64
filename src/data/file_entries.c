@@ -89,15 +89,17 @@ bbs_err_t fentry_count(u8 area_id, u8 device, u8 *out_count)
     err = fentry_open(area_id, device, &h);
     if (err != BBS_OK) return err;
 
+    err = BBS_OK;
     for (n = 1; n <= 255; n++) {
         memset(buf, 0, RECORD_SIZE_FILE_ENTRY);
         err = rel_read(h, buf, RECORD_SIZE_FILE_ENTRY, &got);
-        if (err != BBS_OK || got < REC_MIN) break;
+        if (err != BBS_OK) break;
+        if (got < REC_MIN) break;
         fentry_unpack(&r, buf);
         if (!fentry_is_deleted(&r)) (*out_count)++;
     }
     rel_close(h);
-    return BBS_OK;
+    return (err == BBS_OK) ? BBS_OK : err;
 }
 
 bbs_err_t fentry_by_recnum(u8 area_id, u8 recnum, file_entry_record_t *out,
@@ -141,7 +143,8 @@ bbs_err_t fentry_add(u8 area_id, const file_entry_record_t *rec, u8 device)
     for (n = 1; n <= 255; n++) {
         memset(buf, 0, RECORD_SIZE_FILE_ENTRY);
         err = rel_read(h, buf, RECORD_SIZE_FILE_ENTRY, &got);
-        if (err != BBS_OK || got < REC_MIN) { slot = n; break; }
+        if (err != BBS_OK) break;
+        if (got < REC_MIN) { slot = n; break; }
         fentry_unpack(&r, buf);
         if (fentry_is_deleted(&r)) { slot = n; break; }
     }

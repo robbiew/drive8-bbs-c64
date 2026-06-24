@@ -121,9 +121,11 @@ static void fl_list_files(session_t *s, const ud_area_record_t *area)
     fl(s, "  #   FILENAME         BLKS DESCRIPTION");
 
     for (recnum = 1; recnum <= 255; recnum++) {
+        bbs_err_t fe_err;
         if (!sess_carrier_ok(s)) break;
-        if (fentry_by_recnum(area->id, recnum, &fe,
-                             bbs_cfg.device_files) != BBS_OK) break;
+        fe_err = fentry_by_recnum(area->id, recnum, &fe, bbs_cfg.device_files);
+        if (fe_err == BBS_ENOTFOUND) continue;
+        if (fe_err != BBS_OK) break;
         if (!fe.filename[0]) continue;
         if (fe.access_level > s->user.access_level) continue;
         sprintf(buf, "  %-3u %-16s %-4u %.24s",
@@ -171,7 +173,11 @@ static void fl_download(session_t *s, const ud_area_record_t *area)
     while (!sess_read_key(s, &ch)) if (!sess_carrier_ok(s)) return;
     fnl(s);
     if (ch == 'Z' || ch == 'z') {
-        xfer_zmodem_send(s, area->device, bbs_cfg.drive_files, fe.filename);
+        if (xfer_zmodem_send(s, area->device, bbs_cfg.drive_files, fe.filename) == XFER_OK) {
+            fe.downloads++;
+            fentry_save(area->id, &fe, bbs_cfg.device_files);
+            fl(s, "TRANSFER COMPLETE.");
+        } else { fl(s, "TRANSFER FAILED OR CANCELLED."); }
         return;
     }
     if (ch != 'P' && ch != 'p') { fl(s, "CANCELLED."); return; }
@@ -202,6 +208,10 @@ static void fl_upload(session_t *s, ud_area_record_t *area)
     ftx(s, "FILENAME (MAX 15 CHARS): ");
     sess_read_line(s, fname, 15, TRUE);
     if (!fname[0]) { fl(s, "CANCELLED."); return; }
+    { u8 i; for (i = 0; fname[i]; i++) {
+        if (fname[i] == ':' || fname[i] == ',' || fname[i] == '*' || fname[i] == '?')
+            { fl(s, "INVALID FILENAME."); return; }
+    }}
     ftx(s, "DESCRIPTION: ");
     sess_read_line(s, desc, 40, FALSE);
 
@@ -209,7 +219,18 @@ static void fl_upload(session_t *s, ud_area_record_t *area)
     while (!sess_read_key(s, &key)) if (!sess_carrier_ok(s)) return;
     fnl(s);
     if (key == 'Z' || key == 'z') {
-        xfer_zmodem_recv(s, area->device, bbs_cfg.drive_files, fname);
+        if (xfer_zmodem_recv(s, area->device, bbs_cfg.drive_files, fname) == XFER_OK) {
+            memset(&fe, 0, sizeof(fe));
+            strncpy(fe.filename, fname, 15);
+            strncpy(fe.description, desc, 40);
+            strncpy(fe.uploader, s->handle, 15);
+            fe.access_level = area->access_level;
+            fentry_add(area->id, &fe, bbs_cfg.device_files);
+            area->total_files++;
+            file_area_save(area, bbs_cfg.device_files);
+            s->user.uploads++;
+            fl(s, "TRANSFER COMPLETE. FILE ADDED.");
+        } else { fl(s, "TRANSFER FAILED OR CANCELLED."); }
         return;
     }
     if (key != 'P' && key != 'p') { fl(s, "CANCELLED."); return; }
