@@ -10,7 +10,6 @@
 #include "bbs/menu.h"
 #include "bbs/session.h"
 #include "bbs/menu_actions.h"
-#include "bbs/doors.h"
 
 /**
  * MAIN Menu Commands
@@ -22,8 +21,7 @@ static menu_cmd_t main_commands[] = {
   { 'E', "EMAIL",             "email", 0, FALSE, NULL },
   { 'P', "PREFERENCES",       "prefs", 0, FALSE, NULL },
   { 'F', "FILES",             "",      0, TRUE,  action_files },
-  { 'D', "DOORS",             "door",  0, FALSE, NULL },
-  { '!', "DOOR PROGRAMS",    "",      0, TRUE,  action_doors },
+  { 'D', "DOOR PROGRAMS",     "",      0, TRUE,  action_doors },
   { 'L', "LAST CALLERS",      "",      0, TRUE,  action_last_callers },
   { 'U', "USERS ONLINE",      "",      0, TRUE,  action_user_list },
   { 'I', "SYSTEM INFO",       "",      0, TRUE,  action_system_info },
@@ -56,15 +54,6 @@ static menu_cmd_t prefs_commands[] = {
 };
 
 /**
- * DOOR (Games & External Programs) Menu Commands
- */
-static menu_cmd_t door_commands[] = {
-  { 'R', "RUN DOOR",          "",      0, TRUE,  action_run_door },
-  { '?', "HELP",              "",      0, TRUE,  action_help },
-  { 'Q', "BACK TO MAIN",      "",      0, TRUE,  NULL },
-};
-
-/**
  * Master Menu Table
  *
  * All available menus and their associated command tables.
@@ -73,7 +62,6 @@ menu_def_t menus[] = {
   { "main",  "MAIN MENU",        "main",  main_commands,  sizeof(main_commands)  / sizeof(main_commands[0])  },
   { "email", "EMAIL",            "email", email_commands, sizeof(email_commands) / sizeof(email_commands[0]) },
   { "prefs", "PREFERENCES",      "prefs", prefs_commands, sizeof(prefs_commands) / sizeof(prefs_commands[0]) },
-  { "door",  "DOORS & GAMES",    "door",  door_commands,  sizeof(door_commands)  / sizeof(door_commands[0])  },
 };
 
 /**

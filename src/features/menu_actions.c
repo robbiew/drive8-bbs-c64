@@ -66,7 +66,7 @@ void action_help(session_t *s) {
 void action_list_boards(session_t *s) {
   krnio_setnam(P"OVL_MSGS");
   krnio_load(1, bbs_cfg.device_system, 1);
-  wfc.ovl_wfc_loaded = FALSE;  /* OVL_MSGS displaced OVL_WFC; reload on next wfc call */
+  wfc.ovl_wfc_loaded = FALSE;
   bulletin_run(s);
   wfc_reload();  /* restore OVL_WFC (spy view code) before returning to menu */
   s->menu_displayed = FALSE;
@@ -157,7 +157,7 @@ void action_clear_on_msg(session_t *s) {
 void action_files(session_t *s) {
   krnio_setnam(P"OVL_FILES");
   krnio_load(1, bbs_cfg.device_system, 1);
-  wfc.ovl_wfc_loaded = FALSE;   /* OVL_FILES displaced OVL_WFC */
+  wfc.ovl_wfc_loaded = FALSE;
   files_run(s);
   wfc_reload();
   s->menu_displayed = FALSE;
@@ -175,14 +175,9 @@ void action_files(session_t *s) {
 void action_doors(session_t *s) {
   krnio_setnam(P"OVL_DOORS");
   krnio_load(1, bbs_cfg.device_system, 1);
-  wfc.ovl_wfc_loaded = FALSE;  /* OVL_DOORS displaced OVL_WFC */
+  wfc.ovl_wfc_loaded = FALSE;
   action_doors_menu(s);
   wfc_reload();
   s->menu_displayed = FALSE;
 }
 
-void action_run_door(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nRUN DOOR (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}

@@ -412,13 +412,12 @@ static void bull_do_post(u16 parent) {
   } /* close { char subj_sv } */
 }   /* bull_do_post */
 
-/* Sized against main-region headroom — see map before growing. */
 #define BULL_PAGE_ROWS   3
 #define BULL_MEMO_SLOTS  3
 
-/* Listing page buffer + author memo live in main bss — the msgs overlay
- * region is nearly full (check the .map) and cannot hold them. */
-#pragma bss(bss)
+/* Listing page buffer + author memo in msgs_bss (overlay BSS, valid only
+ * while OVL_MSGS is loaded).  bull_author7 is resident code but only ever
+ * called from overlay context, so accessing these from it is safe. */
 static msg_list_row_t s_list_rows[BULL_PAGE_ROWS];
 
 /* Author-id -> 7-char padded handle memo for one listing pass.  A screenful
@@ -426,7 +425,6 @@ static msg_list_row_t s_list_rows[BULL_PAGE_ROWS];
  * cache each miss costs a full USR LOG open. */
 static struct { u16 id; char handle[8]; } s_author_memo[BULL_MEMO_SLOTS];
 static u8 s_author_memo_n;
-#pragma bss(msgs_bss)
 
 /* Resident code, not overlay: msgs_code is as tight as msgs_bss, and this
  * helper only calls resident users.c anyway. */

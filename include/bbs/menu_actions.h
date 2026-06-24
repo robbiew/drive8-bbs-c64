@@ -29,6 +29,5 @@ void action_files(session_t *s);        /* resident shim: loads OVL_FILES, calls
 
 /* DOOR menu */
 void action_doors(session_t *s);    /* resident shim: loads OVL_DOORS, calls action_doors_menu */
-void action_run_door(session_t *s);
 
 #endif /* INCLUDE_BBS_MENU_ACTIONS_H */

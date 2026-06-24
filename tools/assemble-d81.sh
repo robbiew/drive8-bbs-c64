@@ -201,7 +201,8 @@ PYPATCH
     "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"   >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_boot"  >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_doors" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "ovl_files" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_files"  >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_zmodem" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "fortune"   >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
@@ -259,6 +260,14 @@ if [ -f "$FILES_OVL_PRG" ]; then
     echo "Adding FILES overlay..."
     "$C1541" "$OUTPUT_DISK" -write "$FILES_OVL_PRG" "ovl_files" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write FILES overlay" >&2; }
+fi
+
+# Add ZMODEM overlay (Zmodem send/receive protocol)
+ZMODEM_OVL_PRG="$ROOT/build/c64/ovl_zmodem.prg"
+if [ -f "$ZMODEM_OVL_PRG" ]; then
+    echo "Adding ZMODEM overlay..."
+    "$C1541" "$OUTPUT_DISK" -write "$ZMODEM_OVL_PRG" "ovl_zmodem" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write ZMODEM overlay" >&2; }
 fi
 
 # Add the bundled example door (built by `make all` via the door-example target).

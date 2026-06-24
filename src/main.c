@@ -94,10 +94,13 @@
 #pragma section( files_bss,  0, , , bss )
 #pragma region( files, 0x9700, 0xC000, , 5, {files_code, files_data, files_bss} )
 
-/* ZMODEM overlay: bank 6, reserved for future Zmodem implementation.
- * Oscar64 generates a corrupt PRG for empty overlay regions, so the region
- * pragma is intentionally left out until the implementation is ready.
- * Re-add: #pragma overlay(ovl_zmodem,6) / #pragma region(zmodem,...) */
+/* ZMODEM overlay: bank 6.  Loaded on demand by xfer_zmodem_send/recv in
+ * the resident xfer.c shim; never called from within another overlay. */
+#pragma overlay( ovl_zmodem, 6 )
+#pragma section( zmodem_code, 0 )
+#pragma section( zmodem_data, 0 )
+#pragma section( zmodem_bss,  0, , , bss )
+#pragma region( zmodem, 0x9700, 0xC000, , 6, {zmodem_code, zmodem_data, zmodem_bss} )
 
 /**
  * main_print()

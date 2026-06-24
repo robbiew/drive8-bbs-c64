@@ -3,8 +3,8 @@
  * Entry: files_run(s) — called by action_files() (RESIDENT) after loading
  * OVL_FILES.  Mirrors bulletin.c pattern: m.files header, p.files prompt,
  * MCI area name, +/- area navigation, digit-select, L/D/U/A/Q commands.
- * Zmodem: via RESIDENT xfer_zmodem_send/recv (stub until implemented).
- * Punter send/receive are compiled into this overlay (files_code section). */
+ * Zmodem: via RESIDENT xfer_zmodem_send/recv (loads OVL_ZMODEM overlay).
+ * Punter: compiled into this overlay (files_code section, no extra load). */
 #include "bbs/overlay.h"
 #include "bbs/session.h"
 #include "bbs/files.h"
@@ -246,10 +246,14 @@ void files_run(session_t *s)
     /* Enter first accessible area */
     if (total && fl_load_area(s, 1, &area)) area_idx = 1;
 
+    session_clear_screen(s);
+
     /* Header: m.files gfile or hardcoded fallback */
     if (session_display_file(s, 'm', "files") != BBS_OK) {
+        sess_reset_color(s);
+        fl(s, "FILE AREAS");
+        fl(s, "======================================");
         fnl(s);
-        fl(s, " FILE AREAS: (L)IST (D)OWN (U)P (A)REAS +/- # (?)HELP (Q)UIT");
     }
 
     for (;;) {
@@ -260,12 +264,10 @@ void files_run(session_t *s)
 
         /* Prompt: p.files gfile or hardcoded fallback */
         if (session_display_file(s, 'p', "files") != BBS_OK) {
-            if (area_idx) {
-                char buf[28];
-                sprintf(buf, " AREA %u: %.18s", (unsigned)area_idx, area.title);
-                fl(s, buf);
-            }
-            ftx(s, " FILES CMD: ");
+            { char buf[28];
+              sprintf(buf, "AREA: %.22s", area_idx ? area.title : "(NONE)");
+              fl(s, buf); }
+            ftx(s, "CMD?: ");
         }
 
         fgetkey_cmd(s, cmd);
@@ -317,10 +319,19 @@ void files_run(session_t *s)
             continue;
         }
 
-        /* ?: re-display menu header */
+        /* ?: re-display menu */
         if (cmd[0] == '?') {
-            if (session_display_file(s, 'm', "files") != BBS_OK)
-                fl(s, " (L)IST (D)OWN (U)P (A)REAS +/- # (Q)UIT");
+            session_clear_screen(s);
+            if (session_display_file(s, 'm', "files") != BBS_OK) {
+                ftx(s, "---------------------------------------\r\n"
+                       "L             LIST FILES\r\n"
+                       "D             DOWNLOAD (PUNTER/ZMODEM)\r\n"
+                       "U             UPLOAD   (PUNTER/ZMODEM)\r\n"
+                       "+/>  -/<  #   AREA NAV\r\n"
+                       "A             LIST AREAS\r\n"
+                       "Q             QUIT TO MAIN\r\n"
+                       "---------------------------------------\r\n");
+            }
             continue;
         }
 

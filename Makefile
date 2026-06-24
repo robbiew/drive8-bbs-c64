@@ -41,7 +41,7 @@ endif
 
 CFLAGS      := $(INCLUDES) $(OFLAGS) $(DRVFLAGS)
 
-HAL_SRCS := src/err.c src/hal/clock.c src/hal/disk.c src/hal/rel.c src/hal/reu.c src/hal/term.c src/io/io.c src/net/at_response.c src/net/telnet_iac.c src/net/punter.c src/platform/cbmdos/net.c src/term/term.c src/term/cp437_ascii.c src/term/cp437_petscii.c src/term/ansi.c
+HAL_SRCS := src/err.c src/hal/clock.c src/hal/disk.c src/hal/rel.c src/hal/reu.c src/hal/term.c src/io/io.c src/net/at_response.c src/net/telnet_iac.c src/net/punter.c src/net/zmodem.c src/platform/cbmdos/net.c src/term/term.c src/term/cp437_ascii.c src/term/cp437_petscii.c src/term/ansi.c
 DATA_SRCS := src/data/cfg.c src/data/users.c src/data/boards.c src/data/file_areas.c src/data/file_entries.c src/data/votes.c src/data/messages.c src/data/usrptr.c src/data/sstatus.c src/data/syscnt.c src/data/access.c src/data/usrday.c src/data/user_hash.c src/data/doors.c src/data/door_visible.c
 SESSION_SRCS := src/session/session.c src/session/spy80.c src/session/spy80_ansi.c src/session/spy80_font.c src/session/prompt_cursor.c src/session/prompt_cursor_frame.c
 FEATURE_SRCS := src/features/menu.c src/features/menu_tables.c src/features/menu_actions.c src/features/auth.c src/features/newuser.c src/features/bulletin.c src/features/editor.c src/features/mail.c src/features/files.c src/features/xfer.c src/features/chat.c src/features/vote.c src/features/callers.c src/features/sysop.c src/features/doors.c
@@ -99,11 +99,9 @@ $(FILES_OVL_PRG): $(BOOT_PRG)
 	@test -f "$@" || { echo "ERROR: overlay file not produced by oscar64"; exit 1; }
 	@echo "Overlay: $@"
 
-# $(ZMODEM_OVL_PRG) is not checked here: the OVL_ZMODEM region is declared
-# but empty until full Zmodem is implemented.  Oscar64 generates a corrupt
-# PRG for an empty overlay region, so we skip the target until the
-# implementation is ready.  The region pragma stays in main.c to reserve
-# bank 6 for future use.
+$(ZMODEM_OVL_PRG): $(BOOT_PRG)
+	@test -f "$@" || { echo "ERROR: ovl_zmodem not produced by oscar64"; exit 1; }
+	@echo "Overlay: $@"
 
 EDITOR_HAL_SRCS := src/err.c src/hal/disk.c src/hal/rel.c
 EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c src-editor/admin/doors.c
