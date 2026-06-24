@@ -82,8 +82,9 @@ static bool_t teq(const u8 *a, const u8 *b)
  * Passing tx_tok=NULL does receive-only with retries. */
 static bool_t p_hs(const u8 *tx_tok, const u8 *rx_tok)
 {
-    u8 buf[3], tries = P_RETRIES, jstart;
+    u8 buf[3], tries = P_RETRIES;
     while (tries--) {
+        u8 jstart;
         if (tx_tok) ptx(tx_tok, 3);
         jstart = j_now();
         if (prx(buf, 3, jstart, J_TOK) && teq(buf, rx_tok)) return TRUE;
@@ -126,8 +127,9 @@ static bool_t p_csum_ok(u8 len)
 /* Send s_blk[0..len-1]; retry on BAD; return TRUE on GOO. */
 static bool_t p_send_blk(u8 len)
 {
-    u8 buf[3], tries = P_RETRIES, jstart;
+    u8 buf[3], tries = P_RETRIES;
     while (tries--) {
+        u8 jstart;
         ptx(s_blk, len);
         jstart = j_now();
         if (!prx(buf, 3, jstart, J_TOK)) continue;
@@ -240,8 +242,9 @@ fail:
  * We send S/B to trigger, receive `len` bytes, verify, reply GOO/BAD. */
 static bool_t p_recv_blk(u8 len)
 {
-    u8 buf[3], tries = P_RETRIES, jstart;
+    u8 buf[3], tries = P_RETRIES;
     while (tries--) {
+        u8 jstart;
         /* Wait for ACK from terminal sender */
         jstart = j_now();
         if (!prx(buf, 3, jstart, J_TOK)) return FALSE;

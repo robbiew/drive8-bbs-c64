@@ -24,15 +24,15 @@
 
 /* ── Output helpers ─────────────────────────────────────────────────────── */
 
-static void ftx(session_t *s, const char *t)  { session_emit(s, t); }
-static void fnl(session_t *s)                  { session_emit(s, "\r\n"); }
+static void ftx(const session_t *s, const char *t)  { session_emit(s, t); }
+static void fnl(const session_t *s)                  { session_emit(s, "\r\n"); }
 static void fl(session_t *s, const char *t)    { ftx(s, t); fnl(s); }
 
 /* ── Input: hotkey + optional digit collection (like bull_getkey) ────────── */
 
 static void fgetkey_cmd(session_t *s, char *cmd)
 {
-    u8 ch; char e[2]; u8 len;
+    u8 ch; char e[2];
     cmd[0] = '\0';
     while (!sess_read_key(s, &ch))
         if (!sess_carrier_ok(s)) return;
@@ -43,7 +43,7 @@ static void fgetkey_cmd(session_t *s, char *cmd)
     cmd[0] = (char)ch; cmd[1] = '\0';
     /* Digits: collect until ENTER (for area/file number) */
     if (ch >= '0' && ch <= '9') {
-        len = 1;
+        u8 len = 1;
         while (len < 4) {
             while (!sess_read_key(s, &ch))
                 if (!sess_carrier_ok(s)) { fnl(s); return; }
@@ -60,7 +60,7 @@ static void fgetkey_cmd(session_t *s, char *cmd)
 /* ── Area management ────────────────────────────────────────────────────── */
 
 /* Load area by sequential index (1-based). Returns 1 on success. */
-static u8 fl_load_area(session_t *s, u8 idx, ud_area_record_t *out)
+static u8 fl_load_area(const session_t *s, u8 idx, ud_area_record_t *out)
 {
     if (file_area_by_index(idx, out, bbs_cfg.device_files) != BBS_OK) return 0;
     if (out->access_level > s->user.access_level) return 0;
@@ -107,7 +107,7 @@ static void fl_list_areas(session_t *s)
 
 /* ── File listing within current area ───────────────────────────────────── */
 
-static void fl_list_files(session_t *s, ud_area_record_t *area)
+static void fl_list_files(session_t *s, const ud_area_record_t *area)
 {
     file_entry_record_t fe;
     u8 recnum, count = 0;
@@ -146,7 +146,7 @@ static void fl_list_files(session_t *s, ud_area_record_t *area)
 
 /* ── Download ───────────────────────────────────────────────────────────── */
 
-static void fl_download(session_t *s, ud_area_record_t *area)
+static void fl_download(session_t *s, const ud_area_record_t *area)
 {
     file_entry_record_t fe;
     char input[5];

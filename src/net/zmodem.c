@@ -119,7 +119,7 @@ static void z_send_data_pkt(const u8 *buf, u8 len, u8 marker)
  * ----------------------------------------------------------------------- */
 
 /* Returns raw byte (0-255), -1 on timeout/loss, -2 on cancel sequence */
-static i16 z_rx_byte(session_t *s)
+static i16 z_rx_byte(const session_t *s)
 {
     clock_tod_t t0; clock_read(&t0);
     for (;;) {
@@ -225,8 +225,8 @@ hunt:
 static i16 z_recv_data_pkt(session_t *s, u8 *buf, u8 bufsize, u8 *marker)
 {
     u16 crc = 0, len = 0;
-    i16 c;
     for (;;) {
+        i16 c;
         c = z_rx_byte(s); if (c < 0) return c;
         if ((u8)c != ZDLE) {
             if (len < bufsize) { crc = z_crc16_byte(crc, (u8)c); buf[len++] = (u8)c; }
@@ -277,7 +277,6 @@ __noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
 {
     i16  frame;
     u32  pos;
-    i16  nread;
     u32  fpos = 0;
     u8   retries;
     u8   fnamebuf[30];
@@ -309,7 +308,7 @@ __noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
 
     /* ZFILE: header + data subpacket with "filename\0\0" */
     fi = 0;
-    while (filename[fi] && fi < 28) { fnamebuf[fi] = (u8)filename[fi]; fi++; }
+    while (fi < 28 && filename[fi]) { fnamebuf[fi] = (u8)filename[fi]; fi++; }
     fnamebuf[fi++] = 0; fnamebuf[fi++] = 0; /* NUL-terminate + empty size info */
     z_send_hex_hdr(ZFILE, 0);
     z_send_data_pkt(fnamebuf, fi, ZCRCW);
@@ -334,7 +333,7 @@ __noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
     z_send_hex_hdr(ZDATA, fpos);
 
     for (;;) {
-        nread = disk_read(z_rxbuf, 255);
+        i16 nread = disk_read(z_rxbuf, 255);
         if (nread <= 0) nread = 0;
 
         {
