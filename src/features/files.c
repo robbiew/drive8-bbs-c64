@@ -68,7 +68,7 @@ static u8 fl_load_area(const session_t *s, u8 idx, ud_area_record_t *out)
 }
 
 /* Advance to next (+) or previous (-) accessible area. */
-static void fl_shift_area(session_t *s, u8 fwd, u8 total,
+static void fl_shift_area(const session_t *s, u8 fwd, u8 total,
                            ud_area_record_t *area, u8 *pidx)
 {
     u8 idx = *pidx, tries;
@@ -88,7 +88,7 @@ static void fl_shift_area(session_t *s, u8 fwd, u8 total,
 
 /* ── Area listing ───────────────────────────────────────────────────────── */
 
-static void fl_list_areas(session_t *s)
+static void fl_list_areas(const session_t *s)
 {
     ud_area_record_t rec;
     u8 i, total, found = 0;
@@ -107,7 +107,7 @@ static void fl_list_areas(session_t *s)
 
 /* ── File listing within current area ───────────────────────────────────── */
 
-static void fl_list_files(session_t *s, const ud_area_record_t *area)
+static void fl_list_files(const session_t *s, const ud_area_record_t *area)
 {
     file_entry_record_t fe;
     u8 recnum, count = 0;

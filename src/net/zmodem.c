@@ -272,7 +272,7 @@ static void z_send_cancel(void)
  *  ZRQINIT → ZRINIT → ZFILE+data → ZRPOS → ZDATA+data-pkts → ZEOF
  *  → ZRINIT → ZFIN
  * ----------------------------------------------------------------------- */
-__noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
+__noinline zmodem_result_t zmodem_send(const session_t *s, u8 device, u8 drive,
                                         const char *filename)
 {
     i16  frame;
@@ -378,7 +378,7 @@ __noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
  *
  *  ZRINIT → ZFILE → ZRPOS=0 → ZDATA → data-pkts → (ZCRCE) → ZRINIT → ZFIN → OO
  * ----------------------------------------------------------------------- */
-__noinline zmodem_result_t zmodem_recv(session_t *s, u8 device, u8 drive,
+__noinline zmodem_result_t zmodem_recv(const session_t *s, u8 device, u8 drive,
                                         const char *filename)
 {
     i16    frame;
