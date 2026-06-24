@@ -104,7 +104,6 @@ bbs_err_t fentry_by_recnum(u8 area_id, u8 recnum, file_entry_record_t *out,
                             u8 device)
 {
     rel_handle_t h;
-    u8 buf[RECORD_SIZE_FILE_ENTRY], got;
     bbs_err_t err;
 
     if (!recnum || !out) return BBS_EBADARG;
@@ -113,6 +112,7 @@ bbs_err_t fentry_by_recnum(u8 area_id, u8 recnum, file_entry_record_t *out,
 
     err = rel_position(h, recnum);
     if (err == BBS_OK) {
+        u8 buf[RECORD_SIZE_FILE_ENTRY], got;
         memset(buf, 0, RECORD_SIZE_FILE_ENTRY);
         err = rel_read(h, buf, RECORD_SIZE_FILE_ENTRY, &got);
         if (err == BBS_OK && got >= REC_MIN) {
@@ -161,7 +161,6 @@ bbs_err_t fentry_add(u8 area_id, const file_entry_record_t *rec, u8 device)
 bbs_err_t fentry_save(u8 area_id, const file_entry_record_t *rec, u8 device)
 {
     rel_handle_t h;
-    u8 buf[RECORD_SIZE_FILE_ENTRY];
     bbs_err_t err;
 
     if (!rec || !rec->id) return BBS_EBADARG;
@@ -169,6 +168,7 @@ bbs_err_t fentry_save(u8 area_id, const file_entry_record_t *rec, u8 device)
     if (err != BBS_OK) return err;
     err = rel_position(h, rec->id);
     if (err == BBS_OK) {
+        u8 buf[RECORD_SIZE_FILE_ENTRY];
         fentry_pack(rec, buf);
         err = rel_write(h, buf, RECORD_SIZE_FILE_ENTRY);
     }
