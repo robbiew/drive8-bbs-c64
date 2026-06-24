@@ -55,11 +55,11 @@ typedef enum {
 /* Send a file via Zmodem (BBS → caller).
  * __noinline prevents the interprocedural optimizer from folding these into
  * the resident xfer.c shim, which would leave zmodem_code empty. */
-__noinline zmodem_result_t zmodem_send(session_t *s, u8 device, u8 drive,
+__noinline zmodem_result_t zmodem_send(const session_t *s, u8 device, u8 drive,
                                         const char *filename);
 
 /* Receive a file via Zmodem (caller → BBS). */
-__noinline zmodem_result_t zmodem_recv(session_t *s, u8 device, u8 drive,
+__noinline zmodem_result_t zmodem_recv(const session_t *s, u8 device, u8 drive,
                                         const char *filename);
 
 #endif /* NET_ZMODEM_H */
