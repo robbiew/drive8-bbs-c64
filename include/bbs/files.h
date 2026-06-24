@@ -3,7 +3,8 @@
 #include "types.h"
 #include "err.h"
 #include "session.h"
-bbs_err_t files_list(session_t *s);
-bbs_err_t files_download(session_t *s);
-bbs_err_t files_upload(session_t *s);
+
+/* OVL_FILES entry point: file area menu (list, download, upload). */
+void files_run(session_t *s);
+
 #endif

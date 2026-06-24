@@ -184,17 +184,24 @@ if os.path.exists(FLAT_BACKUP):
 PYPATCH
 
     # Remove old PRG files so we can replace with fresh builds.
-    # Must match the CBM names used by the -write calls below (cbm_name),
-    # otherwise the stale PRG is left in place and c1541 -write fails because
-    # the target filename already exists.
-    BOOT_CBM="$(cbm_name "$BOOT_PRG")"
-    EDIT_CBM="$(cbm_name "$CONFIGURE_PRG")"
-    "$C1541" "$OUTPUT_DISK" -delete "$BOOT_CBM" >/dev/null 2>&1 || true
-    "$C1541" "$OUTPUT_DISK" -delete "$EDIT_CBM" >/dev/null 2>&1 || true
+    # Scan for any version-tagged boot/configure PRG (handles seed disks built
+    # with a different version number — deleting by current name would miss them).
+    "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
+        if [[ "$line" =~ \"([^\"]+)\"[[:space:]]+prg ]]; then
+            cbm="${BASH_REMATCH[1]}"
+            case "$cbm" in
+                boot-*|configure-*)
+                    "$C1541" "$OUTPUT_DISK" -delete "$cbm" >/dev/null 2>&1 || true
+                    ;;
+            esac
+        fi
+    done
+    # Fixed-name overlays and example door.
     "$C1541" "$OUTPUT_DISK" -delete "ovl_msgs"  >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_wfc"   >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_boot"  >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "ovl_doors" >/dev/null 2>&1 || true
+    "$C1541" "$OUTPUT_DISK" -delete "ovl_files" >/dev/null 2>&1 || true
     "$C1541" "$OUTPUT_DISK" -delete "fortune"   >/dev/null 2>&1 || true
     # Clear all SEQ files so stale gfiles disappear when the seed is reused.
     "$C1541" "$OUTPUT_DISK" -list 2>/dev/null | while IFS= read -r line; do
@@ -244,6 +251,14 @@ if [ -f "$DOORS_OVL_PRG" ]; then
     echo "Adding DOORS overlay..."
     "$C1541" "$OUTPUT_DISK" -write "$DOORS_OVL_PRG" "ovl_doors" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write DOORS overlay" >&2; }
+fi
+
+# Add FILES overlay (file area browse, Punter upload/download)
+FILES_OVL_PRG="$ROOT/build/c64/ovl_files.prg"
+if [ -f "$FILES_OVL_PRG" ]; then
+    echo "Adding FILES overlay..."
+    "$C1541" "$OUTPUT_DISK" -write "$FILES_OVL_PRG" "ovl_files" >/dev/null 2>&1 || \
+        { echo "WARNING: failed to write FILES overlay" >&2; }
 fi
 
 # Add the bundled example door (built by `make all` via the door-example target).

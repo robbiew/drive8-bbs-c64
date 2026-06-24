@@ -392,6 +392,45 @@ static void delay_jiffies(u8 n)
     }
 }
 
+bbs_err_t net_rx_raw(void *buf, u16 want, u16 *got)
+{
+    /* Re-arm the Timer-B IRQ if KERNAL disk I/O has stopped it. */
+    if (*(void * volatile *)0x0314 != (void *)acia_irq_isr ||
+        (*(volatile u8 *)0xDC0F & 0x01) == 0) {
+        net_irq_setup();
+    }
+
+    u8 *p = (u8 *)buf;
+    *got = 0;
+
+    while (s_rx_head != s_rx_tail) {
+        if (*got >= want) break;
+        u8 in = s_rx_buf[s_rx_head & RX_BUF_MASK];
+        s_rx_head++;
+        /* Telnet binary: 0xFF 0xFF → single 0xFF.  Lone 0xFF passes through. */
+        if (in == 0xFF && s_rx_head != s_rx_tail &&
+            s_rx_buf[s_rx_head & RX_BUF_MASK] == 0xFF) {
+            s_rx_head++;
+        }
+        p[(*got)++] = in;
+    }
+
+    if (s_state != NET_CONNECTED && *got == 0) return BBS_EAGAIN;
+    return BBS_OK;
+}
+
+bbs_err_t net_tx_raw(const void *buf, u16 n, u16 *sent)
+{
+    if (s_state != NET_CONNECTED) { *sent = 0; return BBS_EAGAIN; }
+    const u8 *p = (const u8 *)buf;
+    for (u16 i = 0; i < n; i++) {
+        acia_putc(p[i]);
+        if (p[i] == 0xFF) acia_putc(0xFF);   /* telnet binary escape */
+    }
+    *sent = n;
+    return BBS_OK;
+}
+
 bbs_err_t net_disconnect(void)
 {
     /* VICE/tcpser: raw TCP carries no DTR line, so the DTR drop below won't hang

@@ -16,6 +16,7 @@
 #include "bbs/cfg.h"
 #include "bbs/records.h"
 #include "bbs/doors.h"
+#include "bbs/files.h"
 #include <c64/kernalio.h>
 
 /**
@@ -149,27 +150,16 @@ void action_clear_on_msg(session_t *s) {
  * FILES Menu Actions
  */
 
-void action_list_areas(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nLIST AREAS (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_download_file(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nDOWNLOAD FILE (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_upload_file(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nUPLOAD FILE (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_search_files(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nSEARCH FILES (STUB)\r\n");
+/* action_files — resident shim: loads OVL_FILES, runs files_run(), reloads WFC.
+ * Mirrors action_doors: the four old per-command stubs (list areas, download,
+ * upload, search) are replaced by a single entry that hands control to the
+ * OVL_FILES dispatch loop for the duration of the files session. */
+void action_files(session_t *s) {
+  krnio_setnam(P"OVL_FILES");
+  krnio_load(1, bbs_cfg.device_system, 1);
+  wfc.ovl_wfc_loaded = FALSE;   /* OVL_FILES displaced OVL_WFC */
+  files_run(s);
+  wfc_reload();
   s->menu_displayed = FALSE;
 }
 

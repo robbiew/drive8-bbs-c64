@@ -48,6 +48,16 @@ bbs_err_t net_rx(void *buf, u16 want, u16 *got);
  * Returns BBS_EAGAIN if not CONNECTED. */
 bbs_err_t net_tx(const void *buf, u16 n, u16 *sent);
 
+/* Raw receive for binary protocol transfers (Zmodem).
+ * Skips telnet IAC command processing; only undoubles 0xFF 0xFF → 0xFF.
+ * Use instead of net_rx() during binary transfers to avoid data corruption. */
+bbs_err_t net_rx_raw(void *buf, u16 want, u16 *got);
+
+/* Raw send for binary protocol transfers (Zmodem).
+ * Doubles outbound 0xFF bytes as required by telnet binary mode.
+ * Use instead of net_tx() during binary transfers. */
+bbs_err_t net_tx_raw(const void *buf, u16 n, u16 *sent);
+
 /* Drop the current call by de-asserting DTR. */
 bbs_err_t net_disconnect(void);
 

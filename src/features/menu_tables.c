@@ -21,7 +21,7 @@ static menu_cmd_t main_commands[] = {
   { 'M', "MESSAGE AREAS",     "",      0, TRUE,  action_list_boards },
   { 'E', "EMAIL",             "email", 0, FALSE, NULL },
   { 'P', "PREFERENCES",       "prefs", 0, FALSE, NULL },
-  { 'F', "FILES",             "files", 0, FALSE, NULL },
+  { 'F', "FILES",             "",      0, TRUE,  action_files },
   { 'D', "DOORS",             "door",  0, FALSE, NULL },
   { '!', "DOOR PROGRAMS",    "",      0, TRUE,  action_doors },
   { 'L', "LAST CALLERS",      "",      0, TRUE,  action_last_callers },
@@ -56,18 +56,6 @@ static menu_cmd_t prefs_commands[] = {
 };
 
 /**
- * FILES Menu Commands
- */
-static menu_cmd_t files_commands[] = {
-  { 'L', "LIST AREAS",        "",      0, TRUE,  action_list_areas },
-  { 'D', "DOWNLOAD FILE",     "",      0, TRUE,  action_download_file },
-  { 'U', "UPLOAD FILE",       "",      0, TRUE,  action_upload_file },
-  { 'S', "SEARCH FILES",      "",      0, TRUE,  action_search_files },
-  { '?', "HELP",              "",      0, TRUE,  action_help },
-  { 'Q', "BACK TO MAIN",      "",      0, TRUE,  NULL },
-};
-
-/**
  * DOOR (Games & External Programs) Menu Commands
  */
 static menu_cmd_t door_commands[] = {
@@ -85,7 +73,6 @@ menu_def_t menus[] = {
   { "main",  "MAIN MENU",        "main",  main_commands,  sizeof(main_commands)  / sizeof(main_commands[0])  },
   { "email", "EMAIL",            "email", email_commands, sizeof(email_commands) / sizeof(email_commands[0]) },
   { "prefs", "PREFERENCES",      "prefs", prefs_commands, sizeof(prefs_commands) / sizeof(prefs_commands[0]) },
-  { "files", "FILES",            "files", files_commands, sizeof(files_commands) / sizeof(files_commands[0]) },
   { "door",  "DOORS & GAMES",    "door",  door_commands,  sizeof(door_commands)  / sizeof(door_commands[0])  },
 };
 
