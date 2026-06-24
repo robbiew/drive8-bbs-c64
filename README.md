@@ -6,7 +6,7 @@
 
 TURBO/64 BBS is a Commodore 64 BBS written in C for the [Oscar64 compiler](https://github.com/drmortalwombat/oscar64). It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
 
-**Current status:** v0.2.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), Punter and Zmodem file transfers, and the "Configure" editor are working.
+**Current status:** v0.3.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), Punter and Zmodem file transfers, and the "Configure" editor are working.
 
 Not working: Private mail, SysOp chat, polls/voting, and lots more remain stubbed.
 
@@ -71,7 +71,7 @@ See [`tools/README.md`](tools/README.md) for the full reference.
 On the C64, mount `TURBO64-<ver>.D81` on device 8 and load CONFIGURE:
 
 ```
-LOAD "CONFIGURE-0.2.0",8
+LOAD "CONFIGURE-0.3.0",8
 RUN
 ```
 
@@ -129,14 +129,14 @@ Then mount `BOARDS-<ver>.D81` on C64U device 9.
 Outside CONFIGURE, on the C64:
 
 ```
-LOAD "BOOT-0.2.0",8
+LOAD "BOOT-0.3.0",8
 RUN
 ```
 
 Expected startup output:
 
 ```
-TURBO/64 BBS V0.2.0
+TURBO/64 BBS V0.3.0
 
 LOADING SETUP...
   BBS: <your bbs name>
@@ -234,7 +234,7 @@ CONFIGURE MAIN MENU
   I — INIT BBS        Initialize USR LOG, USR PROF, and CALLERS
   U — USER MGMT       List, delete, reset passwords
   M — MSG AREAS       Create/edit/delete message boards
-  F — FILE AREAS      Create/edit upload/download areas (stub)
+  F — FILE AREAS      Create/edit upload/download areas
   V — VOTE MGMT       Create/edit polls (stub)
   D — DOOR PROGRAMS   Register/edit/delete door programs (see Door Programs below)
   C — CONFIG OPTIONS  Edit BBS name, devices, baud rate
@@ -395,8 +395,11 @@ Files on `TURBO64-<ver>.d81` (device 8, system device):
 | `configure-<ver>` | PRG | SysOp editor |
 | `ovl_msgs` | PRG | Bulletin-board overlay |
 | `ovl_wfc` | PRG | WFC (waiting-for-call) overlay |
+| `ovl_boot` | PRG | Boot/login overlay |
+| `ovl_doors` | PRG | Door programs overlay |
 | `ovl_files` | PRG | File-area overlay (browse, list, D/U) |
 | `ovl_zmodem` | PRG | Zmodem transfer overlay |
+| `fortune` | PRG | Example door (FORTUNE) |
 | `config` | SEQ | BBS configuration (key=value) |
 | `access` | SEQ | Access levels (6 lines, one per level 0–5) |
 | `usr log` | REL | User database (30 bytes/record, 100 slots) |
@@ -411,12 +414,15 @@ Files on `TURBO64-<ver>.d81` (device 8, system device):
 | `g.login 2 80` | SEQ | Login art — ASCII 80-col |
 | `g.newuser` | SEQ | New user screen — generic fallback |
 | `g.term` | SEQ | Terminal selection menu |
+| `m.doors` | SEQ | Door programs menu body |
+| `m.files` | SEQ | File areas menu body |
 | `m.main` | SEQ | Main menu body — generic fallback |
-| `m.main 0` | SEQ | Main menu body — PETSCII |
 | `m.main 1 80` | SEQ | Main menu body — ANSI/CP437 80-col |
 | `m.msgs` | SEQ | Messages menu body — generic fallback |
 | `m.msgs 1 80` | SEQ | Messages menu body — ANSI/CP437 80-col |
 | `m.read` | SEQ | Read-message display — generic fallback |
+| `p.doors` | SEQ | Door programs menu prompt |
+| `p.files` | SEQ | File areas menu prompt |
 | `p.main` | SEQ | Main menu prompt — generic fallback |
 | `p.main 1 80` | SEQ | Main menu prompt — ANSI/CP437 80-col |
 | `p.msgs` | SEQ | Messages menu prompt |
@@ -550,7 +556,7 @@ Device 9 is not mounted or has no boards configured. Mount `BOARDS-<ver>.D81` on
 
 ---
 
-## What Is Not Yet Implemented (v0.2.0)
+## What Is Not Yet Implemented (v0.3.0)
 
 The following features return a placeholder message:
 
