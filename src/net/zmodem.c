@@ -140,7 +140,7 @@ static i16 z_rx_byte(const session_t *s)
 }
 
 /* One hex-encoded byte (two nibble chars) */
-static i16 z_rx_hex_byte(session_t *s)
+static i16 z_rx_hex_byte(const session_t *s)
 {
     i16 c, hi, lo;
     c = z_rx_byte(s); if (c < 0) return c;
@@ -161,7 +161,7 @@ static i16 z_rx_hex_byte(session_t *s)
  * Returns frame type (0-19), -1 on timeout/error, -2 on cancel.
  * *pos receives the 4-byte position/info value (little-endian u32).
  * ----------------------------------------------------------------------- */
-static i16 z_recv_header(session_t *s, u32 *pos)
+static i16 z_recv_header(const session_t *s, u32 *pos)
 {
     i16 c;
     u8  h[5], i;
@@ -222,7 +222,7 @@ hunt:
  * Sets *marker to ZCRCE/ZCRCG/ZCRCQ/ZCRCW.
  * Returns -1 timeout, -2 cancel, -3 CRC error.
  * ----------------------------------------------------------------------- */
-static i16 z_recv_data_pkt(session_t *s, u8 *buf, u8 bufsize, u8 *marker)
+static i16 z_recv_data_pkt(const session_t *s, u8 *buf, u8 bufsize, u8 *marker)
 {
     u16 crc = 0, len = 0;
     for (;;) {

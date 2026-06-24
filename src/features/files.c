@@ -26,11 +26,11 @@
 
 static void ftx(const session_t *s, const char *t)  { session_emit(s, t); }
 static void fnl(const session_t *s)                  { session_emit(s, "\r\n"); }
-static void fl(session_t *s, const char *t)    { ftx(s, t); fnl(s); }
+static void fl(const session_t *s, const char *t)    { ftx(s, t); fnl(s); }
 
 /* ── Input: hotkey + optional digit collection (like bull_getkey) ────────── */
 
-static void fgetkey_cmd(session_t *s, char *cmd)
+static void fgetkey_cmd(const session_t *s, char *cmd)
 {
     u8 ch; char e[2];
     cmd[0] = '\0';
