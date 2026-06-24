@@ -5,8 +5,7 @@
 #include "bbs/err.h"
 #include "bbs/records.h"
 
-/* Open the UD<area_id> REL file; returns record count in *out_count.
- * Scans all records to find the highest active entry. */
+/* Count non-deleted entries in the UD<area_id> REL file; stores result in *out_count. */
 bbs_err_t fentry_count(u8 area_id, u8 device, u8 *out_count);
 
 /* Load a specific file entry by 1-based record number within an area. */

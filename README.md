@@ -351,7 +351,7 @@ TURBO/64 supports two transfer protocols through the **`F` (FILES)** entry on th
 |-----|--------|
 | `L` | List files in the current area |
 | `A` | List all areas |
-| `N` / `P` | Next / previous area |
+| `+` / `-` | Next / previous area |
 | `1`–`9` | Jump to area by number |
 | `D` | Download a file (prompts for protocol) |
 | `U` | Upload a file (prompts for protocol) |

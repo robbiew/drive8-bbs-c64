@@ -57,7 +57,7 @@ static bool_t j_over(u8 s, u8 lim) { return (u8)(j_now() - s) >= lim; }
 static void ptx(const u8 *buf, u8 n)
 {
     u16 sent;
-    net_tx(buf, n, &sent);
+    net_tx_raw(buf, n, &sent);
 }
 
 /* Receive `n` bytes with jiffy timeout anchored at `jstart`.
@@ -68,7 +68,7 @@ static bool_t prx(u8 *buf, u8 n, u8 jstart, u8 jlim)
     while (i < n) {
         u16 got;
         u8 b;
-        if (net_rx(&b, 1, &got) == BBS_OK && got == 1) { buf[i++] = b; continue; }
+        if (net_rx_raw(&b, 1, &got) == BBS_OK && got == 1) { buf[i++] = b; continue; }
         if (j_over(jstart, jlim)) return FALSE;
     }
     return TRUE;
