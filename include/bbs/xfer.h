@@ -15,11 +15,11 @@ typedef enum {
  * Called from within OVL_FILES when a caller requests Zmodem download.
  * After zmodem_send() returns, OVL_FILES is reloaded so the caller can
  * continue executing (mirrors the door_run() pattern). */
-xfer_result_t xfer_zmodem_send(session_t *s, u8 device, u8 drive,
+xfer_result_t xfer_zmodem_send(const session_t *s, u8 device, u8 drive,
                                 const char *filename);
 
 /* RESIDENT: Load OVL_ZMODEM, run Zmodem receive, reload OVL_FILES. */
-xfer_result_t xfer_zmodem_recv(session_t *s, u8 device, u8 drive,
+xfer_result_t xfer_zmodem_recv(const session_t *s, u8 device, u8 drive,
                                 const char *filename);
 
 #endif /* INCLUDE_BBS_XFER_H */
