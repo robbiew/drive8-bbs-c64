@@ -1,21 +1,23 @@
-This is an early pre-release for testing and feedback. It is incomplete — many features are stubbed out and there are known rough edges. Expect bugs.
-
-If you run into problems or have suggestions, please open an issue on GitHub:
+This is an early pre-release for testing and feedback. It is incomplete and
+file transfers in particular need more real-world testing before they can be
+considered stable. Expect bugs — please report them on GitHub.
 
   https://github.com/robbiew/turbo64/issues
 
 New in v__VERSION__
 -------------------
-- Door programs: the BBS now loads and runs external Oscar64 plug-ins
-  ("doors") during a call. Register them in CONFIGURE (D — DOOR PROGRAMS):
-  title, filename, device/drive, command key, min access level, and an
-  optional run-at-login flag.
-- Door author dev kit: write a door as a single C file against a small
-  versioned SDK (caller info + core I/O), build with `make door`. See
-  devkit/README.md. The example FORTUNE door ships on the disk image.
-- CONFIGURE message-area editor reworked to a paged list + interactive
-  field editor (the manual compact/prune screen was retired; pruning
-  still runs automatically at runtime).
+- File transfers: Punter (C64-native) and Zmodem (modern terminal) protocols
+  for both upload and download
+- FILES overlay: browse file areas, list files, select by number, choose
+  protocol, upload with automatic file-entry registration
+- Per-area file entry data store (REL-backed CRUD, soft-delete, download
+  counter tracking)
+- Resident Zmodem shim safely swaps overlays mid-transfer without corrupting
+  the FILES session
+- Binary-safe raw net I/O for protocol transfers
+- CBM-DOS filename sanitisation on upload; download counter updated for both
+  Punter and Zmodem paths
+- Door and file menu improvements
 
 What works in v__VERSION__:
 
@@ -23,15 +25,14 @@ What works in v__VERSION__:
 - Terminal auto-detection (PETSCII, ANSI/CP437, ASCII)
 - Bulletin boards (read, post)
 - Door programs (run external plug-ins; dev kit for authors)
-- SysOp Configure editor (init files, user mgmt, board mgmt,
-  door mgmt, config, access levels)
+- File transfers — upload and download via Punter and Zmodem (needs testing)
+- SysOp Configure editor (users, boards, doors, file areas, config, access)
 - 80-column SysOp spy mode (ANSI callers, REU required)
 - SwiftLink/ACIA modem support, VICE tcpser bridge
 
 What is NOT yet working:
 
 - Private mail
-- File transfers (upload/download)
 - SysOp chat / page
 - Polls and votes
 - Several smaller features (see README.txt)
