@@ -36,7 +36,7 @@ __noinline static void z_load_files(void)
     wfc.ovl_wfc_loaded = FALSE;
 }
 
-__noinline xfer_result_t xfer_zmodem_send(session_t *s, u8 device, u8 drive,
+__noinline xfer_result_t xfer_zmodem_send(const session_t *s, u8 device, u8 drive,
                                             const char *filename)
 {
     u8 r;
@@ -48,7 +48,7 @@ __noinline xfer_result_t xfer_zmodem_send(session_t *s, u8 device, u8 drive,
     return XFER_ERR;
 }
 
-__noinline xfer_result_t xfer_zmodem_recv(session_t *s, u8 device, u8 drive,
+__noinline xfer_result_t xfer_zmodem_recv(const session_t *s, u8 device, u8 drive,
                                             const char *filename)
 {
     u8 r;
