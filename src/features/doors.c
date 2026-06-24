@@ -173,16 +173,29 @@ void action_doors_menu(session_t *s) {
   u8 n, i, key;
 
   n = doors_scan(arr, DOORS_MAX);
-  session_emit(s, "\r\nDOOR PROGRAMS\r\n\r\n");
-  for (i = 0; i < n; i++) {
-    if (!door_visible(&arr[i], s->user.access_level)) continue;
-    { char line[40]; sprintf(line, " [%c] %s\r\n", arr[i].cmd_key, arr[i].title);
-      session_emit(s, line); }
+
+  session_clear_screen(s);
+  /* m.doors — sysop-maintained door menu.  Fallback: dynamic list from DOORS REL. */
+  if (session_display_file(s, 'm', "doors") == BBS_ENOTFOUND) {
+    sess_reset_color(s);
+    session_emit(s, "\r\nDOOR PROGRAMS\r\n");
+    session_emit(s, "---------------------------------------\r\n\r\n");
+    for (i = 0; i < n; i++) {
+      if (!door_visible(&arr[i], s->user.access_level)) continue;
+      { char line[40]; sprintf(line, " [%c] %s\r\n", arr[i].cmd_key, arr[i].title);
+        session_emit(s, line); }
+    }
   }
-  session_emit(s, "\r\nSELECT (RETURN=BACK): ");
+
+  /* p.doors prompt — fallback matches action_doors_menu's original inline prompt. */
+  session_emit(s, "\r\n");
+  if (session_display_file(s, 'p', "doors") == BBS_ENOTFOUND)
+    session_emit(s, "SELECT (RETURN=BACK): ");
+
   { u8 c; if (!sess_read_key(s, &c)) return; key = c; }
   if (key == '\r' || key == '\n') { s->menu_displayed = FALSE; return; }
-  if (key >= 'a' && key <= 'z') key = (u8)(key - 0x20);   /* fold to match stored cmd_key */
+  if (key >= 'a' && key <= 'z') key = (u8)(key - 0x20);
+  { const char e[2] = { (char)key, 0 }; session_emit(s, e); }
   for (i = 0; i < n; i++) {                                 /* select from memory — no extra open */
     if (door_visible(&arr[i], s->user.access_level) && arr[i].cmd_key == (char)key) {
       door_run(s, &arr[i]);

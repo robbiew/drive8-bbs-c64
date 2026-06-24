@@ -25,13 +25,9 @@ void action_paging(session_t *s);
 void action_clear_on_msg(session_t *s);
 
 /* FILES menu */
-void action_list_areas(session_t *s);
-void action_download_file(session_t *s);
-void action_upload_file(session_t *s);
-void action_search_files(session_t *s);
+void action_files(session_t *s);        /* resident shim: loads OVL_FILES, calls files_run */
 
 /* DOOR menu */
 void action_doors(session_t *s);    /* resident shim: loads OVL_DOORS, calls action_doors_menu */
-void action_run_door(session_t *s);
 
 #endif /* INCLUDE_BBS_MENU_ACTIONS_H */

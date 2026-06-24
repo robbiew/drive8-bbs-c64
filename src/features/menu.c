@@ -176,6 +176,7 @@ void menu_dispatch(session_t *s, char ch) {
         /* Invoke action handler if present */
         s->menu_skip_pause = FALSE;
         if (cmd->handler) {
+          session_emit(s, "\r\nWORKING...\r\n");
           cmd->handler(s);
         }
         /* If handler changed state to SESS_LOGOFF, don't re-display.

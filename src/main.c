@@ -85,6 +85,23 @@
 #pragma section( doors_bss,  0, , , bss )
 #pragma region( doors, 0x9700, 0xC000, , 4, {doors_code, doors_data, doors_bss} )
 
+/* FILES overlay: file list, Punter protocol send/receive.  Bank 5.
+ * xfer_punter_send/recv stay RESIDENT (they call krnio_load which overwrites
+ * this zone); files_run and the Punter implementation live here. */
+#pragma overlay( ovl_files, 5 )
+#pragma section( files_code, 0 )
+#pragma section( files_data, 0 )
+#pragma section( files_bss,  0, , , bss )
+#pragma region( files, 0x9700, 0xC000, , 5, {files_code, files_data, files_bss} )
+
+/* ZMODEM overlay: bank 6.  Loaded on demand by xfer_zmodem_send/recv in
+ * the resident xfer.c shim; never called from within another overlay. */
+#pragma overlay( ovl_zmodem, 6 )
+#pragma section( zmodem_code, 0 )
+#pragma section( zmodem_data, 0 )
+#pragma section( zmodem_bss,  0, , , bss )
+#pragma region( zmodem, 0x9700, 0xC000, , 6, {zmodem_code, zmodem_data, zmodem_bss} )
+
 /**
  * main_print()
  *

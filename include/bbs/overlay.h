@@ -26,4 +26,14 @@
 #pragma section( doors_data, 0 )
 #pragma section( doors_bss,  0, , , bss )
 
+/* FILES overlay sections — for files.c, punter.c, file_entries.c */
+#pragma section( files_code, 0 )
+#pragma section( files_data, 0 )
+#pragma section( files_bss,  0, , , bss )
+
+/* ZMODEM overlay sections — for zmodem.c */
+#pragma section( zmodem_code, 0 )
+#pragma section( zmodem_data, 0 )
+#pragma section( zmodem_bss,  0, , , bss )
+
 #endif /* INCLUDE_BBS_OVERLAY_H */

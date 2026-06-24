@@ -16,6 +16,7 @@
 #include "bbs/cfg.h"
 #include "bbs/records.h"
 #include "bbs/doors.h"
+#include "bbs/files.h"
 #include <c64/kernalio.h>
 
 /**
@@ -65,7 +66,7 @@ void action_help(session_t *s) {
 void action_list_boards(session_t *s) {
   krnio_setnam(P"OVL_MSGS");
   krnio_load(1, bbs_cfg.device_system, 1);
-  wfc.ovl_wfc_loaded = FALSE;  /* OVL_MSGS displaced OVL_WFC; reload on next wfc call */
+  wfc.ovl_wfc_loaded = FALSE;
   bulletin_run(s);
   wfc_reload();  /* restore OVL_WFC (spy view code) before returning to menu */
   s->menu_displayed = FALSE;
@@ -149,27 +150,16 @@ void action_clear_on_msg(session_t *s) {
  * FILES Menu Actions
  */
 
-void action_list_areas(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nLIST AREAS (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_download_file(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nDOWNLOAD FILE (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_upload_file(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nUPLOAD FILE (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}
-
-void action_search_files(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nSEARCH FILES (STUB)\r\n");
+/* action_files — resident shim: loads OVL_FILES, runs files_run(), reloads WFC.
+ * Mirrors action_doors: the four old per-command stubs (list areas, download,
+ * upload, search) are replaced by a single entry that hands control to the
+ * OVL_FILES dispatch loop for the duration of the files session. */
+void action_files(session_t *s) {
+  krnio_setnam(P"OVL_FILES");
+  krnio_load(1, bbs_cfg.device_system, 1);
+  wfc.ovl_wfc_loaded = FALSE;
+  files_run(s);
+  wfc_reload();
   s->menu_displayed = FALSE;
 }
 
@@ -185,14 +175,9 @@ void action_search_files(session_t *s) {
 void action_doors(session_t *s) {
   krnio_setnam(P"OVL_DOORS");
   krnio_load(1, bbs_cfg.device_system, 1);
-  wfc.ovl_wfc_loaded = FALSE;  /* OVL_DOORS displaced OVL_WFC */
+  wfc.ovl_wfc_loaded = FALSE;
   action_doors_menu(s);
   wfc_reload();
   s->menu_displayed = FALSE;
 }
 
-void action_run_door(session_t *s) {
-  if (!s) return;
-  session_emit(s, "\r\nRUN DOOR (STUB)\r\n");
-  s->menu_displayed = FALSE;
-}

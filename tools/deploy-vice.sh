@@ -21,6 +21,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION_COMPACT="$(grep 'BBS_RELEASE_VERSION_COMPACT' "$ROOT/include/bbs/version.h" | cut -d'"' -f2)"
 DISK_IMAGE="$ROOT/build/c64/TURBO64-${VERSION_COMPACT}.d81"
+DEV9_D81="$ROOT/data/device9.d81"   # persistent data disk (msgs + files)
+C1541="${C1541:-c1541}"
 
 # Check for required dependencies
 VICE_CMD="${VICE_CMD:-x64sc}"
@@ -192,6 +194,14 @@ if [ ! -f "$DISK_IMAGE" ]; then
     exit 1
 fi
 
+# Ensure the device 9 data disk exists — create blank if not.
+# This disk persists across builds; populate it from within VICE using CONFIGURE.
+if [ ! -f "$DEV9_D81" ]; then
+    echo "Creating blank device 9 disk: $(basename "$DEV9_D81")..."
+    "$C1541" -format "bbs data,d9" d81 "$DEV9_D81" >/dev/null 2>&1 || \
+        echo "  WARNING: c1541 not found — device 9 will be unattached" >&2
+fi
+
 # Build VICE command line
 VICE_ARGS=()
 
@@ -215,16 +225,23 @@ if [ $PAUSED -eq 1 ]; then
     VICE_ARGS+=("-pause")
 fi
 
-# Add disk image
+# Add disk image (drive 8 = boot disk)
 if [ $AUTOSTART -eq 1 ]; then
     VICE_ARGS+=("-autostart" "$DISK_IMAGE")
 else
     VICE_ARGS+=("-8" "$DISK_IMAGE")
 fi
 
+# Drive 9: persistent 1581 data disk (BBS message bases + file areas).
+# Created blank on first run; populated via CONFIGURE from within VICE.
+if [ -f "$DEV9_D81" ]; then
+    VICE_ARGS+=("-drive9type" "1581" "-9" "$DEV9_D81")
+fi
+
 echo "Launching VICE with TURBO64-${VERSION_COMPACT}.d81..."
 echo "  Emulator: $VICE_CMD"
-echo "  Disk:     $DISK_IMAGE"
+echo "  Drive 8:  $(basename "$DISK_IMAGE") (boot)"
+[ -f "$DEV9_D81" ] && echo "  Drive 9:  $(basename "$DEV9_D81") (data — msgs + files)"
 if [ $USE_TCPSER -eq 1 ]; then
     echo "  tcpser:   port $TCPSER_PORT (virtual RS232 on $TCPSER_VPORT)"
 fi
@@ -307,8 +324,8 @@ VICE_ARGS+=(
 )
 
 # JiffyDOS: swap the stock C64 KERNAL and 1581 drive ROM for the JiffyDOS
-# patched versions (reference/jiffydos). The BBS boots a .d81, so drive 8 is a
-# 1581 — both ROMs must match for the fast-loader handshake to engage.
+# patched versions (reference/jiffydos). Drives 8 and 9 are both 1581s, and
+# -dos1581 applies to all 1581 drives, so one flag covers both.
 if [ $JIFFYDOS -eq 1 ]; then
     if [ ! -f "$JIFFYDOS_KERNAL" ] || [ ! -f "$JIFFYDOS_1581" ]; then
         echo "ERROR: --jiffydos: ROM(s) not found in $JIFFYDOS_DIR" >&2

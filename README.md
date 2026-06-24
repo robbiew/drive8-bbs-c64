@@ -6,9 +6,9 @@
 
 TURBO/64 BBS is a Commodore 64 BBS written in C for the [Oscar64 compiler](https://github.com/drmortalwombat/oscar64). It targets native `.prg` output for real hardware (including C64 Ultimate) and VICE emulation.
 
-**Current status:** v0.2.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), and the "Configure" editor are working. 
+**Current status:** v0.2.0 — login/registration, terminal translation (PETSCII, ANSI/CP437, ASCII), bulletin boards, door programs (run external Oscar64 plug-ins), Punter and Zmodem file transfers, and the "Configure" editor are working.
 
-Not working: Private mail, file transfers, SysOp chat, polls/voting, and lots more remain stubbed.
+Not working: Private mail, SysOp chat, polls/voting, and lots more remain stubbed.
 
 > **Not a developer?** Download `TURBO64-<ver>.d81` from the [latest GitHub release](../../releases/latest), mount it on your C64 Ultimate or in Vice, and jump straight to First-Time Setup below.
 
@@ -335,6 +335,56 @@ there is no manual compact/prune step in CONFIGURE.
 
 ---
 
+## File Transfers
+
+TURBO/64 supports two transfer protocols through the **`F` (FILES)** entry on the main menu. Files are organised into areas, each with its own device, upload permission level, and listing. When you press `D` or `U`, the BBS prompts `PROTOCOL: (P)UNTER (Z)MODEM (ENTER=CANCEL):`.
+
+### Protocols
+
+**Punter** (P) — the native C64 BBS protocol. If you're calling with **CCGMS**, CGTerm, or another C64 terminal, use Punter. It is compiled directly into the `OVL_FILES` overlay so there is no extra disk load. The implementation sends one 256-byte block at a time with a simple checksum-and-ACK handshake.
+
+**Zmodem** (Z) — better for PC-side clients (SyncTerm, PuTTY with Zmodem support, etc.). The BBS swaps in the `OVL_ZMODEM` overlay (~3.4 KB) for the transfer, then reloads `OVL_FILES` to continue. Uses ZHEX headers, ZCRCG streaming in 255-byte blocks, CRC-16, and the standard five-ZDLE cancel sequence.
+
+### Caller commands (files menu)
+
+| Key | Action |
+|-----|--------|
+| `L` | List files in the current area |
+| `A` | List all areas |
+| `+` / `-` | Next / previous area |
+| `1`–`9` | Jump to area by number |
+| `D` | Download a file (prompts for protocol) |
+| `U` | Upload a file (prompts for protocol) |
+| `Q` | Quit back to main menu |
+
+### Setting up file areas
+
+**CONFIGURE → F — FILE AREAS → C (Create).** Each area has:
+
+| Field | Notes |
+|-------|-------|
+| NAME | Area title shown to callers |
+| DEVICE | CBM device the files live on (typically 8 or 9) |
+| DRIVE | CBM drive number (usually 0) |
+| DL LEVEL | Minimum access level to download |
+| UL LEVEL | Minimum access level to upload |
+
+Files are stored as ordinary PRG/SEQ entries on the configured device — no special index. Uploaded files appear immediately for download.
+
+### Access control
+
+- **`U` flag** in CONFIGURE → Access Levels enables uploading for that level. Without it, `U` is refused even if `UL LEVEL` passes.  
+- **`ALLOW_UPLOADS`** in CONFIG OPTIONS is a global on/off switch; the access flag is checked on top of it.  
+- Downloads are gated only by `DL LEVEL` — no per-level flag is required.
+
+### Limitations
+
+- **No file size in Zmodem ZFILE header.** CBM DOS does not expose file size before reading, so the ZFILE header sends the filename only. Most Zmodem clients handle this gracefully (they show `?` for size and rely on ZEOF to terminate).
+- **No Zmodem resume.** CBM DOS sequential files cannot seek; a receiver-requested ZRPOS will abort the transfer rather than rewind the file.
+- **255-byte disk reads.** `disk_read` is limited to 255 bytes per call; both protocol implementations use back-to-back reads so throughput is unaffected, but each IEC operation is a separate bus transaction at 1541/1571/1581 speed.
+
+---
+
 ## Disk File Layout
 
 Files on `TURBO64-<ver>.d81` (device 8, system device):
@@ -345,6 +395,8 @@ Files on `TURBO64-<ver>.d81` (device 8, system device):
 | `configure-<ver>` | PRG | SysOp editor |
 | `ovl_msgs` | PRG | Bulletin-board overlay |
 | `ovl_wfc` | PRG | WFC (waiting-for-call) overlay |
+| `ovl_files` | PRG | File-area overlay (browse, list, D/U) |
+| `ovl_zmodem` | PRG | Zmodem transfer overlay |
 | `config` | SEQ | BBS configuration (key=value) |
 | `access` | SEQ | Access levels (6 lines, one per level 0–5) |
 | `usr log` | REL | User database (30 bytes/record, 100 slots) |
@@ -503,7 +555,6 @@ Device 9 is not mounted or has no boards configured. Mount `BOARDS-<ver>.D81` on
 The following features return a placeholder message:
 
 - Private mail
-- File transfers (upload/download)
 - SysOp chat / page
 - Polls and votes
 - Last caller display
