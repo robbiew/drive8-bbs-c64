@@ -14,12 +14,10 @@
 
 static bbs_err_t usrday_open(u8 device, rel_handle_t *h)
 {
-    char fname[32];
     bbs_err_t err;
     err = cfg_send_drive_init(device, bbs_cfg.init_system);
     if (err != BBS_OK) return err;
-    sprintf(fname, "%u:USR.DAY", (unsigned)bbs_cfg.drive_system);
-    return rel_open(device, fname, RECORD_SIZE_USR_DAY, h);
+    return rel_open(device, bbs_cfg.drive_system, "USR.DAY", RECORD_SIZE_USR_DAY, h);
 }
 
 bbs_err_t usrday_load(u16 user_id, usr_day_record_t *out, u8 device)

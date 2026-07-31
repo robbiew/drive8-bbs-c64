@@ -16,11 +16,11 @@
 
 static bbs_err_t fentry_open(u8 area_id, u8 device, rel_handle_t *h)
 {
-    char fname[24];
+    char fname[8];
     bbs_err_t err = cfg_send_drive_init(device, bbs_cfg.init_files);
     if (err != BBS_OK) return err;
-    sprintf(fname, "%u:UD%u", (unsigned)bbs_cfg.drive_files, (unsigned)area_id);
-    return rel_open(device, fname, RECORD_SIZE_FILE_ENTRY, h);
+    sprintf(fname, "UD%u", (unsigned)area_id);
+    return rel_open(device, bbs_cfg.drive_files, fname, RECORD_SIZE_FILE_ENTRY, h);
 }
 
 static void fentry_pack(const file_entry_record_t *r, u8 *buf)

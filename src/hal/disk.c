@@ -29,18 +29,66 @@ static bbs_err_t check_status(u8 device)
 
 static u8 s_open_device = 0;
 
+/* Last successfully-selected (device, partition) — see disk_select_partition().
+ * 0xFF is not a valid CBM device number, so it doubles as the "nothing
+ * cached" sentinel without a separate valid flag. */
+static u8 s_part_device    = 0xFF;
+static u8 s_part_partition = 0;
+
+bbs_err_t disk_select_partition(u8 device, u8 partition)
+{
+    char cmd[8];
+    bbs_err_t err;
+
+    /* CFG_DRIVE_DEFAULT is 0, so this is the common case for every install
+     * that has never touched the partition field. Sending "CP0" is harmless
+     * on an unpartitioned disk (measured on hardware), but skipping it
+     * entirely guarantees byte-for-byte identical IEC traffic to pre-fix
+     * behaviour for those installs. Do not "simplify" this into always
+     * sending CP — that property is load-bearing. */
+    if (partition == 0) {
+        return BBS_OK;
+    }
+
+    if (s_part_device == device && s_part_partition == partition) {
+        return BBS_OK;
+    }
+
+    sprintf(cmd, "CP%u", (unsigned)partition);
+    err = disk_cmd(device, cmd);
+    if (err != BBS_OK) {
+        return err;   /* disk_cmd() already invalidated the cache below */
+    }
+
+    /* Must cache AFTER disk_cmd() returns. disk_cmd() unconditionally
+     * invalidates this cache (it has to — an arbitrary command, including a
+     * SysOp's per-device init string, can itself contain "CP"), and that
+     * includes the CP<n> command we just sent. Caching before the call
+     * would be wiped out by our own request. */
+    s_part_device    = device;
+    s_part_partition = partition;
+    return BBS_OK;
+}
+
 bbs_err_t disk_open(u8 device, u8 drive, const char *name, disk_mode_t mode)
 {
     char fname[48];
     const char *suffix;
+    bbs_err_t err = disk_select_partition(device, drive);
+    if (err != BBS_OK) return err;
+
+    /* The partition is now selected as persistent drive state (CP<n>), so
+     * every filename uses the literal drive-0 form — a 1581 only exposes
+     * drive 0; the old "<drive>:" prefix was a CBM *drive number*, not a
+     * partition number, and silently failed to open on real hardware. */
     switch (mode) {
     case DISK_READ:   suffix = ",S,R"; break;
-    case DISK_WRITE:  sprintf(fname, "@%d:%s,S,W", drive, name);
+    case DISK_WRITE:  sprintf(fname, "@0:%s,S,W", name);
                       goto do_open;
     case DISK_APPEND: suffix = ",S,A"; break;
     default:          suffix = ",S,W"; break;
     }
-    sprintf(fname, "%d:%s%s", drive, name, suffix);
+    sprintf(fname, "0:%s%s", name, suffix);
 
 do_open:
     krnio_setnam(fname);
@@ -116,11 +164,9 @@ bool_t disk_eof(void)
 bbs_err_t disk_scratch(u8 device, u8 drive, const char *name)
 {
     char cmd[40];
-    if (drive == 0) {
-        sprintf(cmd, "S:%s", name);
-    } else {
-        sprintf(cmd, "S%d:%s", drive, name);
-    }
+    bbs_err_t err = disk_select_partition(device, drive);
+    if (err != BBS_OK) return err;
+    sprintf(cmd, "S:%s", name);
     return disk_cmd(device, cmd);
 }
 
@@ -128,16 +174,21 @@ bbs_err_t disk_rename(u8 device, u8 drive,
                       const char *old_name, const char *new_name)
 {
     char cmd[48];
-    if (drive == 0) {
-        sprintf(cmd, "R:%s=%s", new_name, old_name);
-    } else {
-        sprintf(cmd, "R%d:%s=%s", drive, new_name, old_name);
-    }
+    bbs_err_t err = disk_select_partition(device, drive);
+    if (err != BBS_OK) return err;
+    sprintf(cmd, "R:%s=%s", new_name, old_name);
     return disk_cmd(device, cmd);
 }
 
 bbs_err_t disk_cmd(u8 device, const char *cmd)
 {
+    /* An arbitrary command can itself select a partition (a SysOp's
+     * init_system/init_msgs/init_files/init_doors string is exactly that
+     * workaround, sent via cfg_send_drive_init() before every disk op), so
+     * the cache in disk_select_partition() can never be trusted to survive
+     * a disk_cmd() call — including the CP<n> call disk_select_partition()
+     * itself makes through here. Invalidate unconditionally. */
+    s_part_device = 0xFF;
     krnio_setnam(cmd);
     krnio_open(CFG_FNUM_CMD, device, 15);
     krnio_close(CFG_FNUM_CMD);

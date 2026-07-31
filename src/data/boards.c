@@ -77,7 +77,6 @@ static u8 title_is_deleted(const char *title) {
 
 static bbs_err_t board_open_rel(u8 device, rel_handle_t *h)
 {
-  char fname[32];
   bbs_err_t err;
 
   err = cfg_send_drive_init(device, bbs_cfg.init_msgs);
@@ -85,8 +84,7 @@ static bbs_err_t board_open_rel(u8 device, rel_handle_t *h)
     return err;
   }
 
-  sprintf(fname, "%u:BOARDS", (unsigned)bbs_cfg.drive_msgs);
-  return rel_open(device, fname, RECORD_SIZE_BOARD_DIR, h);
+  return rel_open(device, bbs_cfg.drive_msgs, "BOARDS", RECORD_SIZE_BOARD_DIR, h);
 }
 
 u8 board_count(u8 device) {

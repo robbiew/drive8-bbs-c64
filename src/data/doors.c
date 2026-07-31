@@ -50,7 +50,6 @@ void door_unpack(door_record_t *rec, const u8 *buf) {
 
 bbs_err_t door_open_rel(u8 device, rel_handle_t *h)
 {
-  char fname[32];
   bbs_err_t err;
 
   err = cfg_send_drive_init(device, bbs_cfg.init_doors);
@@ -58,8 +57,7 @@ bbs_err_t door_open_rel(u8 device, rel_handle_t *h)
     return err;
   }
 
-  sprintf(fname, "%u:DOORS", (unsigned)bbs_cfg.drive_doors);
-  return rel_open(device, fname, RECORD_SIZE_DOOR, h);
+  return rel_open(device, bbs_cfg.drive_doors, "DOORS", RECORD_SIZE_DOOR, h);
 }
 
 u8 door_count(u8 device) {

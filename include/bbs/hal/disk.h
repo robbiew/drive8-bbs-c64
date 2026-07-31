@@ -9,11 +9,16 @@
  *   CFG_FNUM_DATA  (8)  primary data channel
  *   CFG_FNUM_AUX   (1)  secondary / aux channel
  *
- * Sequential file naming on disk follows CBM DOS convention:
- *   "drive:name,S,R"  read
- *   "drive:name,S,W"  write (truncate)
- *   "drive:name,S,A"  append
- *   "@drive:name,S,W" write (overwrite existing)
+ * Sequential file naming on disk always uses the literal CBM *drive* 0
+ * (a 1581 only exposes drive 0 — there is no such thing as "drive 1" on
+ * this hardware):
+ *   "0:name,S,R"  read
+ *   "0:name,S,W"  write (truncate)
+ *   "0:name,S,A"  append
+ *   "@0:name,S,W" write (overwrite existing)
+ * The `drive` parameter below is a drive *partition*, selected separately
+ * via disk_select_partition() (the "CP<n>" command channel command) before
+ * the filename is opened — see disk_select_partition() for why.
  *
  * REL file access is handled by bbs/rel.h, not this module.
  */
@@ -82,6 +87,14 @@ bbs_err_t disk_rename(u8 device, u8 drive,
 
 /* Send a raw command string to the drive command channel (e.g. "I0"). */
 bbs_err_t disk_cmd(u8 device, const char *cmd);
+
+/* Select drive partition `partition` on `device` via the "CP<n>" command
+ * channel command. Partitions are persistent drive state (not filename
+ * state), so this must be called before any filename that assumes a given
+ * partition is current. Caches the last selected (device, partition) pair
+ * and is a no-op when already selected. `partition == 0` always sends
+ * nothing (see disk.c for why). */
+bbs_err_t disk_select_partition(u8 device, u8 partition);
 
 /* Read drive status into disk_errmsg. Returns numeric error code (0=OK). */
 u8 disk_status(u8 device);

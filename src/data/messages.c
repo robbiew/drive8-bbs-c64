@@ -108,15 +108,13 @@ static void msg_unpack(msg_index_record_t *rec, const u8 *buf)
 static bbs_err_t msg_open_idx(u8 board_id, u8 device, rel_handle_t *h)
 {
     char fname[24];
-    char full[32];
     bbs_err_t err;
 
     err = cfg_send_drive_init(device, bbs_cfg.init_msgs);
     if (err != BBS_OK) return err;
 
     msg_idx_fname(board_id, fname);
-    sprintf(full, "%u:%s", (unsigned)bbs_cfg.drive_msgs, fname);
-    return rel_open(device, full, RECORD_SIZE_MSG_IDX, h);
+    return rel_open(device, bbs_cfg.drive_msgs, fname, RECORD_SIZE_MSG_IDX, h);
 }
 
 /* ---- Index CRUD --------------------------------------------------- */

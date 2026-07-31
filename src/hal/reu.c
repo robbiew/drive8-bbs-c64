@@ -215,19 +215,17 @@ u8 reu_bank_count(void)
 bbs_err_t reu_index_load(u8 board_id, u8 device)
 {
     rel_handle_t h;
-    char fname[32];
+    char fname[16];
     u8   got;
     u16  rec;
     bbs_err_t err;
 
-    /* Build "drive:B<n>.IDX" for rel_open */
-    sprintf(fname, "%u:B%u.IDX", (unsigned)bbs_cfg.drive_msgs,
-            (unsigned)board_id);
+    sprintf(fname, "B%u.IDX", (unsigned)board_id);
 
     err = cfg_send_drive_init(device, bbs_cfg.init_msgs);
     if (err != BBS_OK) return err;
 
-    err = rel_open(device, fname, RECORD_SIZE_MSG_IDX, &h);
+    err = rel_open(device, bbs_cfg.drive_msgs, fname, RECORD_SIZE_MSG_IDX, &h);
     if (err != BBS_OK) return BBS_EIO;
 
     err = BBS_OK;
@@ -259,17 +257,16 @@ bbs_err_t reu_index_load(u8 board_id, u8 device)
 bbs_err_t reu_index_flush(u8 board_id, u8 device)
 {
     rel_handle_t h;
-    char fname[32];
+    char fname[16];
     u16  rec;
     bbs_err_t err;
 
-    sprintf(fname, "%u:B%u.IDX", (unsigned)bbs_cfg.drive_msgs,
-            (unsigned)board_id);
+    sprintf(fname, "B%u.IDX", (unsigned)board_id);
 
     err = cfg_send_drive_init(device, bbs_cfg.init_msgs);
     if (err != BBS_OK) return err;
 
-    err = rel_open(device, fname, RECORD_SIZE_MSG_IDX, &h);
+    err = rel_open(device, bbs_cfg.drive_msgs, fname, RECORD_SIZE_MSG_IDX, &h);
     if (err != BBS_OK) return BBS_EIO;
 
     for (rec = 1; rec <= CFG_MSG_MAX_PER_BOARD; rec++) {

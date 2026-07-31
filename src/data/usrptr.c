@@ -15,12 +15,10 @@
 
 static bbs_err_t usrptr_open(u8 device, rel_handle_t *h)
 {
-    char fname[32];
     bbs_err_t err;
     err = cfg_send_drive_init(device, bbs_cfg.init_msgs);
     if (err != BBS_OK) return err;
-    sprintf(fname, "%u:USR.PTR", (unsigned)bbs_cfg.drive_msgs);
-    return rel_open(device, fname, RECORD_SIZE_USR_PTR, h);
+    return rel_open(device, bbs_cfg.drive_msgs, "USR.PTR", RECORD_SIZE_USR_PTR, h);
 }
 
 bbs_err_t usrptr_load(u16 user_id, usr_ptr_record_t *out, u8 device)
