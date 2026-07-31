@@ -42,6 +42,39 @@ bbs_err_t rel_open(u8 device, u8 partition, const char *name, u8 record_size,
     krnio_setnam("");
     krnio_open(CFG_FNUM_CMD, device, 15);
 
+    /* WHY the status check: krnio_open() succeeds on ANY device that answers
+     * the bus, whatever DOS thought of the ",L," open string. Without this,
+     * a drive that rejects the REL open still returns BBS_OK here, and every
+     * later rel_write() also returns BBS_OK while the data goes nowhere —
+     * silent record loss, not a visible error. Measured on a Commodore 64
+     * Ultimate: its SoftIEC drive has no REL support, answers 61 FILE NOT
+     * OPEN, and never creates the file, yet the whole API reported success.
+     *
+     * Read the status IN PLACE. disk_status() closes and reopens logical
+     * file 15, which is the command channel rel_position() drives the seek
+     * through, so calling it here would break positioning on a working drive.
+     * krnio_gets() does its own CHKIN/CLRCHN and latches KRNIO_EOF at the end
+     * of the line, hence the reset. Buffer is full-line sized so no unread
+     * bytes are left queued on the channel.
+     *
+     * 50 (RECORD NOT PRESENT) is accepted: CBM DOS reports it for a REL file
+     * that does not exist yet, which is the normal create-on-first-write path
+     * this module documents. */
+    {
+        char st[40];
+        int  n;
+        u8   code;
+
+        krnio_pstatus[CFG_FNUM_CMD] = KRNIO_OK;
+        n = krnio_gets(CFG_FNUM_CMD, st, (int)sizeof(st));
+        code = (n < 2) ? 99 : (u8)((st[0] - '0') * 10 + (st[1] - '0'));
+        if (code >= 20 && code != 50) {
+            krnio_close(CFG_FNUM_CMD);
+            krnio_close(CFG_FNUM_DATA);
+            return BBS_EIO;
+        }
+    }
+
     s_rec_size = record_size;
     s_device   = device;
     s_open     = 1;
