@@ -110,7 +110,8 @@ static void fl_list_areas(const session_t *s)
 static void fl_list_files(const session_t *s, const ud_area_record_t *area)
 {
     file_entry_record_t fe;
-    u8 recnum, count = 0;
+    u16 recnum;
+    u8 count = 0;
     char buf[56];
     u8 pg = (s->term_rows > 6u) ? (u8)(s->term_rows - 4u) : 20u;
     u8 row = 2;

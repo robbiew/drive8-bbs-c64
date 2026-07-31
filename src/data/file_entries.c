@@ -81,7 +81,8 @@ static bool_t fentry_is_deleted(const file_entry_record_t *r)
 bbs_err_t fentry_count(u8 area_id, u8 device, u8 *out_count)
 {
     rel_handle_t h;
-    u8 buf[RECORD_SIZE_FILE_ENTRY], got, n;
+    u8 buf[RECORD_SIZE_FILE_ENTRY], got;
+    u16 n;
     bbs_err_t err;
     file_entry_record_t r;
 
@@ -131,7 +132,8 @@ bbs_err_t fentry_by_recnum(u8 area_id, u8 recnum, file_entry_record_t *out,
 bbs_err_t fentry_add(u8 area_id, const file_entry_record_t *rec, u8 device)
 {
     rel_handle_t h;
-    u8 buf[RECORD_SIZE_FILE_ENTRY], got, n, slot = 0;
+    u8 buf[RECORD_SIZE_FILE_ENTRY], got, slot = 0;
+    u16 n;
     bbs_err_t err;
     file_entry_record_t r;
 
