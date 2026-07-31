@@ -4,12 +4,14 @@
  * Reads/writes the "access" SEQ file: one comma-delimited line per level,
  *   "level,name,calls_per_day,mins_per_day,flags"
  * ascending by level. Mirrors src/data/cfg.c's disk_open/disk_gets/disk_puts
- * pattern (uppercase "ACCESS" name, drive 0). Whole-table load/save.
+ * pattern (uppercase "ACCESS" name, bbs_cfg.drive_system partition).
+ * Whole-table load/save.
  */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "bbs/access.h"
+#include "bbs/cfg.h"
 #include "bbs/hal/disk.h"
 
 static const char *const k_names[ACCESS_LEVEL_COUNT] = {
@@ -92,7 +94,7 @@ bbs_err_t access_levels_load(access_level_t out[ACCESS_LEVEL_COUNT], u8 device) 
 
   access_levels_defaults(out);
 
-  err = disk_open(device, 0, ACCESS_FILE, DISK_READ);
+  err = disk_open(device, bbs_cfg.drive_system, ACCESS_FILE, DISK_READ);
   if (err != BBS_OK) return BBS_ENOTFOUND;
 
   while ((n = disk_gets(line, sizeof(line))) > 0) {
@@ -111,8 +113,8 @@ bbs_err_t access_levels_save(const access_level_t in[ACCESS_LEVEL_COUNT], u8 dev
   char line[64];
   u8 i;
 
-  disk_scratch(device, 0, ACCESS_FILE);
-  err = disk_open(device, 0, ACCESS_FILE, DISK_WRITE);
+  disk_scratch(device, bbs_cfg.drive_system, ACCESS_FILE);
+  err = disk_open(device, bbs_cfg.drive_system, ACCESS_FILE, DISK_WRITE);
   if (err != BBS_OK) return err;
 
   for (i = 0; i < ACCESS_LEVEL_COUNT; i++) {
@@ -146,7 +148,7 @@ bbs_err_t access_limits_runtime(u8 level, u16 *mins, u8 *flags, u8 device) {
 
   if (!mins || !flags) return BBS_EBADARG;
 
-  err = disk_open(device, 0, ACCESS_FILE, DISK_READ);
+  err = disk_open(device, bbs_cfg.drive_system, ACCESS_FILE, DISK_READ);
   if (err != BBS_OK) return err;
 
   while ((n = disk_gets(line, sizeof(line))) > 0) {

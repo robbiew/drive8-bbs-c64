@@ -98,7 +98,6 @@ static u8 handle_eq(const char *a, const char *b) {
 static bbs_err_t user_open_rel(u8 device, const char *name, u8 record_size,
                                rel_handle_t *h)
 {
-  char fname[32];
   bbs_err_t err;
 
   err = cfg_send_drive_init(device, bbs_cfg.init_system);
@@ -106,8 +105,7 @@ static bbs_err_t user_open_rel(u8 device, const char *name, u8 record_size,
     return err;
   }
 
-  sprintf(fname, "%u:%s", (unsigned)bbs_cfg.drive_system, name);
-  return rel_open(device, fname, record_size, h);
+  return rel_open(device, bbs_cfg.drive_system, name, record_size, h);
 }
 
 /**

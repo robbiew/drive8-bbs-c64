@@ -10,6 +10,7 @@
  */
 #include "bbs/rel.h"
 #include "bbs/config.h"
+#include "bbs/hal/disk.h"
 #include <c64/kernalio.h>
 #include <string.h>
 #include <stdio.h>
@@ -18,13 +19,16 @@ static u8 s_rec_size = 0;
 static u8 s_device   = 0;
 static u8 s_open     = 0;
 
-bbs_err_t rel_open(u8 device, const char *name, u8 record_size,
+bbs_err_t rel_open(u8 device, u8 partition, const char *name, u8 record_size,
                    rel_handle_t *out)
 {
     if (s_open) return BBS_EFULL;   /* only one open at a time */
 
     char fname[40];
-    sprintf(fname, "%s,L,%c", name, (char)record_size);
+    bbs_err_t perr = disk_select_partition(device, partition);
+    if (perr != BBS_OK) return perr;
+
+    sprintf(fname, "0:%s,L,%c", name, (char)record_size);
     krnio_setnam(fname);
     /* OPEN with ",L,size" format. CBM DOS creates the file on first write
      * if it doesn't exist. If the open fails here, treat it as "file not found"
