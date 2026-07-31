@@ -86,6 +86,8 @@ bbs_err_t disk_open(u8 device, u8 drive, const char *name, disk_mode_t mode)
     case DISK_WRITE:  sprintf(fname, "@0:%s,S,W", name);
                       goto do_open;
     case DISK_APPEND: suffix = ",S,A"; break;
+    case DISK_OVER:   sprintf(fname, "@0:%s,S,W", name);
+                      goto do_open;
     default:          suffix = ",S,W"; break;
     }
     sprintf(fname, "0:%s%s", name, suffix);
