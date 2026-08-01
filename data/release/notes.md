@@ -35,6 +35,20 @@ termination relied on a break the empty-slot path skipped.
 **Zmodem upload could not overwrite an existing file.** The save-and-replace
 prefix was missing, so re-uploading returned FILE EXISTS instead of replacing.
 
+**Partitions were ignored when creating and saving data.** CONFIGURE's INIT
+built the user database on whatever partition the drive happened to be on
+rather than on SYSDEV's, and saving DEVICES paired the previous device with
+the newly-entered partition — which on a Commodore 64 Ultimate meant sending
+CP to its emulated 1581, which rejects the command, and reporting
+"SAVE FAILED".
+
+**The BBS could only find its config on the device it was compiled for.**
+CONFIG was read from the compile-time default device (normally 8) rather
+than from the device the BBS was loaded from, so a BBS run from any other
+device read a different config and then failed to find its own USR LOG. It
+now reads CONFIG from the boot device, which is what makes running the whole
+BBS from a single sd2iec card work.
+
 **A rejected REL file still reported success.** `rel_open()` only checked the
 KERNAL, never the drive's status channel — so on a device that refused the
 open, every subsequent record write also reported success while the data went
@@ -70,6 +84,20 @@ a reset — that is KERNAL serial-bus behaviour, not a fault in the tools.
 
 See the README for full details.
 
+
+Running the BBS entirely from one device
+---------------------------------------
+Verified this release: BOOT, CONFIGURE, the overlays, menus, config, user
+database and message base all on a single uIEC/SD card, with system files on
+partition 1 and the message base on partition 2. No disk image mounted.
+
+Two things to know if you try it:
+
+- Copy the program files onto the card FROM THE C64, not from a PC. See the
+  README. A PC-side copy leaves the FAT extension in the filename.
+- CONFIGURE is larger than BASIC's ~39 KB program space, so after it exits
+  BASIC reports OUT OF MEMORY on the next LOAD. Type NEW first - you do not
+  need to reboot.
 
 Known gaps
 ----------
