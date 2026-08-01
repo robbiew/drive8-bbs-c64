@@ -189,13 +189,13 @@ static void do_settings(u8 device)
   bbs_cfg.prompt_cursor   = (strcmp(s_promptcur, "ON") == 0) ? TRUE : FALSE;
   bbs_cfg.petscii_lower_art = (strcmp(s_lowart, "ON") == 0) ? TRUE : FALSE;
 
-  err = cfg_save(device);
+  err = cfg_save();
   if (err != BBS_OK) { ui_error("SAVE FAILED."); return; }
   sstatus_save(s_sysop_status);   /* status lives in its own STATUS file */
   ui_status("SAVED", (const char *[]){"CONFIG WRITTEN TO DISK."}, 1);
 }
 
-static void do_devices(u8 device)
+static void do_devices(void)
 {
   ui_edit_field_t f[4];
   bbs_err_t err;
@@ -223,7 +223,7 @@ static void do_devices(u8 device)
   cfg_parse_device_spec(s_dev_doors, &bbs_cfg.device_doors,  &bbs_cfg.drive_doors,
                         bbs_cfg.init_doors,  (u8)sizeof(bbs_cfg.init_doors));
 
-  err = cfg_save(device);
+  err = cfg_save();
   if (err != BBS_OK) { ui_error("SAVE FAILED."); return; }
   ui_status("SAVED", (const char *[]){"DEVICE CONFIG WRITTEN TO DISK."}, 1);
 }
@@ -237,7 +237,7 @@ static void do_baud(u8 device)
   ui_select_field("BAUD RATE", s_baud, 5, s_baud_opts, BAUD_OPTS_COUNT);
 
   bbs_cfg.baud_rate = (u16)atoi(s_baud);
-  err = cfg_save(device);
+  err = cfg_save();
   if (err != BBS_OK) ui_error("SAVE FAILED.");
   else ui_status("SAVED", (const char *[]){"BAUD RATE UPDATED."}, 1);
 }
@@ -255,7 +255,7 @@ static void do_modem_type(u8 device)
   if      (strcmp(s_modem, "VICE") == 0) bbs_cfg.modem_type = MODEM_VICE;
   else if (strcmp(s_modem, "U64")  == 0) bbs_cfg.modem_type = MODEM_U64;
   else                                   bbs_cfg.modem_type = MODEM_AUTO;
-  err = cfg_save(device);
+  err = cfg_save();
   if (err != BBS_OK) ui_error("SAVE FAILED.");
   else ui_status("SAVED", (const char *[]){"MODEM TYPE UPDATED."}, 1);
 }
@@ -276,7 +276,7 @@ static void do_idle(u8 device)
   ui_edit_field_single(&f);
 
   bbs_cfg.idle_timeout_mins = (u8)atoi(s_idle);
-  err = cfg_save(device);
+  err = cfg_save();
   if (err != BBS_OK) ui_error("SAVE FAILED.");
   else ui_status("SAVED", (const char *[]){"IDLE TIMEOUT UPDATED."}, 1);
 }
@@ -374,7 +374,7 @@ void admin_config_menu(u8 device)
     ui_menu_display("CONFIG", items, 7);
     ch = ui_menu_input("CHOICE:", "123456Q");
     if      (ch == '1') do_settings(device);
-    else if (ch == '2') do_devices(device);
+    else if (ch == '2') do_devices();
     else if (ch == '3') do_baud(device);
     else if (ch == '4') do_idle(device);
     else if (ch == '5') do_modem_type(device);

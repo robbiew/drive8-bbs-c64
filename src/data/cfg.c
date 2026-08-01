@@ -397,7 +397,7 @@ static void cfg_put(const char *line) {
  * Returns BBS_EFULL on DOS 72 (disk full), BBS_EIO on any other write or
  * drive-status error — callers must treat non-BBS_OK as "CONFIG is suspect".
  */
-bbs_err_t cfg_save(u8 device) {
+bbs_err_t cfg_save(void) {
   bbs_err_t err;
   char line[96];
   char spec[CFG_VALUE_MAX];
@@ -409,9 +409,10 @@ bbs_err_t cfg_save(u8 device) {
    * selects drive_msgs' partition; a config save afterwards would then land on
    * that partition instead of the one it was read from. Writing to
    * drive_system makes the destination deterministic. */
-  disk_scratch(device, bbs_cfg.drive_system, "CONFIG");
+  disk_scratch(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG");
 
-  err = disk_open(device, bbs_cfg.drive_system, "CONFIG", DISK_WRITE);
+  err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG",
+                  DISK_WRITE);
   if (err != BBS_OK) {
     return err;
   }
@@ -449,13 +450,13 @@ bbs_err_t cfg_save(u8 device) {
   if (s_save_err != BBS_OK) {
     /* Still read the error channel: maps DISK FULL precisely and clears
      * the drive's latched error before the next command. */
-    status = disk_status(device);
+    status = disk_status(bbs_cfg.device_system);
     return (status == 72) ? BBS_EFULL : s_save_err;
   }
 
   /* KERNAL buffers writes; DOS 72 (DISK FULL) only surfaces on the drive
    * status channel after close. */
-  status = disk_status(device);
+  status = disk_status(bbs_cfg.device_system);
   if (status >= 20) {
     return (status == 72) ? BBS_EFULL : BBS_EIO;
   }
