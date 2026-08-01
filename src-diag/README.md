@@ -12,6 +12,8 @@ questions only hardware can answer. Build with `make diag`; the PRGs land in
 | `DIR` | What is on a given device/partition? (non-destructive) |
 | `EXISTS` | Is a specific file present? Reports the raw DOS code |
 | `CLEAN` | Scratch T/64's system files from one device/partition |
+| `WIPE` | Scratch **every** file on a device/partition (destructive) |
+| `COPYALL` | Copy the T/64 program set between devices, through the C64 |
 
 They link `src/hal/disk.c` and `src/hal/rel.c` directly, so a pass here is evidence
 about the code the BBS actually runs — not a reimplementation that might diverge.
@@ -26,6 +28,14 @@ SYSCNT, USR.DAY). It deliberately leaves message-base files (BOARDS, USR.PTR, B<
 alone, so it is safe to run on a device whose message base you want to keep. Use it when a
 config change re-points a subsystem and leaves orphans behind on the old device — stale
 files in the wrong place are an easy way to misread a later test.
+
+`COPYALL` exists because files copied onto an sd2iec card from a PC keep their FAT
+extension as part of the CBM filename (`BOOT-0.3.1.PRG`), while files written through the
+C64 get proper names — sd2iec generates the FAT name itself. It copies program and content
+files only and deliberately skips `CONFIG`, `CALLERS` and `ACCESS`: those are per-install
+data, and overwriting a SysOp's device configuration during a program update is
+destructive. It needs two logical file numbers open at once, which T/64's own disk HAL
+cannot do since it keeps a single data channel.
 
 ## Measured results (2026-08-01)
 

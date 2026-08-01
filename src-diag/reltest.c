@@ -16,23 +16,27 @@
 
 int main(void)
 {
-    u8 dev = 10;
+    u8 dev = 10, part = 0;
     rel_handle_t h;
     bbs_err_t eo, ep, ew, er;
     u8 buf[23], got = 0, first = 0;
 
     printf("\x93\x8e");
-    printf("REL TEST\nDEV? ");
+    printf("REL TEST (PARTITION)\nDEV? ");
     for (;;) { int c = getch();
         if (c >= '8' && c <= '9') { dev = (u8)(c - '0'); break; }
         if (c == '1') { dev = 10; break; }
         if (c == '2') { dev = 11; break; } }
     printf("%u\n", (unsigned)dev);
 
-    disk_scratch(dev, 0, "RELTST");
+    printf("PART? ");
+    for (;;) { int c = getch(); if (c >= '0' && c <= '4') { part = (u8)(c - '0'); break; } }
+    printf("%u\n\n", (unsigned)part);
+
+    disk_scratch(dev, part, "RELTST");
 
     rel_reset();
-    eo = rel_open(dev, 0, "RELTST", 23, &h);
+    eo = rel_open(dev, part, "RELTST", 23, &h);
     ep = ew = er = BBS_EFATAL;
     if (eo == BBS_OK) {
         memset(buf, ' ', sizeof(buf));
