@@ -161,6 +161,15 @@ cp "$BOOT_PRG"      "$RELEASE_DIR/BOOT-${VERSION}.prg"
 cp "$CONFIGURE_PRG" "$RELEASE_DIR/CONFIGURE-${VERSION}.prg"
 cp "$BLANK_DISK"    "$RELEASE_DIR/BOARDS-${VERSION}.d81"
 
+# Storage diagnostics. The README and release notes both tell SysOps to run
+# these, so shipping without them would make that advice unfollowable without
+# a build host.
+if make -C "$ROOT" diag >/dev/null 2>&1; then
+    for d in PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL; do
+        [ -f "$ROOT/build/c64/$d.prg" ] && cp "$ROOT/build/c64/$d.prg" "$RELEASE_DIR/"
+    done
+fi
+
 sed "s/__VERSION__/$VERSION/g" "$ROOT/data/release/file_id.diz.tmpl" > "$RELEASE_DIR/FILE_ID.DIZ"
 sed "s/__VERSION__/$VERSION/g" "$ROOT/data/release/readme.txt.tmpl" > "$RELEASE_DIR/README.txt"
 
@@ -180,7 +189,8 @@ echo -e "${BLUE}Creating ZIP archive...${NC}"
         "CONFIGURE-${VERSION}.prg" \
         "BOARDS-${VERSION}.d81" \
         "FILE_ID.DIZ" \
-        "README.txt"
+        "README.txt" \
+        $(cd "$RELEASE_DIR" && ls *.prg 2>/dev/null | grep -vE "^(BOOT|CONFIGURE)-" | tr '\n' ' ')
 )
 
 # --- Release notes ---

@@ -64,7 +64,6 @@ static u8 title_is_deleted(const char *title) {
 
 static bbs_err_t file_area_open_rel(u8 device, rel_handle_t *h)
 {
-  char fname[32];
   bbs_err_t err;
 
   err = cfg_send_drive_init(device, bbs_cfg.init_files);
@@ -72,8 +71,7 @@ static bbs_err_t file_area_open_rel(u8 device, rel_handle_t *h)
     return err;
   }
 
-  sprintf(fname, "%u:UDS", (unsigned)bbs_cfg.drive_files);
-  return rel_open(device, fname, RECORD_SIZE_UD_AREA, h);
+  return rel_open(device, bbs_cfg.drive_files, "UDS", RECORD_SIZE_UD_AREA, h);
 }
 
 /**

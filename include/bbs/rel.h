@@ -25,12 +25,14 @@
 typedef u8 rel_handle_t;
 #define REL_INVALID ((rel_handle_t)0xFF)
 
-/* Open or create a REL file on `device`, path `name` (CBM filename
- * including drive prefix, e.g. "0:USR LOG").
+/* Open or create a REL file on `device`, drive partition `partition`, with
+ * the given bare CBM `name` (no drive prefix — added internally; a 1581
+ * only exposes drive 0, so the partition is selected separately via
+ * disk_select_partition() and the filename always uses the literal "0:").
  * `record_size`: 1-254 bytes.
  * If the file does not exist it is created; if it exists the record
  * size must match. Returns BBS_OK on success. */
-bbs_err_t rel_open(u8 device, const char *name, u8 record_size,
+bbs_err_t rel_open(u8 device, u8 partition, const char *name, u8 record_size,
                    rel_handle_t *out);
 
 /* Position to record `rec` (1-based). Must be called before rel_read

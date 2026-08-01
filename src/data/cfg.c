@@ -331,8 +331,28 @@ static bbs_err_t cfg_load_impl(void) {
   /* Start with defaults */
   cfg_set_defaults();
 
-  /* Try to open "config" file on device DEV_SYSTEM (drive 0) */
-  err = disk_open(bbs_cfg.device_system, 0, "CONFIG", DISK_READ);
+  /* Read CONFIG from the device we were loaded FROM, not from the compile-time
+   * default. $BA is the KERNAL's current device, set by the LOAD that brought
+   * this program in, so a BBS booted from device 10 reads its config from
+   * device 10. Without this the default (T64_DRIVE_SYSTEM, normally 8) wins and
+   * a BBS running off any other device silently reads someone else's config and
+   * then fails to find its own USR LOG. cfg_init() already loads the OVL_BOOT
+   * overlay from $BA; this makes the config agree with it.
+   *
+   * Values below 8 mean tape or a bus device that cannot hold files, so the
+   * compile-time default is kept in that case.
+   *
+   * Partition: drive_system is still cfg_set_defaults()' value (0) here, so no
+   * CP is sent and CONFIG is read from whatever partition the drive powers up
+   * on. That is unavoidable — the file cannot say which partition it lives on
+   * until it has been read. CONFIG must therefore live on that partition. */
+  {
+    u8 boot_dev = *(volatile u8 *)0xBA;
+    if (boot_dev >= 8) {
+      bbs_cfg.device_system = boot_dev;
+    }
+  }
+  err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG", DISK_READ);
   if (err != BBS_OK) {
     /* File not found; use defaults */
     return BBS_ENOTFOUND;
@@ -390,15 +410,22 @@ static void cfg_put(const char *line) {
  * Returns BBS_EFULL on DOS 72 (disk full), BBS_EIO on any other write or
  * drive-status error — callers must treat non-BBS_OK as "CONFIG is suspect".
  */
-bbs_err_t cfg_save(u8 device) {
+bbs_err_t cfg_save(void) {
   bbs_err_t err;
   char line[96];
   char spec[CFG_VALUE_MAX];
   u8 status;
 
-  disk_scratch(device, 0, "CONFIG");
+  /* WHY drive_system rather than a literal 0: partition 0 means "send no CP,
+   * use whatever partition the drive is currently on", and the current
+   * partition is mutable state. In CONFIGURE, visiting the message-areas menu
+   * selects drive_msgs' partition; a config save afterwards would then land on
+   * that partition instead of the one it was read from. Writing to
+   * drive_system makes the destination deterministic. */
+  disk_scratch(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG");
 
-  err = disk_open(device, 0, "CONFIG", DISK_WRITE);
+  err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG",
+                  DISK_WRITE);
   if (err != BBS_OK) {
     return err;
   }
@@ -436,13 +463,13 @@ bbs_err_t cfg_save(u8 device) {
   if (s_save_err != BBS_OK) {
     /* Still read the error channel: maps DISK FULL precisely and clears
      * the drive's latched error before the next command. */
-    status = disk_status(device);
+    status = disk_status(bbs_cfg.device_system);
     return (status == 72) ? BBS_EFULL : s_save_err;
   }
 
   /* KERNAL buffers writes; DOS 72 (DISK FULL) only surfaces on the drive
    * status channel after close. */
-  status = disk_status(device);
+  status = disk_status(bbs_cfg.device_system);
   if (status >= 20) {
     return (status == 72) ? BBS_EFULL : BBS_EIO;
   }

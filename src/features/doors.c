@@ -4,6 +4,7 @@
 #include "bbs/net.h"
 #include "bbs/sysop.h"
 #include "bbs/cfg.h"
+#include "bbs/hal/disk.h"
 #include "bbs/overlay.h"
 #include <c64/kernalio.h>
 #include <string.h>
@@ -99,8 +100,10 @@ static void enter_door(void) {
  * (load failure, ABI mismatch) also reload because the door file load may have
  * already partially overwritten the overlay. */
 __noinline void door_run(session_t *s, const door_record_t *rec) {
-  /* "<drive>:<filename>" — drive is a u8 (≤3 digits even if a record is corrupt)
-   * + ':' + up to 16 filename chars + NUL = 21 worst case; 24 leaves margin. */
+  /* "0:<filename>" — rec->drive is a partition (persistent drive state,
+   * selected below via disk_select_partition()), not a drive number; a
+   * 1581 only exposes drive 0. Up to 16 filename chars + "0:" + NUL = 19
+   * worst case; 24 leaves margin. */
   char name[24];
   const volatile u8 *hdr = (const volatile u8 *)DOOR_ENTRY;
 
@@ -111,7 +114,17 @@ __noinline void door_run(session_t *s, const door_record_t *rec) {
   DCB[BBS_DCB_PTR_LO] = (u8)((u16)&g_api & 0xFF);
   DCB[BBS_DCB_PTR_HI] = (u8)((u16)&g_api >> 8);
 
-  sprintf(name, "%u:%s", (unsigned)rec->drive, rec->filename);
+  /* A wrong-partition load is unrecoverable: it either fails silently (the
+   * exact defect this fix addresses) or, worse, silently loads whatever is
+   * on the currently-selected partition instead of the intended door. Bail
+   * out through the same failure path as a genuine load failure rather than
+   * attempting a load that cannot be trusted. */
+  if (disk_select_partition(rec->device, rec->drive) != BBS_OK) {
+    session_emit(s, "\r\nDOOR LOAD FAILED.\r\n");
+    goto reload_ovl;
+  }
+
+  sprintf(name, "0:%s", rec->filename);
   krnio_setnam(name);
   if (!krnio_load(1, rec->device, 1)) {
     session_emit(s, "\r\nDOOR LOAD FAILED.\r\n");

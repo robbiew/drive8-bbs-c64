@@ -55,7 +55,6 @@ static u8 question_is_deleted(const char *question) {
 
 static bbs_err_t vote_open_rel(u8 device, rel_handle_t *h)
 {
-  char fname[32];
   bbs_err_t err;
 
   err = cfg_send_drive_init(device, bbs_cfg.init_system);
@@ -63,8 +62,7 @@ static bbs_err_t vote_open_rel(u8 device, rel_handle_t *h)
     return err;
   }
 
-  sprintf(fname, "%u:VOTE1", (unsigned)bbs_cfg.drive_system);
-  return rel_open(device, fname, RECORD_SIZE_VOTE, h);
+  return rel_open(device, bbs_cfg.drive_system, "VOTE1", RECORD_SIZE_VOTE, h);
 }
 
 /**

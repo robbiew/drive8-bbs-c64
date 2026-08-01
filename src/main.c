@@ -210,10 +210,8 @@ static bbs_err_t boot_sequence(void) {
   main_print("\nCHECKING USR LOG...\n");
   {
     rel_handle_t h;
-    char fname[32];
-    sprintf(fname, "%u:USR LOG", (unsigned)bbs_cfg.drive_system);
-    bbs_err_t check = rel_open(bbs_cfg.device_system, fname,
-                                RECORD_SIZE_USER, &h);
+    bbs_err_t check = rel_open(bbs_cfg.device_system, bbs_cfg.drive_system,
+                                "USR LOG", RECORD_SIZE_USER, &h);
     if (check == BBS_OK) {
       /* Verify file has data by attempting to read record 1 (SYSOP) */
       u8 buf[RECORD_SIZE_USER];

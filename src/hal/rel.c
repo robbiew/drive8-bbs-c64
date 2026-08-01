@@ -10,6 +10,7 @@
  */
 #include "bbs/rel.h"
 #include "bbs/config.h"
+#include "bbs/hal/disk.h"
 #include <c64/kernalio.h>
 #include <string.h>
 #include <stdio.h>
@@ -18,13 +19,16 @@ static u8 s_rec_size = 0;
 static u8 s_device   = 0;
 static u8 s_open     = 0;
 
-bbs_err_t rel_open(u8 device, const char *name, u8 record_size,
+bbs_err_t rel_open(u8 device, u8 partition, const char *name, u8 record_size,
                    rel_handle_t *out)
 {
     if (s_open) return BBS_EFULL;   /* only one open at a time */
 
     char fname[40];
-    sprintf(fname, "%s,L,%c", name, (char)record_size);
+    bbs_err_t perr = disk_select_partition(device, partition);
+    if (perr != BBS_OK) return perr;
+
+    sprintf(fname, "0:%s,L,%c", name, (char)record_size);
     krnio_setnam(fname);
     /* OPEN with ",L,size" format. CBM DOS creates the file on first write
      * if it doesn't exist. If the open fails here, treat it as "file not found"
@@ -37,6 +41,39 @@ bbs_err_t rel_open(u8 device, const char *name, u8 record_size,
     /* Open command channel. */
     krnio_setnam("");
     krnio_open(CFG_FNUM_CMD, device, 15);
+
+    /* WHY the status check: krnio_open() succeeds on ANY device that answers
+     * the bus, whatever DOS thought of the ",L," open string. Without this,
+     * a drive that rejects the REL open still returns BBS_OK here, and every
+     * later rel_write() also returns BBS_OK while the data goes nowhere —
+     * silent record loss, not a visible error. Measured on a Commodore 64
+     * Ultimate: its SoftIEC drive has no REL support, answers 61 FILE NOT
+     * OPEN, and never creates the file, yet the whole API reported success.
+     *
+     * Read the status IN PLACE. disk_status() closes and reopens logical
+     * file 15, which is the command channel rel_position() drives the seek
+     * through, so calling it here would break positioning on a working drive.
+     * krnio_gets() does its own CHKIN/CLRCHN and latches KRNIO_EOF at the end
+     * of the line, hence the reset. Buffer is full-line sized so no unread
+     * bytes are left queued on the channel.
+     *
+     * 50 (RECORD NOT PRESENT) is accepted: CBM DOS reports it for a REL file
+     * that does not exist yet, which is the normal create-on-first-write path
+     * this module documents. */
+    {
+        char st[40];
+        int  n;
+        u8   code;
+
+        krnio_pstatus[CFG_FNUM_CMD] = KRNIO_OK;
+        n = krnio_gets(CFG_FNUM_CMD, st, (int)sizeof(st));
+        code = (n < 2) ? 99 : (u8)((st[0] - '0') * 10 + (st[1] - '0'));
+        if (code >= 20 && code != 50) {
+            krnio_close(CFG_FNUM_CMD);
+            krnio_close(CFG_FNUM_DATA);
+            return BBS_EIO;
+        }
+    }
 
     s_rec_size = record_size;
     s_device   = device;
