@@ -10,9 +10,22 @@ questions only hardware can answer. Build with `make diag`; the PRGs land in
 | `RELTEST` | Can this device create, position and read a REL file? |
 | `CPTEST` | What status code does `CP<n>` actually return, per device? |
 | `DIR` | What is on a given device/partition? (non-destructive) |
+| `EXISTS` | Is a specific file present? Reports the raw DOS code |
+| `CLEAN` | Scratch T/64's system files from one device/partition |
 
 They link `src/hal/disk.c` and `src/hal/rel.c` directly, so a pass here is evidence
 about the code the BBS actually runs — not a reimplementation that might diverge.
+
+`EXISTS` exists because directory listings wrap at 40 columns and truncate names — it
+answers "is this file here" from the DOS status code instead of parsed text. Note **64**
+(FILE TYPE MISMATCH) means the file IS present: it only occurs when a REL file is opened
+as SEQ. **62** is the absent case.
+
+`CLEAN` removes only the system-file set (USR LOG, USR PROF, ACCESS, CALLERS, STATUS,
+SYSCNT, USR.DAY). It deliberately leaves message-base files (BOARDS, USR.PTR, B<n>.IDX)
+alone, so it is safe to run on a device whose message base you want to keep. Use it when a
+config change re-points a subsystem and leaves orphans behind on the old device — stale
+files in the wrong place are an easy way to misread a later test.
 
 ## Measured results (2026-08-01)
 
