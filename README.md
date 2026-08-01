@@ -201,14 +201,14 @@ within that device.
 ```
 DEV_SYSTEM=8            device 8, partition 0, no init string
 DEV_MSGS=8;2:           device 8, partition 2
-DEV_FILES=9;1:CD:BBS    device 9, partition 1, sends "CD:BBS" at startup
+DEV_FILES=9;1:;CD:BBS   device 9, partition 1, sends "CD:BBS" at startup
 ```
 
 | Field | Meaning |
 |---|---|
 | `<device>` | CBM bus device number, 8–11 |
 | `<partition>` | Partition on that device. **0 = leave the drive where it is** |
-| `<init>` | Optional CBM DOS command sent before disk access |
+| `<init>` | Optional CBM DOS command sent before disk access. Note the `:;` separator |
 
 The four subsystems are `DEV_SYSTEM` (user database, access levels, caller log),
 `DEV_MSGS` (message boards), `DEV_FILES` (file library) and `DEV_DOORS` (door PRGs).
