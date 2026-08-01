@@ -331,14 +331,27 @@ static bbs_err_t cfg_load_impl(void) {
   /* Start with defaults */
   cfg_set_defaults();
 
-  /* Try to open "config" file on device DEV_SYSTEM (drive 0) */
-  /* Bootstrap: this runs before the config has been parsed, so drive_system is
-   * still cfg_set_defaults()' value (CFG_DRIVE_DEFAULT, 0) on a cold boot and
-   * no CP is sent — CONFIG is read from whatever partition the drive powers up
-   * on. That is unavoidable: the file cannot say which partition it lives on
-   * until it has been read. Consequence for SysOps: CONFIG must live on the
-   * partition the drive selects at power-on, and SYSDEV's partition should
-   * match it so that cfg_save() writes back to the same place. */
+  /* Read CONFIG from the device we were loaded FROM, not from the compile-time
+   * default. $BA is the KERNAL's current device, set by the LOAD that brought
+   * this program in, so a BBS booted from device 10 reads its config from
+   * device 10. Without this the default (T64_DRIVE_SYSTEM, normally 8) wins and
+   * a BBS running off any other device silently reads someone else's config and
+   * then fails to find its own USR LOG. cfg_init() already loads the OVL_BOOT
+   * overlay from $BA; this makes the config agree with it.
+   *
+   * Values below 8 mean tape or a bus device that cannot hold files, so the
+   * compile-time default is kept in that case.
+   *
+   * Partition: drive_system is still cfg_set_defaults()' value (0) here, so no
+   * CP is sent and CONFIG is read from whatever partition the drive powers up
+   * on. That is unavoidable — the file cannot say which partition it lives on
+   * until it has been read. CONFIG must therefore live on that partition. */
+  {
+    u8 boot_dev = *(volatile u8 *)0xBA;
+    if (boot_dev >= 8) {
+      bbs_cfg.device_system = boot_dev;
+    }
+  }
   err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG", DISK_READ);
   if (err != BBS_OK) {
     /* File not found; use defaults */
