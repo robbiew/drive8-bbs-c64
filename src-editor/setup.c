@@ -37,7 +37,7 @@ bbs_err_t setup_create_user_database(u8 device) {
 
   printf("CREATING USER DATABASE...\n");
 
-  (void)disk_scratch(device, 0, "USR LOG");
+  (void)disk_scratch(device, bbs_cfg.drive_system, "USR LOG");
 
   memset(&user, 0, sizeof(user));
   user.id = 1;
@@ -50,14 +50,14 @@ bbs_err_t setup_create_user_database(u8 device) {
   user.flags          = USER_F_CLEAR_ON_MSG;  /* default sysop: clear-screen on */
 
   rel_reset();
-  err = rel_open(device, 0, "USR LOG", RECORD_SIZE_USER, &rh);
+  err = rel_open(device, bbs_cfg.drive_system, "USR LOG", RECORD_SIZE_USER, &rh);
   if (err != BBS_OK && err != BBS_ENOTFOUND) {
     printf("OPEN FAILED (CODE %u)\n", (unsigned)err);
     return err;
   }
   if (err == BBS_ENOTFOUND) {
     rel_reset();
-    err = rel_open(device, 0, "USR LOG", RECORD_SIZE_USER, &rh);
+    err = rel_open(device, bbs_cfg.drive_system, "USR LOG", RECORD_SIZE_USER, &rh);
     if (err != BBS_OK) {
       printf("CREATE FAILED (CODE %u)\n", (unsigned)err);
       return err;
@@ -127,17 +127,17 @@ bbs_err_t setup_create_user_profiles(u8 device) {
 
   printf("CREATING USR PROF...\n");
 
-  (void)disk_scratch(device, 0, "USR PROF");
+  (void)disk_scratch(device, bbs_cfg.drive_system, "USR PROF");
   rel_reset();
 
-  err = rel_open(device, 0, "USR PROF", RECORD_SIZE_USER_PROFILE, &rh);
+  err = rel_open(device, bbs_cfg.drive_system, "USR PROF", RECORD_SIZE_USER_PROFILE, &rh);
   if (err != BBS_OK && err != BBS_ENOTFOUND) {
     printf("OPEN FAILED (CODE %u)\n", (unsigned)err);
     return err;
   }
   if (err == BBS_ENOTFOUND) {
     rel_reset();
-    err = rel_open(device, 0, "USR PROF", RECORD_SIZE_USER_PROFILE, &rh);
+    err = rel_open(device, bbs_cfg.drive_system, "USR PROF", RECORD_SIZE_USER_PROFILE, &rh);
     if (err != BBS_OK) {
       printf("CREATE FAILED (CODE %u)\n", (unsigned)err);
       return err;

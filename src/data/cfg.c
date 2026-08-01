@@ -332,7 +332,14 @@ static bbs_err_t cfg_load_impl(void) {
   cfg_set_defaults();
 
   /* Try to open "config" file on device DEV_SYSTEM (drive 0) */
-  err = disk_open(bbs_cfg.device_system, 0, "CONFIG", DISK_READ);
+  /* Bootstrap: this runs before the config has been parsed, so drive_system is
+   * still cfg_set_defaults()' value (CFG_DRIVE_DEFAULT, 0) on a cold boot and
+   * no CP is sent — CONFIG is read from whatever partition the drive powers up
+   * on. That is unavoidable: the file cannot say which partition it lives on
+   * until it has been read. Consequence for SysOps: CONFIG must live on the
+   * partition the drive selects at power-on, and SYSDEV's partition should
+   * match it so that cfg_save() writes back to the same place. */
+  err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, "CONFIG", DISK_READ);
   if (err != BBS_OK) {
     /* File not found; use defaults */
     return BBS_ENOTFOUND;
@@ -396,9 +403,15 @@ bbs_err_t cfg_save(u8 device) {
   char spec[CFG_VALUE_MAX];
   u8 status;
 
-  disk_scratch(device, 0, "CONFIG");
+  /* WHY drive_system rather than a literal 0: partition 0 means "send no CP,
+   * use whatever partition the drive is currently on", and the current
+   * partition is mutable state. In CONFIGURE, visiting the message-areas menu
+   * selects drive_msgs' partition; a config save afterwards would then land on
+   * that partition instead of the one it was read from. Writing to
+   * drive_system makes the destination deterministic. */
+  disk_scratch(device, bbs_cfg.drive_system, "CONFIG");
 
-  err = disk_open(device, 0, "CONFIG", DISK_WRITE);
+  err = disk_open(device, bbs_cfg.drive_system, "CONFIG", DISK_WRITE);
   if (err != BBS_OK) {
     return err;
   }
