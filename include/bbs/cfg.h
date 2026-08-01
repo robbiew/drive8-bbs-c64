@@ -101,7 +101,11 @@ bbs_err_t cfg_init(void);
  *   BBS_EFULL   — disk full (DOS error 72)
  *   BBS_EIO     — write or drive-status error
  */
-bbs_err_t cfg_save(u8 device);
+/* Writes to bbs_cfg.device_system / bbs_cfg.drive_system — CONFIG lives with
+ * the system files. Takes no device argument on purpose: callers used to pass
+ * a device captured before the user edited it, which could be paired with a
+ * freshly-edited partition and address a device that rejects CP. */
+bbs_err_t cfg_save(void);
 
 /**
  * cfg_parse_device_spec()
