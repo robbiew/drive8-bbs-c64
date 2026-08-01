@@ -39,16 +39,16 @@ int main(void)
     line[0] = 0;
     while (n < 3000) {
         int v = krnio_getch(CFG_FNUM_DATA);
+        char ch;
         if (v < 0) break;
         n++;
-        {   char ch = (char)(v & 0xFF);
-            if (ch >= 0x20 && ch < 0x7F) {
-                if (col < 40) line[col++] = ch;
-            } else if (ch == 0 && col > 0) {
-                line[col] = 0;
-                if (strlen(line) > 2) printf("%s\n", line);
-                col = 0;
-            }
+        ch = (char)(v & 0xFF);
+        if (ch >= 0x20 && ch < 0x7F) {
+            if (col < 39) line[col++] = ch;
+        } else if (ch == 0 && col > 0) {
+            line[col] = 0;
+            if (col > 2) printf("%s\n", line);
+            col = 0;
         }
     }
     krnio_clrchn();
