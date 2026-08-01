@@ -54,6 +54,14 @@ Measured on hardware, each with a control run against a known-good drive:
 The C64 Ultimate's built-in emulated drives do not support partitions. Set
 them to partition 0. Partitions need real hardware or an sd2iec-class device.
 
+Copying files onto an sd2iec device: copy them **from the C64** with a file-copy
+utility rather than from a PC. Files copied onto the card from a PC keep their
+FAT extension as part of the name, so the C64 sees "BOOT-0.3.1.PRG" and
+LOAD"BOOT-0.3.1" fails. Files created through the C64 get proper CBM names.
+(Alternatively enable extension hiding on the drive with XE+ then XW.) The
+BBS's own data files are never affected — CONFIGURE creates them through the
+C64, so they are always named correctly.
+
 New in this release: `make diag` builds standalone storage diagnostics
 (PTEST, RELTEST, CPTEST, DIR, EXISTS, CLEAN) that run the same disk code the
 BBS does. Start with PTEST if storage behaves unexpectedly. Note that

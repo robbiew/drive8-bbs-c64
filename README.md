@@ -249,6 +249,35 @@ Two consequences worth planning around:
   operation then fails. Using SoftIEC for the record database is planned work, not a
   current capability.
 
+### Getting files onto an sd2iec device
+
+If you copy `.prg` files onto the card from a PC or Mac, the C64 will see them with the
+extension as **part of the filename** — `BOOT-0.3.1.PRG` rather than `BOOT-0.3.1`. That is
+not a fault: sd2iec presents the whole FAT name, and extension hiding is off by default.
+It means `LOAD"BOOT-0.3.1",10` fails; you would have to type the `.PRG` too.
+
+**Recommended: copy from the C64 rather than from the PC.** Mount the T/64 `.d81` on one
+device and use any C64 file-copy utility that supports two devices (CBM-Command and the
+various copiers all work) to copy `BOOT-*.PRG`, `CONFIGURE-*.PRG`, the overlays and the
+gfiles across to the sd2iec device. Files created *through* the C64 get proper CBM names,
+because sd2iec generates the FAT name itself.
+
+This is also why the BBS's own data files are never affected — `USR LOG`, `BOARDS` and the
+rest are created by CONFIGURE through the C64, so they are always named correctly.
+
+**Alternative: turn on extension hiding** on the drive, which strips a `PRG`/`SEQ`/`USR`/
+`REL` extension and sets the file type from it:
+
+```
+OPEN 15,10,15,"XE+":CLOSE 15     enable extension hiding
+OPEN 15,10,15,"XW":CLOSE 15      save it to the drive's EEPROM
+```
+
+Under JiffyDOS use `@"XE+"` and `@"XW"` — the quotes are required. Power-cycle the drive
+afterwards so the saved setting is re-read. The command is accepted on sd2iec firmware;
+whether a given build hides the extension in every listing has not been verified here, so
+check with a directory listing before relying on it.
+
 ### Diagnostics
 
 If storage behaves unexpectedly, `make diag` builds standalone test programs that run
