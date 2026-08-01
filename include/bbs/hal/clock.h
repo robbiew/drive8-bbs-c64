@@ -23,10 +23,12 @@ typedef struct {
     u8 hours;    /* 0x01-0x12 (BCD); bit 7 set = PM */
 } clock_tod_t;
 
-/* Start the TOD clock oscillator (must be called once at boot).
- * Sets the clock to 00:00:00.0 and enables 50 Hz or 60 Hz based
- * on CFG_CLOCK_HZ (50 = PAL default, 60 = NTSC). */
-void clock_init(void);
+/* Start the TOD clock oscillator and set it to 1:00:00.0.
+ * tod_hz declares what frequency the CIA's TOD pin is fed at — 60, or 50 for
+ * any other value.  Getting it wrong makes the clock run 20% fast or slow, and
+ * it cannot be inferred from the video standard, so the boot path measures it
+ * (wfc_init_impl) rather than assuming. Must be called once at boot. */
+void clock_init(u8 tod_hz);
 
 /* Read the current time into *t.  Reads all four registers atomically
  * (CIA latches them when $DC0B is read). */
