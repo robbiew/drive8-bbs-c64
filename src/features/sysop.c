@@ -190,9 +190,14 @@ static void draw_header(const clock_tod_t *t)
     const char *tstr;
     fmt_time(t, tbuf);
     tstr = (tbuf[0] == ' ') ? tbuf + 1 : tbuf;
-    printf("\n" P_YELLOW " %s "
+    /* Both fields are padded to 8 so the row is always 39 columns.  It is
+     * redrawn in place (P_HOME, no clear), so a narrower row leaves the
+     * previous frame's trailing character stranded: at the 12:59 -> 1:00
+     * rollover the hour loses a digit and column 38 kept the year's last
+     * digit, rendering "07/30/26" as "07/30/266". */
+    printf("\n" P_YELLOW " %-8s "
            P_LGREEN P_RVON "    TURBO/64 BBS    " P_RVOF
-           P_YELLOW " %s\n",
+           P_YELLOW " %-8s\n",
            tstr, wfc.date[0] ? wfc.date : "");
 }
 
@@ -750,6 +755,102 @@ static char wait_key_2s(void)
     }
 }
 
+/* ── TOD rate calibration ─────────────────────────────────────────────────
+ * The CIA must be told what frequency its TOD pin is fed at (CRA bit 7:
+ * 1 = 50 Hz, 0 = 60 Hz); a wrong setting runs the clock 20% off — +30 min
+ * over 2.5 h.  The feed is NOT implied by the video standard: VICE's x64sc
+ * is PAL video with a 60 Hz TOD feed, xscpu64 the reverse, and on real
+ * hardware it follows the mains.  So measure it.
+ *
+ * CIA2 Timer A divides O2 by CAL_UNIT and Timer B counts those underflows,
+ * giving a 16-bit tick count over CAL_TENTHS TOD tenths, probed in 50 Hz mode:
+ *
+ *   PAL O2 (985248 Hz) .. NTSC O2 (1022727 Hz)
+ *   feed really is 50 Hz  -> 0.400 s -> 3941 .. 4091
+ *   feed is 60 Hz         -> 0.333 s -> 3284 .. 3409   (the 1.2x-fast case)
+ *
+ * The bands sit ~15% apart, so the 3.8% PAL/NTSC spread never straddles
+ * CAL_SPLIT and the video standard needs no detecting.  This times hardware
+ * against hardware, so CPU turbo (U64, SuperCPU) cannot skew it; a reading
+ * outside [CAL_MIN,CAL_MAX] is reported as unknown rather than guessed at.
+ * CIA2's interrupt mask ($DD0D) is never touched — a CIA2 IRQ is an NMI. */
+#define CIA2_TA_LO   (*(volatile u8 *)0xDD04)
+#define CIA2_TA_HI   (*(volatile u8 *)0xDD05)
+#define CIA2_TB_LO   (*(volatile u8 *)0xDD06)
+#define CIA2_TB_HI   (*(volatile u8 *)0xDD07)
+#define CIA2_CRA     (*(volatile u8 *)0xDD0E)
+#define CIA2_CRB     (*(volatile u8 *)0xDD0F)
+#define TOD_10THS    (*(volatile u8 *)0xDC08)
+
+#define CAL_TENTHS   4
+#define CAL_UNIT     100
+#define CAL_SPLIT    3675    /* below -> 60 Hz feed, above -> 50 Hz feed */
+#define CAL_MIN      3000    /* outside [MIN,MAX] -> unrecognised */
+#define CAL_MAX      4400
+
+static u8 s_tod_hz = 0;      /* 50, 60, or 0 if the measurement was inconclusive */
+
+/* Read Timer B, retrying across a high-byte carry. */
+static u16 cal_tb_read(void)
+{
+    u8 hi, lo;
+    do { hi = CIA2_TB_HI; lo = CIA2_TB_LO; } while (hi != CIA2_TB_HI);
+    return (u16)(((u16)hi << 8) | lo);
+}
+
+/* Wait for the TOD tenths register to change.  FALSE if it never does, so a
+ * stopped TOD reports "unknown" instead of hanging the boot.  Polling $DC08
+ * alone is a live read — only reading $DC0B latches the TOD registers. */
+static bool_t cal_wait_tenth(void)
+{
+    u8  t0 = TOD_10THS;
+    u16 guard = 0;
+    while (TOD_10THS == t0)
+        if (++guard == 0u) return FALSE;
+    return TRUE;
+}
+
+/* Measure the TOD feed. Returns 50, 60, or 0 if it could not be identified. */
+static u8 tod_calibrate(void)
+{
+    u16 a, b, ticks;
+    u8  i;
+
+    CIA2_CRA   = 0x00;
+    CIA2_CRB   = 0x00;
+    CIA2_TA_LO = (u8)(CAL_UNIT - 1);   /* period is latch+1 O2 cycles */
+    CIA2_TA_HI = 0x00;
+    CIA2_TB_LO = 0xFF;
+    CIA2_TB_HI = 0xFF;
+    CIA2_CRB   = 0x41;   /* start, count Timer A underflows */
+    CIA2_CRA   = 0x01;   /* start, count O2 */
+
+    ticks = 0;
+    if (cal_wait_tenth()) {
+        a = cal_tb_read();
+        for (i = 0; i < CAL_TENTHS; i++)
+            if (!cal_wait_tenth()) break;
+        if (i == CAL_TENTHS) {
+            b = cal_tb_read();
+            ticks = (u16)(a - b);   /* counts down; u16 wrap makes this right */
+        }
+    }
+
+    CIA2_CRA = 0x00;
+    CIA2_CRB = 0x00;
+
+    if (ticks < CAL_MIN || ticks > CAL_MAX) return 0;
+    return (u8)((ticks < CAL_SPLIT) ? 60 : 50);
+}
+
+/* Report the measured TOD feed.  Worth showing: a wrong rate is invisible
+ * until the clock has drifted for hours. */
+static void print_tod_rate(void)
+{
+    if (s_tod_hz) printf("TOD CLOCK: %uHZ\n", (unsigned)s_tod_hz);
+    else          printf("TOD CLOCK: UNKNOWN, ASSUMING 50HZ\n");
+}
+
 void wfc_set_datetime(void)
 {
     clock_tod_t t;
@@ -758,6 +859,7 @@ void wfc_set_datetime(void)
 
     printf(P_CLR P_GFX P_WHITE);
     printf(P_LGREEN "*** SET TIME/DATE ***\n" P_WHITE);
+    print_tod_rate();
 
     /* ── Try RTC auto-detect ─────────────────────────────────── */
     if (rtc_try_read(&yr, &mo, &dy, &h, &m, &pm)) {
@@ -780,6 +882,7 @@ void wfc_set_datetime(void)
     do {
         printf(P_CLR P_GFX P_WHITE);
         printf(P_LGREEN "*** SET TIME/DATE ***\n" P_WHITE);
+        print_tod_rate();
 
         /* ── Time entry ──────────────────────────────────────── */
         for (;;) {
@@ -855,7 +958,12 @@ commit:
 
 void wfc_init_impl(void)
 {
-    clock_init();
+    /* Start the TOD in 50 Hz mode, measure what it is actually fed, then
+     * restart it with the right rate.  Costs ~0.5 s, once, at boot. */
+    clock_init(50);
+    s_tod_hz = tod_calibrate();
+    clock_init(s_tod_hz ? s_tod_hz : 50);
+
     wfc_set_datetime();   /* prompt sysop for time + date at boot */
     clock_read(&wfc.boot_time);
     wfc.last_secs = 0xFF;
