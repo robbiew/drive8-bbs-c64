@@ -39,7 +39,7 @@ Not working: Private mail, SysOp chat, polls/voting, and lots more remain stubbe
 
 **Hardware / emulator**
 - Commodore 64 with SwiftLink/ACIA cartridge at $DE00, **or** C64 Ultimate (C64U) with built-in ACIA, **or** VICE x64sc with tcpser modem bridge
-- Two .D81 disk images — one for the BBS, one blank one for message boards (device 9)
+- Two .D81 disk images — one for the BBS, one blank one for message boards (device 9). On hardware that supports partitions, a second partition works instead of a second disk — see [Storage Devices & Partitions](#storage-devices--partitions)
 - 16 MB REU required for the message boards and some other features. The C64 Ultimate has one built in, and VICE can be configured with one. The BBS boots and lets you log in without a REU, but reading and posting messages need it. This will probably be a hard-check in the future.
 
 **Developer Build host (macOS / Linux)**
@@ -122,7 +122,12 @@ Format a blank .D81 and mount it on C64U device 9. Then in CONFIGURE → **M —
 
 Then mount `BOARDS-<ver>.D81` on C64U device 9.
 
-> ⚠️ The message index format uses 63-byte REL records. 
+> ⚠️ The message index format uses 63-byte REL records.
+
+Boards can equally live on a **partition** of the same device rather than a separate
+disk — e.g. `DEV_SYSTEM=8;1:` and `DEV_MSGS=8;2:` — on hardware that supports partitions.
+See [Storage Devices & Partitions](#storage-devices--partitions) for which devices do.
+
 
 ### 5. Run the BBS
 
@@ -181,7 +186,95 @@ ALLOW_NEW_USERS=1
 ALLOW_UPLOADS=1
 ```
 
-Device values can include a drive number and CBM DOS init string: `8`, `8;0:`, or `8;0:;CD:BBS`. The BBS sends the init string to the drive at startup.
+Device values use the form `<device>;<partition>:<init>` — see
+[Storage Devices & Partitions](#storage-devices--partitions) below.
+
+---
+
+## Storage Devices & Partitions
+
+T/64 can put each subsystem on a different device, and on a different **partition**
+within that device.
+
+### Device spec format
+
+```
+DEV_SYSTEM=8            device 8, partition 0, no init string
+DEV_MSGS=8;2:           device 8, partition 2
+DEV_FILES=9;1:CD:BBS    device 9, partition 1, sends "CD:BBS" at startup
+```
+
+| Field | Meaning |
+|---|---|
+| `<device>` | CBM bus device number, 8–11 |
+| `<partition>` | Partition on that device. **0 = leave the drive where it is** |
+| `<init>` | Optional CBM DOS command sent before disk access |
+
+The four subsystems are `DEV_SYSTEM` (user database, access levels, caller log),
+`DEV_MSGS` (message boards), `DEV_FILES` (file library) and `DEV_DOORS` (door PRGs).
+They can share a device or be spread across several.
+
+### How partitions work
+
+When a partition is non-zero, T/64 selects it with the CBM DOS **`CP<n>`** command on
+the command channel, then addresses files with the drive-0 form (`0:NAME`). This is the
+standard CMD-drive mechanism and it is what sd2iec documents as well.
+
+**Partition 0 sends no `CP` at all.** That keeps behaviour byte-for-byte identical to a
+setup that has never touched the field, so leaving everything at 0 is always safe.
+
+> **Note for anyone upgrading from 0.3.0 or earlier:** that field was documented as a
+> partition but was being sent as a CBM *drive* number, which a 1581 rejects. Any device
+> set to a non-zero value silently failed **every** disk operation on that device — not
+> just the obvious one. If you hit that, no data was lost; nothing could open it. Fixed
+> in 0.3.1.
+
+### What works on which device
+
+Measured on hardware, each with a control run against a known-good drive:
+
+| Device | REL files (database) | `CP` partitions | Notes |
+|---|---|---|---|
+| 1541 / 1571 / 1581 | yes | yes (real hardware) | The baseline T/64 targets |
+| **C64U emulated 1581** (Drive A/B) | yes | **no** | The emulation rejects `CP`. Use partition 0 |
+| **sd2iec / uIEC / SD2IEC** | yes | **yes**, verified isolated | Partitions numbered from 1 |
+| **C64U SoftIEC** | **no** | n/a | No REL support, so the database cannot live here |
+
+Two consequences worth planning around:
+
+- **The C64 Ultimate's built-in emulated drives do not support partitions.** Set them to
+  partition 0. Partitions need real hardware or an sd2iec-class device.
+- **SoftIEC cannot host the database.** T/64's user and message records are CBM relative
+  (REL) files, and SoftIEC has no REL support — the open is accepted and every record
+  operation then fails. Using SoftIEC for the record database is planned work, not a
+  current capability.
+
+### Diagnostics
+
+If storage behaves unexpectedly, `make diag` builds standalone test programs that run
+**the same disk code the BBS does**, so a result is evidence about the real thing:
+
+| Program | Answers |
+|---|---|
+| `PTEST` | Does `CP<n>` reach the right partition, and are partitions isolated? |
+| `RELTEST` | Can this device create, position and read a REL file? |
+| `CPTEST` | What status code does `CP<n>` actually return? |
+| `DIR` | What is on a given device/partition? (non-destructive) |
+| `EXISTS` | Is a specific file present? Reports the raw DOS code |
+| `CLEAN` | Scratch T/64's system files from a device/partition |
+
+Start with `PTEST` — it answers in seconds whether a device supports partitions at all.
+
+> **Warning:** pointing any of these at a device number that is **not present** will hang
+> the C64 and require a reset. Reading the status channel of an absent device never
+> returns; this is KERNAL serial-bus behaviour, not a fault in the tools.
+
+### Known gaps
+
+- **Clock on non-Ultimate hardware.** T/64's time auto-detect only queries an Ultimate's
+  RTC through the cartridge port. It does not read the clock from an sd2iec or CMD drive
+  even when one is fitted, so on a plain C64 you are prompted for the time at every boot.
+- **Free space is not reported** for devices that do not return a block count.
 
 ---
 
