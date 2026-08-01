@@ -4,12 +4,33 @@ considered stable. Expect bugs — please report them on GitHub.
 
   https://github.com/robbiew/turbo64/issues
 
-v__VERSION__ is a bug-fix release. It fixes five defects present in v0.3.0,
-one of which could lose data silently.
+v__VERSION__ is a bug-fix release. It fixes nine defects present in v0.3.0 —
+one that made the clock run fast on every NTSC machine, and one that could
+lose data silently.
 
 
 Fixed in v__VERSION__
 ---------------------
+
+**The clock ran 20% fast on 60 Hz machines.** The CIA has to be told what
+frequency its time-of-day pin is fed at, and the BBS always claimed 50 Hz.
+On a machine fed 60 Hz — which includes any NTSC Commodore 64 Ultimate — the
+clock gained a fifth: about 12 minutes an hour, half an hour over 2.5 hours.
+
+That rate cannot be worked out from the video standard, so the BBS now
+measures it: at boot it times the clock against a hardware timer for about
+half a second and configures itself from the result. The boot screen reports
+what it found, as `TOD CLOCK: 50HZ` or `60HZ`. If your clock has been
+drifting, this was why, and there is nothing to configure.
+
+Measured after the fix on a Commodore 64 Ultimate: 420.4 seconds elapsed in
+420.4 seconds of real time. Before it, that same interval read 504.
+
+**The date on the WFC screen could gain a digit,** showing 07/30/266. The
+header row is redrawn without clearing, and it is one column narrower when
+the hour has one digit, so at the 12:59 -> 1:00 rollover the last digit of
+the year was left stranded on screen. Only the display was affected — the
+stored date was always correct, so nothing written to disk was wrong.
 
 **Partitions did not work, and failed silently.** The `8;1` style field in
 CONFIG > DEVICES is documented as device;PARTITION, but the value was being
@@ -101,9 +122,14 @@ Two things to know if you try it:
 
 Known gaps
 ----------
-- The clock auto-detect only reads an Ultimate's RTC through the cartridge
+- Reading the current date and time automatically (as opposed to the tick
+  rate above) still only works through an Ultimate's RTC on the cartridge
   port. It does not read the clock from an sd2iec or CMD drive even when one
   is fitted, so on a plain C64 you are prompted for the time at every boot.
+- The new tick-rate detection was confirmed on 60 Hz hardware. The 50 Hz
+  result has only been reproduced under emulation — if you run a PAL machine,
+  the boot screen should say `TOD CLOCK: 50HZ`, and it is worth telling us
+  if it does not.
 - Free space is not reported for devices that give no block count.
 
 
