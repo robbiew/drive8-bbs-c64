@@ -17,4 +17,5 @@ cppcheck \
     -I src/term \
     -I src \
     -I src-editor \
-    src src-editor include
+    -I src-diag \
+    src src-editor src-diag include

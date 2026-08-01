@@ -115,6 +115,25 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRC
 
 
 
+# Storage diagnostics — standalone PRGs that exercise the real HAL against a
+# device, for questions only hardware can answer. Each asks for a device number.
+#   PTEST   partition round-trip and isolation
+#   RELTEST REL file create/position/read
+#   CPTEST  what status code CP<n> returns per device
+#   DIR     non-destructive directory listing
+# Usage: make diag        (all four land in build/c64/)
+DIAG_HAL := src/err.c src/hal/disk.c
+DIAG_FLAGS := $(CFLAGS) -i=$(ROOT)src-diag -dNOFLOAT
+
+.PHONY: diag
+diag:
+	@mkdir -p $(OUTDIR)
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/PTEST.prg   src-diag/ptest.c   $(DIAG_HAL)
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/RELTEST.prg src-diag/reltest.c $(DIAG_HAL) src/hal/rel.c
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/CPTEST.prg  src-diag/cptest.c  $(DIAG_HAL)
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/DIR.prg     src-diag/dir.c     $(DIAG_HAL)
+	@echo "Built: PTEST RELTEST CPTEST DIR in $(OUTDIR)"
+
 # Build a door PRG at $9700.  Usage: make door DOOR=<name>
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg
 # For a door not under devkit/examples/, pass SRC=<path> override.
