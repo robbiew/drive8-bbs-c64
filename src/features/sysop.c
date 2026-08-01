@@ -190,9 +190,14 @@ static void draw_header(const clock_tod_t *t)
     const char *tstr;
     fmt_time(t, tbuf);
     tstr = (tbuf[0] == ' ') ? tbuf + 1 : tbuf;
-    printf("\n" P_YELLOW " %s "
+    /* Both fields are padded to 8 so the row is always 39 columns.  It is
+     * redrawn in place (P_HOME, no clear), so a narrower row leaves the
+     * previous frame's trailing character stranded: at the 12:59 -> 1:00
+     * rollover the hour loses a digit and column 38 kept the year's last
+     * digit, rendering "07/30/26" as "07/30/266". */
+    printf("\n" P_YELLOW " %-8s "
            P_LGREEN P_RVON "    TURBO/64 BBS    " P_RVOF
-           P_YELLOW " %s\n",
+           P_YELLOW " %-8s\n",
            tstr, wfc.date[0] ? wfc.date : "");
 }
 
