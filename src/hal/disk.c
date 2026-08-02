@@ -219,11 +219,19 @@ bbs_err_t disk_putc(char c)
 }
 
 /* Bulk write: one CHKOUT + N x CHROUT + one CLRCHN, amortising the channel
- * overhead that disk_putc() pays per byte. Measured 6.4x faster on SoftIEC. */
+ * overhead that disk_putc() pays per byte. Measured 6.4x faster on SoftIEC.
+ *
+ * krnio_write() returns `num` whenever krnio_chkout() succeeds — it never
+ * inspects KERNAL status (ST) between CHROUT calls, so a returned count
+ * equal to `len` only proves the channel opened, not that the bytes reached
+ * the drive. Check krnio_status() (KERNAL READST, $FFB7) right after: a
+ * write that failed partway (disk full, device dropped) leaves it non-zero
+ * even though krnio_write() already returned success. */
 bbs_err_t disk_write(const u8 *buf, u8 len)
 {
     int r = krnio_write(CFG_FNUM_DATA, (const char *)buf, (int)len);
-    return (r == (int)len) ? BBS_OK : BBS_EIO;
+    if (r != (int)len) return BBS_EIO;
+    return (krnio_status() == KRNIO_OK) ? BBS_OK : BBS_EIO;
 }
 
 bbs_err_t disk_puts(const char *s)

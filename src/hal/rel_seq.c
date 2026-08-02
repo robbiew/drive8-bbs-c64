@@ -15,11 +15,10 @@
 static bool_t s_open      = FALSE;
 static u8     s_region    = SEQ_REGION_NONE;
 static u8     s_recsize   = 0;
-static u16    s_count     = 0;      /* records present (high-water mark) */
 static u16    s_pos       = 0;      /* 1-based current record */
 static u16    s_base      = 0;      /* seq_region_offset(s_region), cached at open */
 static u16    s_max_recs  = 0;      /* seq_region_capacity(s_region) / s_recsize */
-static u16    s_off       = 0;      /* byte offset of s_pos, set by rel_position */
+static u16    s_off       = 0;      /* byte offset of s_pos; set by rel_position, advanced by rel_read */
 static bool_t s_dirty     = FALSE;
 static u8     s_device    = 0;
 static u8     s_partition = 0;
@@ -29,6 +28,17 @@ static char   s_name[SEQ_NAME_MAX];
  * The fixed sets stay loaded once read; WINDOW is reloaded per name. */
 static u8   s_loaded[REGION_COUNT_MAX];
 static char s_window_name[SEQ_NAME_MAX];
+
+/* Records present per region (high-water mark) — MUST be per-region, not a
+ * single scalar: region_load() is skipped whenever a fixed region is
+ * already s_loaded[], or a WINDOW name repeats, so a single shared counter
+ * leaks the previous region's count into the next one. Concretely: BOARDS
+ * loads (count=5), B1.IDX loads (count=150), BOARDS reopens — load skipped,
+ * a single scalar would still read 150, and a flush would stream 150x44
+ * bytes from an 880-byte region straight past its neighbours (reu_data_get
+ * has no bounds check). This array is 2*REGION_COUNT_MAX = 18 bytes; the
+ * single scalar it replaces was 2, so the net BSS cost is +16 bytes. */
+static u16 s_count_by_region[REGION_COUNT_MAX];
 
 static u8 s_io[64];
 
@@ -40,13 +50,19 @@ static bbs_err_t region_load(void)
     i16 got;
 
     if (disk_open(s_device, s_partition, s_name, DISK_READ) != BBS_OK) {
-        s_count = 0;
-        return BBS_OK;      /* absent file == empty set, as rel_open creates */
+        /* A real I/O failure (device didn't answer at all), NOT "file
+         * absent" — disk_open() succeeds on the plain not-found case (see
+         * DOS 62 below); it only fails this way for a genuine fault. Do
+         * not cache this as an empty region: rel_open() only sets
+         * s_loaded[] on BBS_OK, so returning an error here leaves the
+         * region retryable on the next open instead of permanently empty
+         * for the rest of the run. */
+        return BBS_EIO;
     }
     if (disk_status(s_device) == 62) {
         disk_close();
-        s_count = 0;
-        return BBS_OK;
+        s_count_by_region[s_region] = 0;
+        return BBS_OK;      /* genuinely absent == empty set, as rel_open creates */
     }
 
     for (;;) {
@@ -61,14 +77,14 @@ static bbs_err_t region_load(void)
     }
     disk_close();
 
-    s_count = (u16)(total / s_recsize);
+    s_count_by_region[s_region] = (u16)(total / s_recsize);
     return BBS_OK;
 }
 
 static bbs_err_t region_flush(void)
 {
     char tmp[SEQ_NAME_MAX];
-    u16 total = (u16)(s_count * s_recsize);
+    u16 total = (u16)(s_count_by_region[s_region] * s_recsize);
     u16 done = 0;
     // cppcheck-suppress variableScope
     u16 chunk;
@@ -163,6 +179,19 @@ bbs_err_t rel_open(u8 device, u8 partition, const char *name,
     if (s_open) return BBS_EIO;
     if (!reu_data_available()) return BBS_EIO;
 
+    if (s_dirty) {
+        /* A previous rel_close()'s flush failed and left live REU data
+         * unpersisted for whichever region was open at the time — s_region/
+         * s_name/s_base/s_recsize below still hold that region's values,
+         * nothing has overwritten them yet. Retry the flush now, before
+         * they are replaced: for the shared WINDOW region in particular,
+         * region_load() below would otherwise overwrite the still-pending
+         * data with a different name's bytes read from disk, losing it
+         * permanently rather than just leaving it unflushed one more time. */
+        bbs_err_t ferr = region_flush();
+        if (ferr != BBS_OK) return ferr;
+    }
+
     region = seq_region_for_name(name);
     if (region == SEQ_REGION_NONE) return BBS_EIO;
     if (strlen(name) >= SEQ_NAME_MAX) return BBS_EIO;
@@ -182,13 +211,11 @@ bbs_err_t rel_open(u8 device, u8 partition, const char *name,
     if (region == SEQ_REGION_WINDOW) {
         if (strcmp(s_window_name, name) != 0) {
             bbs_err_t err = region_load();
-            // cppcheck-suppress knownConditionTrueFalse
             if (err != BBS_OK) return err;
             strcpy(s_window_name, name);
         }
     } else if (!s_loaded[region]) {
         bbs_err_t err = region_load();
-        // cppcheck-suppress knownConditionTrueFalse
         if (err != BBS_OK) return err;
         s_loaded[region] = 1;
     }
@@ -198,9 +225,6 @@ bbs_err_t rel_open(u8 device, u8 partition, const char *name,
     return BBS_OK;
 }
 
-/* Every one of the 176 rel_* call sites positions before it reads or writes
- * (the interface contract), so the record's byte offset is computed once
- * here rather than recomputed by every rel_read()/rel_write() call. */
 bbs_err_t rel_position(rel_handle_t h, u16 rec)
 {
     (void)h;
@@ -210,15 +234,27 @@ bbs_err_t rel_position(rel_handle_t h, u16 rec)
     return BBS_OK;
 }
 
+/* CBM REL semantics (src/hal/rel.c reads straight off the open KERNAL data
+ * channel): a successful read advances the position to the next record, so
+ * callers position ONCE and then loop rel_read() with no intervening
+ * rel_position() call. src/data/users.c's login-path comment documents the
+ * dependency explicitly. rel_write() does not need the same treatment —
+ * every rel_write() call site in this codebase positions immediately
+ * before it, one record per open (checked: usrptr.c, file_areas.c,
+ * votes.c, doors.c x2, usrday.c, file_entries.c x2, users.c x2, boards.c,
+ * messages.c — no site loops writes without repositioning between them). */
 bbs_err_t rel_read(rel_handle_t h, void *buf, u8 record_size, u8 *got)
 {
     (void)h;
     if (!s_open || !buf || s_pos == 0) return BBS_EIO;
     if (got) *got = 0;
-    if (s_pos > s_count) return BBS_ENOTFOUND;
+    if (s_pos > s_count_by_region[s_region]) return BBS_ENOTFOUND;
 
     reu_data_get(s_off, buf, record_size);
     if (got) *got = record_size;
+
+    s_pos++;
+    s_off = (u16)(s_off + s_recsize);
     return BBS_OK;
 }
 
@@ -232,16 +268,16 @@ bbs_err_t rel_write(rel_handle_t h, const void *buf, u8 record_size)
      * write behaves the way it does against a preallocated REL file. The
      * fill offset is stepped by s_recsize per record rather than
      * recomputed by multiplication each iteration. */
-    if (s_count + 1 < s_pos) {
-        u16 fill_off = (u16)(s_base + (u16)s_count * s_recsize);
+    if (s_count_by_region[s_region] + 1 < s_pos) {
+        u16 fill_off = (u16)(s_base + (u16)s_count_by_region[s_region] * s_recsize);
         memset(s_io, 0, s_recsize);
         do {
             reu_data_put(fill_off, s_io, s_recsize);
             fill_off = (u16)(fill_off + s_recsize);
-            s_count++;
-        } while (s_count + 1 < s_pos);
+            s_count_by_region[s_region]++;
+        } while (s_count_by_region[s_region] + 1 < s_pos);
     }
-    if (s_pos > s_count) s_count = s_pos;
+    if (s_pos > s_count_by_region[s_region]) s_count_by_region[s_region] = s_pos;
 
     reu_data_put(s_off, buf, record_size);
     s_dirty = TRUE;
@@ -261,7 +297,13 @@ bbs_err_t rel_close(rel_handle_t h)
 
 void rel_reset(void)
 {
+    u8 i;
     s_open = FALSE;
-    s_dirty = FALSE;
     s_pos = 0;
+    /* s_dirty is deliberately left untouched: if the last rel_close()'s
+     * flush failed, the pending write is still live in REU only, and
+     * clearing the flag here would let it be silently discarded instead of
+     * retried by the next rel_open() (see the retry block there). */
+    for (i = 0; i < REGION_COUNT_MAX; i++) s_loaded[i] = 0;
+    s_window_name[0] = '\0';
 }
