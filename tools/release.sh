@@ -161,14 +161,10 @@ cp "$BOOT_PRG"      "$RELEASE_DIR/BOOT-${VERSION}.prg"
 cp "$CONFIGURE_PRG" "$RELEASE_DIR/CONFIGURE-${VERSION}.prg"
 cp "$BLANK_DISK"    "$RELEASE_DIR/BOARDS-${VERSION}.d81"
 
-# Storage diagnostics. The README and release notes both tell SysOps to run
-# these, so shipping without them would make that advice unfollowable without
-# a build host.
-if make -C "$ROOT" diag >/dev/null 2>&1; then
-    for d in PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL; do
-        [ -f "$ROOT/build/c64/$d.prg" ] && cp "$ROOT/build/c64/$d.prg" "$RELEASE_DIR/"
-    done
-fi
+# Storage diagnostics are deliberately NOT shipped. They are developer tools,
+# two of them (WIPE, CLEAN) delete files, and dropping eight extra PRGs beside
+# BOOT and CONFIGURE only obscures what a SysOp is meant to run. Build them
+# from source with `make diag` when they are actually needed.
 
 sed "s/__VERSION__/$VERSION/g" "$ROOT/data/release/file_id.diz.tmpl" > "$RELEASE_DIR/FILE_ID.DIZ"
 sed "s/__VERSION__/$VERSION/g" "$ROOT/data/release/readme.txt.tmpl" > "$RELEASE_DIR/README.txt"

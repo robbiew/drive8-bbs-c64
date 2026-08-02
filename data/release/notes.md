@@ -97,11 +97,13 @@ LOAD"BOOT-0.3.1" fails. Files created through the C64 get proper CBM names.
 BBS's own data files are never affected — CONFIGURE creates them through the
 C64, so they are always named correctly.
 
-New in this release: `make diag` builds standalone storage diagnostics
-(PTEST, RELTEST, CPTEST, DIR, EXISTS, CLEAN) that run the same disk code the
-BBS does. Start with PTEST if storage behaves unexpectedly. Note that
-pointing them at a device that is not present will hang the C64 and require
-a reset — that is KERNAL serial-bus behaviour, not a fault in the tools.
+If storage behaves unexpectedly, the source tree carries a set of standalone
+diagnostics that run the same disk code the BBS does — PTEST, RELTEST,
+CPTEST, DIR, EXISTS, CLEAN, WIPE and COPYALL. They are not included in this
+archive, since two of them delete files; build them with `make diag` and
+start with PTEST. Note that pointing any of them at a device that is not
+present will hang the C64 and require a reset — that is KERNAL serial-bus
+behaviour, not a fault in the tools.
 
 See the README for full details.
 
