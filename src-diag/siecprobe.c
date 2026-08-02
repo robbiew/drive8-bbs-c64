@@ -184,9 +184,11 @@ static void m4_search(void)
             if (got <= 0) break;
         }
         disk_close();
+        t1 = jiffies();
+        report("DISK", t0, t1, 0);
+    } else {
+        printf("  OPEN FAIL\n");
     }
-    t1 = jiffies();
-    report("DISK", t0, t1, 0);
 }
 
 /* M5: the durability tax per flush, and one existence probe (x36 = boot sweep). */
