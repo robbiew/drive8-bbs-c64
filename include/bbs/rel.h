@@ -58,6 +58,11 @@ void rel_reset(void);
 bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name);
 void      rel_seq_sweep(void);
 bbs_err_t rel_seq_flush(void);
+
+/* Boot-time hard gate: halts (does not return) if no REU is present or the
+ * folder tree has no valid T64.SIEC format marker. Call once, before
+ * rel_seq_sweep(), from a point where OVL_BOOT is still resident. */
+void      rel_seq_require_storage(void);
 #endif
 
 #endif /* BBS_REL_H */

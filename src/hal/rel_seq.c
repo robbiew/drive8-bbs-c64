@@ -224,6 +224,56 @@ void rel_seq_sweep(void)
     }
 }
 
+/* rel_seq_require_storage() — boot-time hard gate, called once from
+ * boot_sequence() (now itself boot_code — see main.c) before rel_seq_sweep()
+ * above. Two things turn silent data loss into a legible error:
+ *   1. No REU means rel_open() (below, once resident) returns BBS_EIO for
+ *      every record set — the BBS would otherwise run with no database.
+ *   2. No T64.SIEC marker (first line "T64SEQ1", written by the migration
+ *      tool) means the folder tree was copied but never migrated — booting
+ *      straight into that would look like a fresh, empty install rather
+ *      than the sysop's real one.
+ * Order matters: REU first, since the marker probe goes through disk_open()
+ * and a missing REU makes the whole storage layer unusable regardless of
+ * what the marker says.
+ *
+ * printf() is used directly rather than main.c's main_print() wrapper
+ * (printf("%s",...)) since main_print is static to main.c and not visible
+ * here; the boot console takes plain printf() output identically. */
+void rel_seq_require_storage(void)
+{
+    (void)reu_detect();
+    if (!reu_data_available()) {
+        printf("\rREU REQUIRED - ENABLE IN ULTIMATE MENU\r");
+        for (;;) { }
+    }
+    {
+        bool_t ok = FALSE;
+        /* disk_open() returning BBS_OK only proves the device answered, not
+         * that the file exists (KERNAL OPEN succeeds regardless) — DOS 62 is
+         * the only trustworthy "not found" signal. */
+        if (disk_open(bbs_cfg.device_system, bbs_cfg.drive_system,
+                      "T64.SIEC", DISK_READ) == BBS_OK &&
+            disk_status(bbs_cfg.device_system) != 62) {
+            /* disk_gets() keeps the CR terminator, so this is strncmp(7),
+             * not strcmp — a documented past defect (probe-results/
+             * FINDINGS.md): comparing against a string that arrives with a
+             * trailing CR. */
+            char line[16];
+            if (disk_gets(line, sizeof(line)) > 0 &&
+                strncmp(line, "T64SEQ1", 7) == 0) {
+                ok = TRUE;
+            }
+        }
+        disk_close();
+        if (!ok) {
+            printf("\rUNMIGRATED INSTALL\r");
+            printf("RUN: TOOLS/MIGRATE-D81.PY\r");
+            for (;;) { }
+        }
+    }
+}
+
 #ifdef T64_BOOT_OVERLAY
 #pragma code(code)
 #pragma data(data)

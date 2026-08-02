@@ -202,13 +202,18 @@ static __noinline bbs_err_t boot_sequence(void) {
   }
 
 #ifdef T64_STORE_SEQ
-  /* LOAD-BEARING POSITION: cfg_init() is the only resident function that
-   * loads OVL_BOOT (bank 3, $9700-$C000) — see cfg.c. rel_seq_sweep() and
-   * rel_seq_recover() live in boot_code, i.e. that same address range, so
-   * this call is only safe while OVL_BOOT is still the bank resident there.
-   * Nothing between cfg_init()'s return and this call may load a different
-   * overlay (OVL_MSGS/OVL_WFC/etc) or the JSR below executes whatever bank
-   * happens to occupy $9700 instead of the sweep. */
+  /* rel_seq_require_storage() and rel_seq_sweep() both live in boot_code,
+   * same as boot_sequence() itself (see main()'s doc comment) — calling them
+   * from here is safe as long as nothing between main()'s OVL_BOOT load and
+   * this point loads a different overlay (OVL_MSGS/OVL_WFC/etc). Nothing
+   * does: cfg_init() (just above) no longer loads anything itself.
+   *
+   * REU check before the marker check: the marker probe goes through
+   * disk_open(), and a missing REU means the storage layer is unusable
+   * regardless of what the marker says. Both before rel_seq_sweep(), which
+   * touches the database. */
+  rel_seq_require_storage();
+
   /* \n, not \r: the next line printed is "  BBS: " + bbs_cfg.bbs_name — an
    * \r here would leave this line's tail on screen whenever the configured
    * name is shorter than "RECOVERING...". */
@@ -253,9 +258,17 @@ static __noinline bbs_err_t boot_sequence(void) {
   /* Detect REU (RAM Expansion Unit) if present */
   main_print("\nCHECKING REU...\n");
   {
+#ifdef T64_STORE_SEQ
+    /* rel_seq_require_storage() above already called reu_detect() (and
+     * halted if none was found) — a second call here would repeat the same
+     * KERNAL DMA probe for no new information, just read back what it
+     * recorded. */
+    u16 reu_sz = bbs_cfg.reu_detected_size;
+#else
     /* reu_detect() already records size + enabled in bbs_cfg; it returns the
      * detected size in KB (0 = absent). */
     u16 reu_sz = reu_detect();
+#endif
     if (reu_sz == 0) {
       main_print("  REU: NOT FOUND\n");
     } else if (reu_sz >= 1024) {
