@@ -193,7 +193,10 @@ static bbs_err_t boot_sequence(void) {
    * Nothing between cfg_init()'s return and this call may load a different
    * overlay (OVL_MSGS/OVL_WFC/etc) or the JSR below executes whatever bank
    * happens to occupy $9700 instead of the sweep. */
-  main_print("RECOVERING...\r");
+  /* \n, not \r: the next line printed is "  BBS: " + bbs_cfg.bbs_name — an
+   * \r here would leave this line's tail on screen whenever the configured
+   * name is shorter than "RECOVERING...". */
+  main_print("RECOVERING...\n");
   rel_seq_sweep();
 #endif
 

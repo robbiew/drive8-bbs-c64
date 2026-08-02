@@ -164,8 +164,11 @@ bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name)
     if (!name || !seq_tmp_name(tmp, name)) return BBS_EIO;
     if (disk_select_partition(device, partition) != BBS_OK) return BBS_EIO;
 
+    /* .NEW absent is the common case (every non-crash boot) — one probe,
+     * not two, matching the measured 0.25s/10-probe boot-time budget. */
+    tmp_exists = seq_name_exists(device, partition, tmp);
+    if (!tmp_exists) return BBS_OK;
     name_exists = seq_name_exists(device, partition, name);
-    tmp_exists  = seq_name_exists(device, partition, tmp);
 
     switch (seq_recover_action(name_exists, tmp_exists)) {
     case SEQ_RECOVER_DROP_TMP: return disk_scratch(device, partition, tmp);
@@ -178,19 +181,39 @@ bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name)
  * header and free-blocks line, no entries — measured on hardware), so this
  * probes known names instead of scanning: the eight fixed sets, then UD<n>/
  * B<n>.IDX up to the configured maxima, whether or not those areas/boards
- * are actually in use. bbs_cfg must already be populated by cfg_init(). */
+ * are actually in use. bbs_cfg must already be populated by cfg_init().
+ *
+ * drive_* is a section-folder index under T64_STORE_SEQ, not an alias —
+ * system/msgs/files/doors are genuinely different directories. Each fixed
+ * name is swept against the same (device, drive) pair its own rel_open()
+ * call site uses, verified directly rather than assumed:
+ *   USR LOG/USR PROF (users.c via user_open_rel), USR.DAY (usrday.c),
+ *   VOTE1 (votes.c)                                        -> drive_system
+ *   USR.PTR (usrptr.c), BOARDS (boards.c)                  -> drive_msgs
+ *   UDS (file_areas.c)                                     -> drive_files
+ *   DOORS (doors.c)                                        -> drive_doors
+ * Sweeping any of these against the wrong folder silently no-ops instead
+ * of finding a real crash-orphaned .NEW. */
 void rel_seq_sweep(void)
 {
-    static const char * const fixed[] = {
-        "USR LOG", "USR.PTR", "USR.DAY", "USR PROF",
-        "BOARDS",  "UDS",     "VOTE1",   "DOORS"
+    static const char * const sys_set[] = {
+        "USR LOG", "USR PROF", "USR.DAY", "VOTE1"
+    };
+    static const char * const msg_set[] = {
+        "USR.PTR", "BOARDS"
     };
     char name[SEQ_NAME_MAX];
     u8 i;
 
-    for (i = 0; i < 8; i++) {
-        (void)rel_seq_recover(bbs_cfg.device_system, bbs_cfg.drive_system, fixed[i]);
+    for (i = 0; i < 4; i++) {
+        (void)rel_seq_recover(bbs_cfg.device_system, bbs_cfg.drive_system, sys_set[i]);
     }
+    for (i = 0; i < 2; i++) {
+        (void)rel_seq_recover(bbs_cfg.device_msgs, bbs_cfg.drive_msgs, msg_set[i]);
+    }
+    (void)rel_seq_recover(bbs_cfg.device_files, bbs_cfg.drive_files, "UDS");
+    (void)rel_seq_recover(bbs_cfg.device_doors, bbs_cfg.drive_doors, "DOORS");
+
     for (i = 1; i <= CFG_MAX_FILE_AREAS; i++) {
         sprintf(name, "UD%u", (unsigned)i);
         (void)rel_seq_recover(bbs_cfg.device_files, bbs_cfg.drive_files, name);
