@@ -49,7 +49,7 @@ static void t3_cd_recovers(void)
     disk_cmd(dev, "CD:STRAND");
     st = probe_exists("SP1");
     printf("  STRANDED ST%u\n", (unsigned)st);
-    disk_cmd(dev, "CD:/USB1/PROBE");
+    disk_cmd(dev, "CD:/USB1/TURBO64");
     st = probe_exists("SP1");
     printf("  AFTER CD ST%u %s\n", (unsigned)st, st == 0 ? "RECOVERED" : "STUCK");
 }
@@ -64,7 +64,7 @@ static void t4_cd_missing(void)
     st = probe_exists("SP1");
     printf("  CURSOR ST%u %s\n", (unsigned)st,
            st == 0 ? "UNMOVED" : "MOVED-OR-LOST");
-    disk_cmd(dev, "CD:/USB1/PROBE");
+    disk_cmd(dev, "CD:/USB1/TURBO64");
 }
 
 static u32 jiffies(void)
@@ -222,7 +222,7 @@ int main(void)
         if (c == '2') { dev = 11; break; } }
     printf("%u\n\n", (unsigned)dev);
 
-    disk_cmd(dev, "CD:/USB1/PROBE");
+    disk_cmd(dev, "CD:/USB1/TURBO64");
     t1_rename_suffix();
     t3_cd_recovers();
     t4_cd_missing();
