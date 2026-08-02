@@ -6,9 +6,11 @@
 #include "bbs/rel.h"
 #include "bbs/seq_region.h"
 #include "bbs/config.h"
+#include "bbs/cfg.h"
 #include "bbs/hal/disk.h"
 #include "bbs/hal/reu.h"
 #include <string.h>
+#include <stdio.h>
 
 #define REL_SEQ_HANDLE 0u
 
@@ -169,6 +171,33 @@ bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name)
     case SEQ_RECOVER_DROP_TMP: return disk_scratch(device, partition, tmp);
     case SEQ_RECOVER_PROMOTE:  return disk_rename(device, partition, tmp, name);
     default:                   return BBS_OK;
+    }
+}
+
+/* Directory listings do not work over SoftIEC (LOAD"$",11 returns only the
+ * header and free-blocks line, no entries — measured on hardware), so this
+ * probes known names instead of scanning: the eight fixed sets, then UD<n>/
+ * B<n>.IDX up to the configured maxima, whether or not those areas/boards
+ * are actually in use. bbs_cfg must already be populated by cfg_init(). */
+void rel_seq_sweep(void)
+{
+    static const char * const fixed[] = {
+        "USR LOG", "USR.PTR", "USR.DAY", "USR PROF",
+        "BOARDS",  "UDS",     "VOTE1",   "DOORS"
+    };
+    char name[SEQ_NAME_MAX];
+    u8 i;
+
+    for (i = 0; i < 8; i++) {
+        (void)rel_seq_recover(bbs_cfg.device_system, bbs_cfg.drive_system, fixed[i]);
+    }
+    for (i = 1; i <= CFG_MAX_FILE_AREAS; i++) {
+        sprintf(name, "UD%u", (unsigned)i);
+        (void)rel_seq_recover(bbs_cfg.device_files, bbs_cfg.drive_files, name);
+    }
+    for (i = 1; i <= CFG_MAX_BOARDS; i++) {
+        sprintf(name, "B%u.IDX", (unsigned)i);
+        (void)rel_seq_recover(bbs_cfg.device_msgs, bbs_cfg.drive_msgs, name);
     }
 }
 

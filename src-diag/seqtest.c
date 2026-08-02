@@ -70,6 +70,26 @@ int main(void)
     printf("\n%s\n", (eo == BBS_OK && ec == BBS_OK && er == BBS_OK &&
                       got == 30 && first == 1 && last == 5)
                      ? "SEQ BACKEND WORKS" : "SEQ BACKEND FAILS");
+
+    /* Crash between steps 1 and 2: both files exist, original wins. */
+    disk_scratch(dev, 0, "VOTE1"); disk_scratch(dev, 0, "VOTE1.NEW");
+    disk_open(dev, 0, "VOTE1",     DISK_WRITE); disk_putc('A'); disk_close();
+    disk_open(dev, 0, "VOTE1.NEW", DISK_WRITE); disk_putc('B'); disk_close();
+    rel_seq_recover(dev, 0, "VOTE1");
+    printf("BOTH:    NEW %s\n",
+           disk_open(dev, 0, "VOTE1.NEW", DISK_READ) == BBS_OK &&
+           disk_status(dev) != 62 ? "KEPT-BAD" : "DROPPED-OK");
+    disk_close();
+
+    /* Crash between steps 2 and 3: only the NEW exists, promote it. */
+    disk_scratch(dev, 0, "VOTE1");
+    disk_open(dev, 0, "VOTE1.NEW", DISK_WRITE); disk_putc('B'); disk_close();
+    rel_seq_recover(dev, 0, "VOTE1");
+    printf("TMPONLY: VOTE1 %s\n",
+           disk_open(dev, 0, "VOTE1", DISK_READ) == BBS_OK &&
+           disk_status(dev) != 62 ? "PROMOTED-OK" : "LOST-BAD");
+    disk_close();
+
     printf("DONE.\n");
     getch();
     return 0;

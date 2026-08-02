@@ -184,6 +184,19 @@ static bbs_err_t boot_sequence(void) {
     main_print("ERROR: CONFIG LOAD FAILED\n");
     return BBS_EFATAL;
   }
+
+#ifdef T64_STORE_SEQ
+  /* LOAD-BEARING POSITION: cfg_init() is the only resident function that
+   * loads OVL_BOOT (bank 3, $9700-$C000) — see cfg.c. rel_seq_sweep() and
+   * rel_seq_recover() live in boot_code, i.e. that same address range, so
+   * this call is only safe while OVL_BOOT is still the bank resident there.
+   * Nothing between cfg_init()'s return and this call may load a different
+   * overlay (OVL_MSGS/OVL_WFC/etc) or the JSR below executes whatever bank
+   * happens to occupy $9700 instead of the sweep. */
+  main_print("RECOVERING...\r");
+  rel_seq_sweep();
+#endif
+
   main_print("  BBS: ");
   main_print_upper(bbs_cfg.bbs_name);
   main_print("\n");

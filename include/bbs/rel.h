@@ -53,4 +53,11 @@ bbs_err_t rel_close(rel_handle_t h);
  * were closed by external code (e.g. after a disk_scratch + raw krnio_close). */
 void rel_reset(void);
 
+#ifdef T64_STORE_SEQ
+/* Boot-time crash recovery for the SEQ backend. Not part of the REL API. */
+bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name);
+void      rel_seq_sweep(void);
+bbs_err_t rel_seq_flush(void);
+#endif
+
 #endif /* BBS_REL_H */
