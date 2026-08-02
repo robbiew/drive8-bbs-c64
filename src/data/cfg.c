@@ -64,6 +64,9 @@ static void cfg_set_defaults(void) {
   bbs_cfg.device_doors  = T64_DRIVE_SOFTIEC;
   bbs_cfg.drive_doors   = 3;
   bbs_cfg.init_doors[0] = '\0';
+  bbs_cfg.device_gfiles  = T64_DRIVE_SOFTIEC;
+  bbs_cfg.drive_gfiles   = 4;
+  bbs_cfg.init_gfiles[0] = '\0';
 #else
   bbs_cfg.device_system = T64_DRIVE_SYSTEM;
   bbs_cfg.drive_system = CFG_DRIVE_DEFAULT;
@@ -77,6 +80,9 @@ static void cfg_set_defaults(void) {
   bbs_cfg.device_doors = T64_DRIVE_DOORS;
   bbs_cfg.drive_doors = CFG_DRIVE_DEFAULT;
   bbs_cfg.init_doors[0] = '\0';
+  bbs_cfg.device_gfiles = T64_DRIVE_GFILES;
+  bbs_cfg.drive_gfiles = CFG_DRIVE_DEFAULT;
+  bbs_cfg.init_gfiles[0] = '\0';
 #endif
 
   strcpy(bbs_cfg.modem_init, "ATZ");
@@ -260,6 +266,14 @@ static void cfg_apply(const char *key, const char *value) {
       bbs_cfg.drive_doors = CFG_DRIVE_DEFAULT;
       bbs_cfg.init_doors[0] = '\0';
     }
+  } else if (strcmp(key, "DEV_GFILES") == 0) {
+    if (cfg_parse_device_spec(value, &bbs_cfg.device_gfiles,
+                              &bbs_cfg.drive_gfiles, bbs_cfg.init_gfiles,
+                              (u8)sizeof(bbs_cfg.init_gfiles)) == FALSE) {
+      bbs_cfg.device_gfiles = (u8)atoi(value);
+      bbs_cfg.drive_gfiles = CFG_DRIVE_DEFAULT;
+      bbs_cfg.init_gfiles[0] = '\0';
+    }
   } else if (strcmp(key, "MODEM_INIT") == 0) {
     strncpy(bbs_cfg.modem_init, value, sizeof(bbs_cfg.modem_init) - 1);
     bbs_cfg.modem_init[sizeof(bbs_cfg.modem_init) - 1] = '\0';
@@ -359,11 +373,26 @@ bbs_err_t cfg_init(void) {
   krnio_load(1, (*(volatile u8 *)0xBA), 1);
 #endif
   err = cfg_load_impl();
+
+  /* Backward compat: an existing CONFIG has no DEV_GFILES line, so
+   * init_gfiles is still empty here. Inherit the system device/folder so
+   * those installs keep working with zero SysOp action. Must run before
+   * disk_set_section_path(4, ...) below so the SIEC section gets the
+   * inherited path, not an empty one. */
+  if (bbs_cfg.init_gfiles[0] == '\0') {
+    bbs_cfg.device_gfiles = bbs_cfg.device_system;
+#ifndef T64_STORE_SEQ
+    bbs_cfg.drive_gfiles  = bbs_cfg.drive_system;
+#endif
+    strcpy(bbs_cfg.init_gfiles, bbs_cfg.init_system);
+  }
+
 #ifdef T64_STORE_SEQ
   disk_set_section_path(0, bbs_cfg.init_system);
   disk_set_section_path(1, bbs_cfg.init_msgs);
   disk_set_section_path(2, bbs_cfg.init_files);
   disk_set_section_path(3, bbs_cfg.init_doors);
+  disk_set_section_path(4, bbs_cfg.init_gfiles);
 #endif
   return err;
 }
@@ -422,6 +451,8 @@ bbs_err_t cfg_save(void) {
   sprintf(line, "DEV_FILES=%s\n",     spec);                                cfg_put(line);
   cfg_format_device_spec(spec, bbs_cfg.device_doors, bbs_cfg.drive_doors, bbs_cfg.init_doors);
   sprintf(line, "DEV_DOORS=%s\n",     spec);                                cfg_put(line);
+  cfg_format_device_spec(spec, bbs_cfg.device_gfiles, bbs_cfg.drive_gfiles, bbs_cfg.init_gfiles);
+  sprintf(line, "DEV_GFILES=%s\n",    spec);                                cfg_put(line);
   sprintf(line, "MODEM_INIT=%s\n",    bbs_cfg.modem_init);                 cfg_put(line);
   sprintf(line, "BAUD=%u\n",          (unsigned)bbs_cfg.baud_rate);        cfg_put(line);
   sprintf(line, "MODEM_TIMEOUT=%u\n", (unsigned)bbs_cfg.modem_timeout);    cfg_put(line);

@@ -1203,13 +1203,13 @@ bbs_err_t session_display_file(const session_t *s, char prefix, const char *base
   session_refresh_timeleft(s);   /* keep %TL current for this render */
 
   disk_build_term_filename(&names, prefix, base_name, s->term_mode, s->term_width);
-  err = cfg_send_drive_init(bbs_cfg.device_system, bbs_cfg.init_system);
+  err = cfg_send_drive_init(bbs_cfg.device_gfiles, bbs_cfg.init_gfiles);
   if (err != BBS_OK) {
     return err;
   }
 
   for (i = 0; i < 4; i++) {
-    err = disk_open(bbs_cfg.device_system, bbs_cfg.drive_system, names.names[i], DISK_READ);
+    err = disk_open(bbs_cfg.device_gfiles, bbs_cfg.drive_gfiles, names.names[i], DISK_READ);
     if (err != BBS_OK) {
       continue;
     }

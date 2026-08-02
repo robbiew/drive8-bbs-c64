@@ -52,8 +52,8 @@ typedef struct {
   u16 call_time_limit;       /* Per-access-level time limit (for future expansion) */
 
   /* In SoftIEC builds drive_* is a SECTION INDEX (0=system, 1=msgs, 2=files,
-   * 3=doors) into the four init_* folder paths, not a CP<n> partition value.
-   * disk_select_partition() resolves it; see bbs/hal/disk.h. */
+   * 3=doors, 4=gfiles) into the five init_* folder paths, not a CP<n>
+   * partition value. disk_select_partition() resolves it; see bbs/hal/disk.h. */
   /* Device assignments */
   u8 device_system;          /* CBM device for system files (default 8) */
   u8 drive_system;           /* Logical drive / partition for system files */
@@ -67,6 +67,9 @@ typedef struct {
   u8 device_doors;           /* CBM device for door programs (default 10) */
   u8 drive_doors;            /* Logical drive / partition for door programs */
   char init_doors[CFG_INIT_MAX]; /* DOS init command for door device */
+  u8 device_gfiles;          /* CBM device for gfiles/menus/prompts */
+  u8 drive_gfiles;           /* partition, or section index 4 under T64_STORE_SEQ */
+  char init_gfiles[CFG_INIT_MAX]; /* DOS init command / folder path for gfiles device */
 
   /* Modem / network */
   char modem_init[20];       /* AT init string */
