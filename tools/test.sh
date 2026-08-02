@@ -39,6 +39,9 @@ run test_devspec \
 run test_devspec_seq -DT64_STORE_SEQ \
     "$ROOT/tests/test_devspec.c" "$ROOT/src/data/devspec.c"
 
+run test_seq_region \
+    "$ROOT/tests/test_seq_region.c" "$ROOT/src/hal/seq_region.c"
+
 run test_door_abi "$ROOT/tests/test_door_abi.c"
 
 run test_door_visible \
