@@ -14,6 +14,7 @@ BOOT_OVL_PRG  := $(OUTDIR)/ovl_boot.prg
 DOORS_OVL_PRG := $(OUTDIR)/ovl_doors.prg
 FILES_OVL_PRG := $(OUTDIR)/ovl_files.prg
 ZMODEM_OVL_PRG := $(OUTDIR)/ovl_zmodem.prg
+AUTH_OVL_PRG := $(OUTDIR)/ovl_auth.prg
 
 INCLUDES    := -i=$(ROOT)include -i=$(ROOT)vendor/oscar64/include -i=$(ROOT)src -i=$(ROOT)src/data
 OFLAGS      := -Os -Oo
@@ -103,6 +104,10 @@ $(ZMODEM_OVL_PRG): $(BOOT_PRG)
 	@test -f "$@" || { echo "ERROR: ovl_zmodem not produced by oscar64"; exit 1; }
 	@echo "Overlay: $@"
 
+$(AUTH_OVL_PRG): $(BOOT_PRG)
+	@test -f "$@" || { echo "ERROR: ovl_auth not produced by oscar64"; exit 1; }
+	@echo "Overlay: $@"
+
 EDITOR_HAL_SRCS := src/err.c src/hal/disk.c src/hal/rel.c
 EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c src-editor/admin/doors.c
 # No %f used in the editor, so strip the float printf path (~1.8 KB) as BOOT does.
@@ -121,7 +126,7 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRC
 BOOT_SIEC_PRG      := $(OUTDIR)/BOOT-$(VERSION)-SIEC.prg
 CONFIGURE_SIEC_PRG := $(OUTDIR)/CONFIGURE-$(VERSION)-SIEC.prg
 SIEC_DEFS          := -dT64_STORE_SEQ
-SIEC_REL_SRC       := src/hal/rel.c
+SIEC_REL_SRC       := src/hal/rel_seq.c src/hal/seq_region.c
 
 .PHONY: c64-siec editor-siec
 c64-siec: $(BOOT_SIEC_PRG)
@@ -170,7 +175,9 @@ diag:
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/COPYALL.prg src-diag/copyall.c $(DIAG_HAL)
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/SIECPROBE.prg src-diag/siecprobe.c \
 	  $(DIAG_HAL) src/hal/reu.c
-	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE in $(OUTDIR)"
+	$(OSCAR64) $(DIAG_FLAGS) $(SIEC_DEFS) -o=$(OUTDIR)/SEQTEST.prg src-diag/seqtest.c \
+	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c
+	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE SEQTEST in $(OUTDIR)"
 
 # Build a door PRG at $9700.  Usage: make door DOOR=<name>
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg
@@ -197,6 +204,6 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG) $(OUTDIR)/overlays-siec.d64
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG) $(AUTH_OVL_PRG) $(OUTDIR)/overlays-siec.d64
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."

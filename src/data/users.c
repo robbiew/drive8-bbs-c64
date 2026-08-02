@@ -19,6 +19,13 @@
  * for login.  We zero-fill the rest after reading. */
 #define RECORD_READ_MIN 12
 
+/* This whole cache is redundant under T64_STORE_SEQ: rel_open("USR LOG")
+ * already loads the full user table into REU (the USERS region at bank 2
+ * offset 0x4000 — rel_seq.c's own region map, distinct from REU_REGION_USERS
+ * at offset 0x0000 below) and rel_read() is itself a DMA read from there.
+ * Keeping this second REU-resident copy would cost resident bytes for no
+ * benefit, so the whole mechanism compiles out of the SIEC build. */
+#ifndef T64_STORE_SEQ
 /* TRUE once user_cache_load() has populated the REU data tier (Bank 2). When
  * set, reads serve from REU; writes are write-through. Disk stays authoritative. */
 static bool_t s_user_cache_valid = FALSE;
@@ -30,6 +37,7 @@ static bool_t s_user_cache_valid = FALSE;
 static u8 s_reu_scratch[RECORD_SIZE_USER];
 
 bool_t user_cache_active(void) { return s_user_cache_valid; }
+#endif
 
 static void user_pack(const user_record_t *rec, u8 *buf) {
   u8 i;
@@ -123,11 +131,13 @@ bbs_err_t user_by_id(u8 id, user_record_t *out_rec, u8 device) {
     return BBS_EBADARG;
   }
 
+#ifndef T64_STORE_SEQ
   if (s_user_cache_valid && id <= USERS_MAX) {
     reu_data_get(REU_REGION_USERS + (u16)(id - 1) * RECORD_SIZE_USER, s_reu_scratch, RECORD_SIZE_USER);
     user_unpack(out_rec, s_reu_scratch);
     return (out_rec->id == 0) ? BBS_ENOTFOUND : BBS_OK;
   }
+#endif
 
   /* Open "USR LOG" REL file */
   err = user_open_rel(device, "USR LOG", RECORD_SIZE_USER, &h);
@@ -185,6 +195,7 @@ u8 user_by_handle(const char *handle, u8 device) {
     return 0;
   }
 
+#ifndef T64_STORE_SEQ
   if (s_user_cache_valid) {
     for (rec_num = 1; rec_num <= USERS_MAX; rec_num++) {
       reu_data_get(REU_REGION_USERS + (u16)(rec_num - 1) * RECORD_SIZE_USER, s_reu_scratch, RECORD_SIZE_USER);
@@ -195,6 +206,7 @@ u8 user_by_handle(const char *handle, u8 device) {
     }
     return 0;
   }
+#endif
 
   /* Open "USR LOG" REL file */
   err = user_open_rel(device, "USR LOG", RECORD_SIZE_USER, &h);
@@ -267,12 +279,14 @@ bbs_err_t user_save(const user_record_t *rec, u8 device) {
   err = rel_write(h, (const void *)buf, RECORD_SIZE_USER);
   rel_close(h);
 
+#ifndef T64_STORE_SEQ
   if (err == BBS_OK && s_user_cache_valid && rec->id <= USERS_MAX) {
     /* write-through: disk already authoritative above; keep REU cache coherent.
      * Copy via the fixed scratch so the DMA source can't be frame-overlaid. */
     memcpy(s_reu_scratch, buf, RECORD_SIZE_USER);
     reu_data_put(REU_REGION_USERS + (u16)(rec->id - 1) * RECORD_SIZE_USER, s_reu_scratch, RECORD_SIZE_USER);
   }
+#endif
 
   return err;
 }
@@ -370,6 +384,7 @@ u8 user_count(u8 device) {
 }
 
 void user_cache_load(u8 device) {
+#ifndef T64_STORE_SEQ
   rel_handle_t h;
   u8 rec_num, got;
   bbs_err_t err;
@@ -389,6 +404,14 @@ void user_cache_load(u8 device) {
   }
   rel_close(h);
   s_user_cache_valid = TRUE;
+#else
+  /* Redundant under T64_STORE_SEQ — see the comment above s_user_cache_valid's
+   * (now compiled-out) declaration. Not called from main.c in this build, so
+   * this whole function dead-strips; kept as a no-op body (rather than an
+   * #ifdef'd-out declaration) so the bbs/users.h prototype stays valid for
+   * both builds without touching that header. */
+  (void)device;
+#endif
 }
 
 /**

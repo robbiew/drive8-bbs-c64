@@ -70,6 +70,11 @@ i16 disk_gets(char *buf, u8 len);
 /* Write one byte. Returns BBS_OK or BBS_EIO. */
 bbs_err_t disk_putc(char c);
 
+/* Write up to `len` raw bytes from buf. Returns BBS_OK or BBS_EIO.
+ * Uses krnio_write() — one CHKOUT + N×CHROUT + one CLRCHN per call.
+ * Much faster than disk_putc() for bulk sequential writes. */
+bbs_err_t disk_write(const u8 *buf, u8 len);
+
 /* Write NUL-terminated string. Returns BBS_OK or BBS_EIO. */
 bbs_err_t disk_puts(const char *s);
 

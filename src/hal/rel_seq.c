@@ -1,0 +1,267 @@
+/* SEQ + REU implementation of bbs/rel.h for the Ultimate Software IEC.
+ *
+ * WHY this exists: REL files do not work over SoftIEC — the open succeeds at
+ * KERNAL level and every record operation then returns DOS 61. Measured, with
+ * a 1581 control run, in docs/probe-results/FINDINGS.md. */
+#include "bbs/rel.h"
+#include "bbs/seq_region.h"
+#include "bbs/config.h"
+#include "bbs/hal/disk.h"
+#include "bbs/hal/reu.h"
+#include <string.h>
+
+#define REL_SEQ_HANDLE 0u
+
+static bool_t s_open      = FALSE;
+static u8     s_region    = SEQ_REGION_NONE;
+static u8     s_recsize   = 0;
+static u16    s_count     = 0;      /* records present (high-water mark) */
+static u16    s_pos       = 0;      /* 1-based current record */
+static u16    s_base      = 0;      /* seq_region_offset(s_region), cached at open */
+static u16    s_max_recs  = 0;      /* seq_region_capacity(s_region) / s_recsize */
+static u16    s_off       = 0;      /* byte offset of s_pos, set by rel_position */
+static bool_t s_dirty     = FALSE;
+static u8     s_device    = 0;
+static u8     s_partition = 0;
+static char   s_name[SEQ_NAME_MAX];
+
+/* Which region is resident, and whether it came off disk this session.
+ * The fixed sets stay loaded once read; WINDOW is reloaded per name. */
+static u8   s_loaded[REGION_COUNT_MAX];
+static char s_window_name[SEQ_NAME_MAX];
+
+static u8 s_io[64];
+
+static bbs_err_t region_load(void)
+{
+    u16 cap = seq_region_capacity(s_region);
+    u16 total = 0;
+    // cppcheck-suppress variableScope
+    i16 got;
+
+    if (disk_open(s_device, s_partition, s_name, DISK_READ) != BBS_OK) {
+        s_count = 0;
+        return BBS_OK;      /* absent file == empty set, as rel_open creates */
+    }
+    if (disk_status(s_device) == 62) {
+        disk_close();
+        s_count = 0;
+        return BBS_OK;
+    }
+
+    for (;;) {
+        got = disk_read(s_io, sizeof(s_io));
+        if (got <= 0) break;
+        if (total + (u16)got > cap) {
+            got = (i16)(cap - total);
+            if (got <= 0) break;
+        }
+        reu_data_put((u16)(s_base + total), s_io, (u16)got);
+        total += (u16)got;
+    }
+    disk_close();
+
+    s_count = (u16)(total / s_recsize);
+    return BBS_OK;
+}
+
+static bbs_err_t region_flush(void)
+{
+    char tmp[SEQ_NAME_MAX];
+    u16 total = (u16)(s_count * s_recsize);
+    u16 done = 0;
+    // cppcheck-suppress variableScope
+    u16 chunk;
+
+    if (!s_dirty) return BBS_OK;
+    if (!seq_tmp_name(tmp, s_name)) return BBS_EIO;
+
+    /* SoftIEC ignores the "@" replace prefix (returns 63), so scratch first. */
+    disk_scratch(s_device, s_partition, tmp);
+
+    if (disk_open(s_device, s_partition, tmp, DISK_WRITE) != BBS_OK) {
+        return BBS_EIO;
+    }
+    while (done < total) {
+        chunk = (u16)(total - done);
+        if (chunk > sizeof(s_io)) chunk = sizeof(s_io);
+        reu_data_get((u16)(s_base + done), s_io, chunk);
+        if (disk_write(s_io, (u8)chunk) != BBS_OK) {
+            disk_close();
+            return BBS_EIO;
+        }
+        done += chunk;
+    }
+    disk_close();
+
+    if (disk_scratch(s_device, s_partition, s_name) != BBS_OK) {
+        /* Absent is fine — this is the first write of a new set. */
+        if (disk_status(s_device) != 62) return BBS_EIO;
+    }
+    if (disk_rename(s_device, s_partition, tmp, s_name) != BBS_OK) {
+        return BBS_EIO;
+    }
+
+    s_dirty = FALSE;
+    return BBS_OK;
+}
+
+bbs_err_t rel_seq_flush(void) { return region_flush(); }
+
+/* rel_seq_recover() and seq_name_exists() run only from the Task 8 boot
+ * recovery sweep — once per name, at startup, never during a session — so
+ * they are boot-overlay-only, same as devspec_parse() (src/data/devspec.c).
+ * Pragmas bind at the definition site and are not scoped, so the switch back
+ * to resident placement below MUST land before rel_open(): everything
+ * between the two switches ends up in ovl_boot. */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(boot_code)
+#pragma data(boot_data)
+#endif
+
+/* disk_open() succeeding is not evidence a file exists (KERNAL OPEN answers
+ * for any device that responds); only DOS 62 is trustworthy. A disk_open()
+ * failure is treated as absent, matching region_load()'s convention. */
+static bool_t seq_name_exists(u8 device, u8 partition, const char *name)
+{
+    bool_t exists;
+    if (disk_open(device, partition, name, DISK_READ) != BBS_OK) return FALSE;
+    exists = (disk_status(device) != 62) ? TRUE : FALSE;
+    disk_close();
+    return exists;
+}
+
+bbs_err_t rel_seq_recover(u8 device, u8 partition, const char *name)
+{
+    char tmp[SEQ_NAME_MAX];
+    bool_t name_exists, tmp_exists;
+
+    if (!name || !seq_tmp_name(tmp, name)) return BBS_EIO;
+    if (disk_select_partition(device, partition) != BBS_OK) return BBS_EIO;
+
+    name_exists = seq_name_exists(device, partition, name);
+    tmp_exists  = seq_name_exists(device, partition, tmp);
+
+    switch (seq_recover_action(name_exists, tmp_exists)) {
+    case SEQ_RECOVER_DROP_TMP: return disk_scratch(device, partition, tmp);
+    case SEQ_RECOVER_PROMOTE:  return disk_rename(device, partition, tmp, name);
+    default:                   return BBS_OK;
+    }
+}
+
+#ifdef T64_BOOT_OVERLAY
+#pragma code(code)
+#pragma data(data)
+#endif
+
+bbs_err_t rel_open(u8 device, u8 partition, const char *name,
+                   u8 record_size, rel_handle_t *out)
+{
+    u8 region;
+
+    if (!name || !out || record_size == 0) return BBS_EIO;
+    if (s_open) return BBS_EIO;
+    if (!reu_data_available()) return BBS_EIO;
+
+    region = seq_region_for_name(name);
+    if (region == SEQ_REGION_NONE) return BBS_EIO;
+    if (strlen(name) >= SEQ_NAME_MAX) return BBS_EIO;
+
+    if (disk_select_partition(device, partition) != BBS_OK) return BBS_EIO;
+
+    s_region = region;
+    s_recsize = record_size;
+    s_base = seq_region_offset(region);
+    s_max_recs = (u16)(seq_region_capacity(region) / record_size);
+    s_device = device;
+    s_partition = partition;
+    s_pos = 0;
+    s_dirty = FALSE;
+    strcpy(s_name, name);
+
+    if (region == SEQ_REGION_WINDOW) {
+        if (strcmp(s_window_name, name) != 0) {
+            bbs_err_t err = region_load();
+            // cppcheck-suppress knownConditionTrueFalse
+            if (err != BBS_OK) return err;
+            strcpy(s_window_name, name);
+        }
+    } else if (!s_loaded[region]) {
+        bbs_err_t err = region_load();
+        // cppcheck-suppress knownConditionTrueFalse
+        if (err != BBS_OK) return err;
+        s_loaded[region] = 1;
+    }
+
+    s_open = TRUE;
+    *out = REL_SEQ_HANDLE;
+    return BBS_OK;
+}
+
+/* Every one of the 176 rel_* call sites positions before it reads or writes
+ * (the interface contract), so the record's byte offset is computed once
+ * here rather than recomputed by every rel_read()/rel_write() call. */
+bbs_err_t rel_position(rel_handle_t h, u16 rec)
+{
+    (void)h;
+    if (!s_open || rec == 0) return BBS_EIO;
+    s_pos = rec;
+    s_off = (u16)(s_base + (u16)(rec - 1) * s_recsize);
+    return BBS_OK;
+}
+
+bbs_err_t rel_read(rel_handle_t h, void *buf, u8 record_size, u8 *got)
+{
+    (void)h;
+    if (!s_open || !buf || s_pos == 0) return BBS_EIO;
+    if (got) *got = 0;
+    if (s_pos > s_count) return BBS_ENOTFOUND;
+
+    reu_data_get(s_off, buf, record_size);
+    if (got) *got = record_size;
+    return BBS_OK;
+}
+
+bbs_err_t rel_write(rel_handle_t h, const void *buf, u8 record_size)
+{
+    (void)h;
+    if (!s_open || !buf || s_pos == 0) return BBS_EIO;
+    if (s_pos > s_max_recs) return BBS_EFULL;
+
+    /* Extending past the high-water mark zero-fills the gap, so a sparse
+     * write behaves the way it does against a preallocated REL file. The
+     * fill offset is stepped by s_recsize per record rather than
+     * recomputed by multiplication each iteration. */
+    if (s_count + 1 < s_pos) {
+        u16 fill_off = (u16)(s_base + (u16)s_count * s_recsize);
+        memset(s_io, 0, s_recsize);
+        do {
+            reu_data_put(fill_off, s_io, s_recsize);
+            fill_off = (u16)(fill_off + s_recsize);
+            s_count++;
+        } while (s_count + 1 < s_pos);
+    }
+    if (s_pos > s_count) s_count = s_pos;
+
+    reu_data_put(s_off, buf, record_size);
+    s_dirty = TRUE;
+    return BBS_OK;
+}
+
+bbs_err_t rel_close(rel_handle_t h)
+{
+    bbs_err_t err;
+    (void)h;
+    if (!s_open) return BBS_OK;
+    err = region_flush();
+    s_open = FALSE;
+    s_pos = 0;
+    return err;
+}
+
+void rel_reset(void)
+{
+    s_open = FALSE;
+    s_dirty = FALSE;
+    s_pos = 0;
+}

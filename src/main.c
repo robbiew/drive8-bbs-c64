@@ -102,6 +102,29 @@
 #pragma section( zmodem_bss,  0, , , bss )
 #pragma region( zmodem, 0x9700, 0xC000, , 6, {zmodem_code, zmodem_data, zmodem_bss} )
 
+/* AUTH overlay: bank 7.  Holds only auth_prompt_login (interactive login),
+ * loaded on demand from session.c's login call site and reloaded back to
+ * OVL_WFC immediately after, same pattern as OVL_MSGS. auth_prompt_login's
+ * only caller (session.c) is resident and it calls nothing outside bank 7,
+ * so this is a clean load/call/reload with no cross-bank risk.
+ *
+ * auth_register_new and auth_validate_handle (both also in src/features/
+ * auth.c) do NOT live here, despite being in the same source file — an
+ * overlay calling into a *different* overlay bank would execute whatever
+ * bank happens to be resident at $9700, not the intended callee, since
+ * overlay code isn't addressable across banks. Their only external caller,
+ * newuser.c's registration flow, is itself compiled into wfc_code (bank 2),
+ * not resident. auth_register_new instead lives in wfc_code — the SAME
+ * bank as that caller, an intra-bank move, not a cross-bank one; see its
+ * pragma switch in auth.c. auth_validate_handle stays fully resident: it
+ * would also fit in wfc_code, but there was no need to spend WFC's
+ * remaining headroom once auth_register_new alone closed the budget gap. */
+#pragma overlay( ovl_auth, 7 )
+#pragma section( auth_code, 0 )
+#pragma section( auth_data, 0 )
+#pragma section( auth_bss,  0, , , bss )
+#pragma region( auth, 0x9700, 0xC000, , 7, {auth_code, auth_data, auth_bss} )
+
 /**
  * main_print()
  *
@@ -224,11 +247,18 @@ static bbs_err_t boot_sequence(void) {
       /* Verify record 1 has SYSOP user (ID=1, not 0 which means empty) */
       if (check == BBS_OK && got > 0 && buf[0] == 1) {
         main_print("  USR LOG: OK\n");
+#ifndef T64_STORE_SEQ
         /* Load the user-record cache into REU (robust file-static DMA path);
-         * report whether it's serving from REU or falling back to disk. */
+         * report whether it's serving from REU or falling back to disk.
+         * Under T64_STORE_SEQ this whole cache is redundant — rel_open()
+         * already keeps USR LOG resident in REU via rel_seq.c's own region
+         * map — so there is nothing honest left to report here; the line
+         * is dropped rather than printed with a hardcoded, misleading
+         * answer. */
         user_cache_load(bbs_cfg.device_system);
         main_print(user_cache_active() ? "  USER CACHE: ON (REU)\n"
                                        : "  USER CACHE: OFF (DISK)\n");
+#endif
       } else {
         main_print("  USR LOG: EMPTY\n");
         /* Clean up the empty file that was auto-created by rel_open */

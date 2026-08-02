@@ -129,10 +129,15 @@ bbs_err_t msg_index_get(u8 board_id, u16 msg_id,
 
     if (!out || msg_id == 0 || board_id == 0) return BBS_EBADARG;
 
+#ifndef T64_STORE_SEQ
+    /* Under T64_STORE_SEQ this cache is redundant: rel_open() already loads
+     * B<n>.IDX into REU (the WINDOW region in bank 2) and rel_read() is
+     * itself a DMA read, so the fallback below costs nothing extra there. */
     if (bbs_cfg.reu_enabled) {
         reu_index_get(msg_id, out);
         return BBS_OK;
     }
+#endif
 
     err = msg_open_idx(board_id, device, &h);
     if (err != BBS_OK) return err;
@@ -179,6 +184,7 @@ u8 msg_index_page(u8 board_id, u16 first_id, u8 max_rows,
 
     if (!out || board_id == 0 || first_id == 0 || max_rows == 0) return 0;
 
+#ifndef T64_STORE_SEQ
     if (bbs_cfg.reu_enabled) {
         while (filled < max_rows &&
                (u16)(first_id + filled) <= CFG_MSG_MAX_PER_BOARD) {
@@ -189,6 +195,7 @@ u8 msg_index_page(u8 board_id, u16 first_id, u8 max_rows,
         }
         return filled;
     }
+#endif
 
     err = msg_open_idx(board_id, device, &h);
     if (err != BBS_OK) return 0;
@@ -267,10 +274,15 @@ bbs_err_t msg_index_put(u8 board_id, const msg_index_record_t *rec, u8 device)
 
     if (err != BBS_OK) return err;
 
-    /* Also update REU if enabled */
+#ifndef T64_STORE_SEQ
+    /* Also update REU if enabled. Under T64_STORE_SEQ this is redundant:
+     * the rel_write() above already updated the WINDOW region in REU bank 2,
+     * which is the authoritative cache there — bank 0 would just be a
+     * second copy of the same data. */
     if (bbs_cfg.reu_enabled) {
         reu_index_put(rec->msg_id, rec);
     }
+#endif
 
     return BBS_OK;
 }
@@ -407,9 +419,11 @@ u8 msg_scan_new(u8 board_id, u16 hwm, u16 last_call_date,
                  u16 *out_ids, u8 max_ids, u8 device)
 {
     scan_new_ctx_t ctx;
+#ifndef T64_STORE_SEQ
     // cppcheck-suppress variableScope
     u16 rec_num;
     msg_index_record_t rec;
+#endif
 
     ctx.hwm = hwm;
     ctx.last_call_date = last_call_date;
@@ -417,6 +431,7 @@ u8 msg_scan_new(u8 board_id, u16 hwm, u16 last_call_date,
     ctx.max_ids = max_ids;
     ctx.found = 0;
 
+#ifndef T64_STORE_SEQ
     if (bbs_cfg.reu_enabled) {
         for (rec_num = 1; rec_num <= CFG_MSG_MAX_PER_BOARD; rec_num++) {
             reu_index_get(rec_num, &rec);
@@ -432,6 +447,7 @@ u8 msg_scan_new(u8 board_id, u16 hwm, u16 last_call_date,
         }
         return ctx.found;
     }
+#endif
 
     msg_scan_all(board_id, device, scan_new_visitor, &ctx);
     return ctx.found;

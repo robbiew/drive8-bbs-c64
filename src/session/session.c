@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <conio.h>   /* getchx() — raw GETIN, safe while VIC is in bitmap mode */
+#include <c64/kernalio.h>   /* krnio_setnam/krnio_load — OVL_AUTH load before auth_prompt_login */
 
 /* C64 keyboard buffer count (non-blocking check) */
 #define KBD_COUNT (*(volatile u8 *)0xC6)
@@ -848,8 +849,15 @@ bbs_err_t session_step(session_t *s) {
           session_emit(s, ": ");
           break;
         }
-        /* Both handle and password collected; attempt login */
+        /* Both handle and password collected; attempt login.
+         * auth_prompt_login lives in OVL_AUTH (bank 7) — load it over the
+         * overlay zone, then reload OVL_WFC (spy view code) before doing
+         * anything else, same pattern as action_list_boards/OVL_MSGS. */
+        krnio_setnam(P"OVL_AUTH");
+        krnio_load(1, bbs_cfg.device_system, 1);
+        wfc.ovl_wfc_loaded = FALSE;
         err = auth_prompt_login(s);
+        wfc_reload();
         if (err == BBS_OK) {
           /* Login successful */
           sess_color(s, 0x9f, "\x1b[36m");
