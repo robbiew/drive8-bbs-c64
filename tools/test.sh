@@ -33,6 +33,9 @@ run test_menu_garbage \
 run test_user_hash \
     "$ROOT/tests/test_user_hash.c" "$ROOT/src/data/user_hash.c"
 
+run test_devspec \
+    "$ROOT/tests/test_devspec.c" "$ROOT/src/data/devspec.c"
+
 run test_door_abi "$ROOT/tests/test_door_abi.c"
 
 run test_door_visible \
