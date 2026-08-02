@@ -20,12 +20,13 @@
 
 /* Initialize USR LOG REL file with sysop account.
  *
- * Uses rel_open / rel_position / rel_write / rel_close — the same path
- * that the BBS runtime (user_save) uses.  rel_reset() is called first to
- * clear the single-open guard in case any previous operation left it set.
- *
- * The P command in rel_position uses PRINT#-style (CHKOUT + CHROUT), which
- * is the reliable canonical method on 1581/U64 CBM DOS.
+ * Uses rel_open / rel_write / rel_close — the same path that the BBS
+ * runtime (user_save) uses for a single record. Record 1 (SYSOP) writes at
+ * the position rel_open() leaves the file at; the remaining USERS_MAX-1
+ * blank slots are written in a loop below with no rel_position() call at
+ * all, relying on rel_write() advancing to the next record on success
+ * (both builds behind bbs/rel.h honour this). rel_reset() is called first
+ * to clear the single-open guard in case any previous operation left it set.
  */
 bbs_err_t setup_create_user_database(u8 device) {
   bbs_err_t err;

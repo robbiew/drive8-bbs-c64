@@ -248,16 +248,14 @@ bbs_err_t rel_position(rel_handle_t h, u16 rec)
 
 /* CBM REL semantics (src/hal/rel.c reads/writes straight off the open KERNAL
  * data channel): a successful read OR write advances the position to the
- * next record, so callers position once (or rely on rel_open()'s implicit
- * position 1) and then loop rel_read()/rel_write() with no intervening
- * rel_position() call. src/data/users.c's login-path comment documents the
- * read-side dependency explicitly; src-editor/setup.c's user/profile
- * database initializers (rel_write() in a `for` loop, one position before
- * the loop, none inside it) depend on the write side the same way — checked
- * directly, not assumed, after an earlier version of this comment asserted
- * "every rel_write() call site positions immediately before it" without
- * having looked outside src/. rel_write() gives rel_read() the identical
- * treatment below. */
+ * next record, and rel_open() itself leaves the file positioned at record 1
+ * (see the comment there). So a caller can loop rel_read()/rel_write() with
+ * no rel_position() call at all — src/data/users.c's login-path comment
+ * documents the read side; src-editor/setup.c's user/profile database
+ * initializers write USERS_MAX records in a `for` loop with zero
+ * rel_position() calls anywhere in the file, relying entirely on
+ * rel_open()'s implicit record 1 plus this advance. rel_write() gets the
+ * same treatment as rel_read() below. */
 bbs_err_t rel_read(rel_handle_t h, void *buf, u8 record_size, u8 *got)
 {
     (void)h;

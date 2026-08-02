@@ -164,8 +164,7 @@ int main(void)
 #ifdef T64_STORE_SEQ
     /* rel_open() (rel_seq.c) hard-requires a working REU — without this call
      * bbs_cfg.reu_enabled stays FALSE all run and every database operation
-     * (INIT BBS, user/board/file/vote edits) fails with BBS_EIO. Same
-     * omission cost a whole hardware probe run earlier in this project. */
+     * (INIT BBS, user/board/file/vote edits) fails with BBS_EIO. */
     {
         u16 reu_sz = reu_detect();
         if (reu_sz == 0) {

@@ -121,6 +121,16 @@ static u8 auth_is_all_digits(const char *handle) {
   return TRUE;  /* All chars were digits */
 }
 
+/* auth_validate_handle lives in wfc_code, the same bank as both of its
+ * callers — newuser.c's registration flow and auth_register_new, just
+ * below — so every call to it is intra-bank. See the ovl_auth region
+ * comment in main.c for why bank 7 (auth_prompt_login's bank) is wrong for
+ * it and bank 2 is right. */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(wfc_code)
+#pragma data(wfc_data)
+#endif
+
 /**
  * auth_validate_handle()
  *
@@ -163,9 +173,10 @@ bbs_err_t auth_validate_handle(const char *handle, u8 device) {
  * resident data-layer functions (users.c/usrptr.c have no overlay pragmas
  * on the paths it uses), so it is safe to displace into its own overlay —
  * see the ovl_auth region comment in main.c. auth_register_new and
- * auth_validate_handle stay resident: both are called from newuser.c's
- * registration flow, which itself lives in the WFC overlay (bank 2), so an
- * overlay-to-overlay call would land on whatever bank is actually loaded. */
+ * auth_validate_handle, above, do NOT live here: both are called from
+ * newuser.c's registration flow, which itself lives in the WFC overlay
+ * (bank 2) — an overlay-to-overlay call would land on whatever bank is
+ * actually loaded, not the callee, so they live in wfc_code instead. */
 #ifdef T64_BOOT_OVERLAY
 #pragma code(auth_code)
 #pragma data(auth_data)

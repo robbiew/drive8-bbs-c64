@@ -112,13 +112,12 @@
  * auth.c) do NOT live here, despite being in the same source file — an
  * overlay calling into a *different* overlay bank would execute whatever
  * bank happens to be resident at $9700, not the intended callee, since
- * overlay code isn't addressable across banks. Their only external caller,
- * newuser.c's registration flow, is itself compiled into wfc_code (bank 2),
- * not resident. auth_register_new instead lives in wfc_code — the SAME
- * bank as that caller, an intra-bank move, not a cross-bank one; see its
- * pragma switch in auth.c. auth_validate_handle stays fully resident: it
- * would also fit in wfc_code, but there was no need to spend WFC's
- * remaining headroom once auth_register_new alone closed the budget gap. */
+ * overlay code isn't addressable across banks. Their callers — newuser.c's
+ * registration flow, and each other (auth_register_new calls
+ * auth_validate_handle) — are themselves compiled into wfc_code (bank 2),
+ * not resident. Both instead live in wfc_code — the SAME bank as those
+ * callers, an intra-bank move, not a cross-bank one; see their pragma
+ * switches in auth.c. */
 #pragma overlay( ovl_auth, 7 )
 #pragma section( auth_code, 0 )
 #pragma section( auth_data, 0 )
