@@ -125,6 +125,7 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRC
 #   CLEAN   scratch T/64's system files from a device/partition
 #   WIPE    scratch every file on a device/partition (destructive)
 #   COPYALL copy the T/64 program set between devices, through the C64
+#   SIECPROBE SoftIEC SEQ correctness gates and cost measurements (throwaway)
 # Usage: make diag        (all four land in build/c64/)
 DIAG_HAL := src/err.c src/hal/disk.c
 DIAG_FLAGS := $(CFLAGS) -i=$(ROOT)src-diag -dNOFLOAT
@@ -140,7 +141,9 @@ diag:
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/CLEAN.prg   src-diag/clean.c   $(DIAG_HAL)
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/WIPE.prg    src-diag/wipe.c    $(DIAG_HAL)
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/COPYALL.prg src-diag/copyall.c $(DIAG_HAL)
-	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL in $(OUTDIR)"
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/SIECPROBE.prg src-diag/siecprobe.c \
+	  $(DIAG_HAL) src/hal/reu.c
+	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE in $(OUTDIR)"
 
 # Build a door PRG at $9700.  Usage: make door DOOR=<name>
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg

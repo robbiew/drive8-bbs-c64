@@ -14,6 +14,7 @@ questions only hardware can answer. Build with `make diag`; the PRGs land in
 | `CLEAN` | Scratch T/64's system files from one device/partition |
 | `WIPE` | Scratch **every** file on a device/partition (destructive) |
 | `COPYALL` | Copy the T/64 program set between devices, through the C64 |
+| `SIECPROBE` | Throwaway probe: the SoftIEC SEQ backend's four correctness gates and five cost measurements — see `docs/probe-results/PHASE0.md` |
 
 They link `src/hal/disk.c` and `src/hal/rel.c` directly, so a pass here is evidence
 about the code the BBS actually runs — not a reimplementation that might diverge.
