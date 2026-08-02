@@ -69,8 +69,8 @@ int main(void) {
 
     /* 23 chars is the maximum a char[24] field holds */
     EXPECT_EQ("siec.max.ok",
-              devspec_parse("11;/USB1/AAAAAAAAAAAAAA", &dev, &drv, loc, 24), 1);
-    EXPECT_STR("siec.max.loc", loc, "/USB1/AAAAAAAAAAAAAA");
+              devspec_parse("11;/USB1/AAAAAAAAAAAAAAAAA", &dev, &drv, loc, 24), 1);
+    EXPECT_STR("siec.max.loc", loc, "/USB1/AAAAAAAAAAAAAAAAA");
 
     EXPECT_EQ("siec.trunc.ok",
               devspec_parse("11;/USB1/AAAAAAAAAAAAAAAAAAAAAAAAAA",
