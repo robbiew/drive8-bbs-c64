@@ -20,6 +20,11 @@
  * via disk_select_partition() (the "CP<n>" command channel command) before
  * the filename is opened — see disk_select_partition() for why.
  *
+ * In T64_STORE_SEQ builds `drive` is instead a SECTION INDEX (0=system,
+ * 1=msgs, 2=files, 3=doors) and disk_select_partition() issues an absolute
+ * "CD:<path>" rather than "CP<n>". Every caller passes the same value in
+ * both builds; only the resolution changes.
+ *
  * REL file access is handled by bbs/rel.h, not this module.
  */
 #ifndef BBS_HAL_DISK_H
@@ -95,6 +100,14 @@ bbs_err_t disk_cmd(u8 device, const char *cmd);
  * and is a no-op when already selected. `partition == 0` always sends
  * nothing (see disk.c for why). */
 bbs_err_t disk_select_partition(u8 device, u8 partition);
+
+#ifdef T64_STORE_SEQ
+/* Register the absolute folder path for section `index` (0=system, 1=msgs,
+ * 2=files, 3=doors). Stores the POINTER — the caller must keep the string
+ * alive for the lifetime of the program (bbs_cfg does). Called once per
+ * section after config load. */
+void disk_set_section_path(u8 index, const char *path);
+#endif
 
 /* Read drive status into disk_errmsg. Returns numeric error code (0=OK). */
 u8 disk_status(u8 device);

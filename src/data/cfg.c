@@ -353,11 +353,19 @@ static bbs_err_t cfg_load_impl(void) {
  * so this is a thin pass-through.
  */
 bbs_err_t cfg_init(void) {
+  bbs_err_t err;
 #ifdef T64_BOOT_OVERLAY
   krnio_setnam(P"OVL_BOOT");
   krnio_load(1, (*(volatile u8 *)0xBA), 1);
 #endif
-  return cfg_load_impl();
+  err = cfg_load_impl();
+#ifdef T64_STORE_SEQ
+  disk_set_section_path(0, bbs_cfg.init_system);
+  disk_set_section_path(1, bbs_cfg.init_msgs);
+  disk_set_section_path(2, bbs_cfg.init_files);
+  disk_set_section_path(3, bbs_cfg.init_doors);
+#endif
+  return err;
 }
 
 /* First disk_puts failure across a whole cfg_save pass; later writes are

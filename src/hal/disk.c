@@ -35,8 +35,80 @@ static u8 s_open_device = 0;
 static u8 s_part_device    = 0xFF;
 static u8 s_part_partition = 0;
 
+#ifdef T64_STORE_SEQ
+/* Absolute folder path per section, registered by disk_set_section_path()
+ * once cfg_init() has read CONFIG. Pointers only — see disk.h. */
+static const char *s_section_path[4] = { 0, 0, 0, 0 };
+
+/* Marker-file arrival check runs once per section, the first time its
+ * folder is selected. CD: to a wrong/missing folder returns DOS status 0
+ * (measured on hardware) and silently leaves the cursor where it was, so
+ * there is no error to catch at the CD: layer itself — only opening a file
+ * known to live in the real folder and reading its DOS status proves the
+ * folder is correct. 62 = file not found is the only trustworthy signal;
+ * disk_open() returning BBS_OK is not (KERNAL OPEN succeeds on any device
+ * that answers, regardless of whether the file exists). */
+static bool_t s_section_verified[4] = { FALSE, FALSE, FALSE, FALSE };
+
+void disk_set_section_path(u8 index, const char *path)
+{
+    if (index < 4) s_section_path[index] = path;
+}
+
+/* Opens the marker directly through krnio rather than disk_open(): the
+ * partition is already current, so going through the public open path
+ * would recurse back into disk_select_partition() for no benefit and cost
+ * scarce resident code space. */
+static bbs_err_t disk_verify_section_marker(u8 device)
+{
+    u8 status;
+
+    krnio_setnam("0:T64.SIEC,S,R");
+    krnio_open(CFG_FNUM_DATA, device, 2);
+    krnio_close(CFG_FNUM_DATA);
+    status = disk_status(device);
+    if (status == 62) return BBS_EIO;
+    return BBS_OK;
+}
+#endif
+
 bbs_err_t disk_select_partition(u8 device, u8 partition)
 {
+#ifdef T64_STORE_SEQ
+    char cmd[28];
+    const char *path;
+
+    if (partition >= 4) return BBS_EIO;
+    path = s_section_path[partition];
+    if (!path || path[0] == '\0') return BBS_OK;
+
+    if (s_part_device == device && s_part_partition == partition) {
+        return BBS_OK;
+    }
+
+    sprintf(cmd, "CD:%s", path);
+    if (disk_cmd(device, cmd) != BBS_OK) {
+        /* Never leave a stale cache entry behind: the next call must retry
+         * the switch rather than assume the cursor moved. */
+        s_part_device = 0xFF;
+        return BBS_EIO;
+    }
+
+    /* Must cache AFTER disk_cmd() returns — see the CP<n> path below for why
+     * (disk_cmd() unconditionally invalidates this cache). */
+    s_part_device    = device;
+    s_part_partition = partition;
+
+    if (!s_section_verified[partition]) {
+        bbs_err_t verify_err = disk_verify_section_marker(device);
+        if (verify_err != BBS_OK) {
+            s_part_device = 0xFF;
+            return verify_err;
+        }
+        s_section_verified[partition] = TRUE;
+    }
+    return BBS_OK;
+#else
     char cmd[8];
     bbs_err_t err;
 
@@ -68,6 +140,7 @@ bbs_err_t disk_select_partition(u8 device, u8 partition)
     s_part_device    = device;
     s_part_partition = partition;
     return BBS_OK;
+#endif
 }
 
 bbs_err_t disk_open(u8 device, u8 drive, const char *name, disk_mode_t mode)
