@@ -102,22 +102,27 @@
 #pragma section( zmodem_bss,  0, , , bss )
 #pragma region( zmodem, 0x9700, 0xC000, , 6, {zmodem_code, zmodem_data, zmodem_bss} )
 
-/* AUTH overlay: bank 7.  Holds only auth_prompt_login (interactive login),
- * loaded on demand from session.c's login call site and reloaded back to
- * OVL_WFC immediately after, same pattern as OVL_MSGS. auth_prompt_login's
- * only caller (session.c) is resident and it calls nothing outside bank 7,
- * so this is a clean load/call/reload with no cross-bank risk.
- *
- * auth_register_new and auth_validate_handle (both also in src/features/
- * auth.c) do NOT live here, despite being in the same source file — an
- * overlay calling into a *different* overlay bank would execute whatever
- * bank happens to be resident at $9700, not the intended callee, since
- * overlay code isn't addressable across banks. Their callers — newuser.c's
- * registration flow, and each other (auth_register_new calls
- * auth_validate_handle) — are themselves compiled into wfc_code (bank 2),
- * not resident. Both instead live in wfc_code — the SAME bank as those
- * callers, an intra-bank move, not a cross-bank one; see their pragma
- * switches in auth.c. */
+/* AUTH overlay: bank 7. src/features/auth.c splits three ways, by caller:
+ *   - auth_prompt_login lives HERE (auth_code/auth_data), loaded on demand
+ *     from session.c's login call site and reloaded back to OVL_WFC right
+ *     after, same pattern as OVL_MSGS. Its only caller (session.c) is
+ *     resident and it calls nothing outside bank 7 — a clean load/call/
+ *     reload, no cross-bank risk.
+ *   - auth_register_new, auth_validate_handle, and the two static handle-
+ *     validation helpers it calls (auth_is_all_digits/auth_is_reserved_
+ *     handle — inlined into it) live in wfc_code (bank 2) instead: their
+ *     callers are newuser.c's registration flow and each other
+ *     (auth_register_new calls auth_validate_handle), which are themselves
+ *     compiled into wfc_code, not resident. Putting them in a DIFFERENT
+ *     overlay bank (e.g. here) would have a bank-2 caller executing
+ *     whatever bank actually happens to be resident at $9700, not the
+ *     intended callee — overlay code isn't addressable across banks. wfc_code
+ *     is the correct, intra-bank home; see the pragma switches in auth.c.
+ *   - auth_password_matches, auth_validate_password, auth_check_access stay
+ *     resident (default section) — the first is shared by both
+ *     auth_prompt_login and auth_validate_password; the latter two have no
+ *     caller anywhere in the tree and are dead-stripped regardless of
+ *     section. */
 #pragma overlay( ovl_auth, 7 )
 #pragma section( auth_code, 0 )
 #pragma section( auth_data, 0 )

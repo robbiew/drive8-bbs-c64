@@ -68,6 +68,18 @@ bbs_err_t auth_check_access(const user_record_t *user, u8 min_level) {
   return BBS_OK;
 }
 
+/* auth_is_reserved_handle / auth_is_all_digits are static helpers called
+ * only from auth_validate_handle, just below, which lives in wfc_code —
+ * they used to inline into it there for free, but moving the caller to
+ * wfc_code (see its comment) stopped that: oscar64 materialised them as
+ * separate RESIDENT symbols instead, i.e. resident code reachable only
+ * from bank 2. Placing them in wfc_code alongside their only caller closes
+ * that gap, whether or not oscar64 chooses to re-inline them there. */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(wfc_code)
+#pragma data(wfc_data)
+#endif
+
 /**
  * auth_is_reserved_handle()
  *
@@ -121,16 +133,11 @@ static u8 auth_is_all_digits(const char *handle) {
   return TRUE;  /* All chars were digits */
 }
 
-/* auth_validate_handle lives in wfc_code, the same bank as both of its
- * callers — newuser.c's registration flow and auth_register_new, just
- * below — so every call to it is intra-bank. See the ovl_auth region
- * comment in main.c for why bank 7 (auth_prompt_login's bank) is wrong for
- * it and bank 2 is right. */
-#ifdef T64_BOOT_OVERLAY
-#pragma code(wfc_code)
-#pragma data(wfc_data)
-#endif
-
+/* auth_validate_handle lives in wfc_code (same switch as the two helpers
+ * above), the same bank as both of its callers — newuser.c's registration
+ * flow and auth_register_new, just below — so every call to it is
+ * intra-bank. See the ovl_auth region comment in main.c for why bank 7
+ * (auth_prompt_login's bank) is wrong for it and bank 2 is right. */
 /**
  * auth_validate_handle()
  *
