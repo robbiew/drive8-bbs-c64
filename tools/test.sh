@@ -36,6 +36,9 @@ run test_user_hash \
 run test_devspec \
     "$ROOT/tests/test_devspec.c" "$ROOT/src/data/devspec.c"
 
+run test_devspec_seq -DT64_STORE_SEQ \
+    "$ROOT/tests/test_devspec.c" "$ROOT/src/data/devspec.c"
+
 run test_door_abi "$ROOT/tests/test_door_abi.c"
 
 run test_door_visible \

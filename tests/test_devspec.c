@@ -7,6 +7,7 @@ int main(void) {
     char loc[24];
     char buf[DEVSPEC_BUF_MAX];
 
+#ifndef T64_STORE_SEQ
     dev = 0; drv = 9; loc[0] = 'x';
     EXPECT_EQ("bare.ok", devspec_parse("8", &dev, &drv, loc, sizeof(loc)), 1);
     EXPECT_EQ("bare.dev", dev, 8);
@@ -50,6 +51,45 @@ int main(void) {
     EXPECT_EQ("rt.dev", dev, 10);
     EXPECT_EQ("rt.drv", drv, 3);
     EXPECT_STR("rt.loc", loc, "I0");
+#else
+    dev = 0; drv = 7; loc[0] = 'x';
+    EXPECT_EQ("siec.ok",
+              devspec_parse("11;/USB1/BBS/SYSTEM", &dev, &drv, loc, sizeof(loc)), 1);
+    EXPECT_EQ("siec.dev", dev, 11);
+    EXPECT_EQ("siec.drv.untouched", drv, 7);
+    EXPECT_STR("siec.loc", loc, "/USB1/BBS/SYSTEM");
+
+    EXPECT_EQ("siec.bare.ok", devspec_parse("11", &dev, &drv, loc, sizeof(loc)), 1);
+    EXPECT_EQ("siec.bare.dev", dev, 11);
+    EXPECT_STR("siec.bare.loc", loc, "");
+
+    EXPECT_EQ("siec.ws.ok",
+              devspec_parse("  11;/SD/T64  ", &dev, &drv, loc, sizeof(loc)), 1);
+    EXPECT_STR("siec.ws.loc", loc, "/SD/T64");
+
+    /* 23 chars is the maximum a char[24] field holds */
+    EXPECT_EQ("siec.max.ok",
+              devspec_parse("11;/USB1/AAAAAAAAAAAAAA", &dev, &drv, loc, 24), 1);
+    EXPECT_STR("siec.max.loc", loc, "/USB1/AAAAAAAAAAAAAA");
+
+    EXPECT_EQ("siec.trunc.ok",
+              devspec_parse("11;/USB1/AAAAAAAAAAAAAAAAAAAAAAAAAA",
+                            &dev, &drv, loc, 24), 1);
+    EXPECT_EQ("siec.trunc.len", strlen(loc), 23);
+
+    EXPECT_EQ("siec.empty", devspec_parse("", &dev, &drv, loc, sizeof(loc)), 0);
+    EXPECT_EQ("siec.null", devspec_parse(0, &dev, &drv, loc, sizeof(loc)), 0);
+
+    devspec_format(buf, 11, 0, "/USB1/BBS/SYSTEM");
+    EXPECT_STR("siec.fmt", buf, "11;/USB1/BBS/SYSTEM");
+    devspec_format(buf, 11, 0, "");
+    EXPECT_STR("siec.fmt.bare", buf, "11");
+
+    devspec_format(buf, 11, 0, "/SD/T64/MSGS");
+    EXPECT_EQ("siec.rt.ok", devspec_parse(buf, &dev, &drv, loc, sizeof(loc)), 1);
+    EXPECT_EQ("siec.rt.dev", dev, 11);
+    EXPECT_STR("siec.rt.loc", loc, "/SD/T64/MSGS");
+#endif
 
     return test_summary("devspec");
 }
