@@ -9,6 +9,7 @@
 #include "bbs/types.h"
 #include "bbs/err.h"
 #include "bbs/config.h"
+#include "bbs/cfg.h"
 #include "bbs/hal/disk.h"
 #include "bbs/hal/reu.h"
 
@@ -229,6 +230,7 @@ int main(void)
 
     printf("\nT2 IS MANUAL - SEE README\n");
 
+    printf("REU %u KB\n", (unsigned)reu_detect());
     if (reu_data_available()) {
         m2_write_slow(3000);
         m1_read(3000);
@@ -238,7 +240,9 @@ int main(void)
         m1_read(8600);
         m5_recovery();
     } else {
-        printf("NO REU - M1-M5 SKIPPED\n");
+        printf("NO REU DATA TIER - M1-M5 SKIPPED\n");
+        printf("  SIZE %u KB BANKS %u\n",
+               (unsigned)bbs_cfg.reu_detected_size, (unsigned)reu_bank_count());
     }
 
     printf("DONE.\n");
