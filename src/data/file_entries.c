@@ -145,6 +145,11 @@ bbs_err_t fentry_add(u8 area_id, const file_entry_record_t *rec, u8 device)
     for (n = 1; n <= 255; n++) {
         memset(buf, 0, RECORD_SIZE_FILE_ENTRY);
         err = rel_read(h, buf, RECORD_SIZE_FILE_ENTRY, &got);
+        /* Past the SEQ backend's high-water mark IS a free slot — there is
+         * nothing there yet, which is exactly what we're scanning for. REL's
+         * rel_read() never returns BBS_ENOTFOUND mid-scan (only got<REC_MIN,
+         * handled below), so this case is inert on that backend. */
+        if (err == BBS_ENOTFOUND) { slot = n; break; }
         if (err != BBS_OK) break;
         if (got < REC_MIN) { slot = n; break; }
         fentry_unpack(&r, buf);
