@@ -16,6 +16,7 @@
 #include "admin/admin.h"
 #include "ui/ui.h"
 #include "bbs/hal/disk.h"
+#include "bbs/hal/reu.h"
 #include "bbs/callers.h"
 #include "bbs/sstatus.h"
 #include "bbs/syscnt.h"
@@ -159,6 +160,24 @@ int main(void)
         printf("ERROR: CONFIG INIT FAILED\n");
         return 1;
     }
+
+#ifdef T64_STORE_SEQ
+    /* rel_open() (rel_seq.c) hard-requires a working REU — without this call
+     * bbs_cfg.reu_enabled stays FALSE all run and every database operation
+     * (INIT BBS, user/board/file/vote edits) fails with BBS_EIO. Same
+     * omission cost a whole hardware probe run earlier in this project. */
+    {
+        u16 reu_sz = reu_detect();
+        if (reu_sz == 0) {
+            printf("WARNING: NO REU DETECTED\n");
+            printf("DATABASE ACCESS WILL FAIL\n");
+        } else if (reu_sz >= 1024) {
+            printf("REU: %u MB\n", (unsigned)(reu_sz >> 10));
+        } else {
+            printf("REU: %u KB\n", reu_sz);
+        }
+    }
+#endif
 
     main_menu();
 

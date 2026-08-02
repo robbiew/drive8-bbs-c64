@@ -84,12 +84,19 @@ static bbs_err_t region_load(void)
 static bbs_err_t region_flush(void)
 {
     char tmp[SEQ_NAME_MAX];
-    u16 total = (u16)(s_count_by_region[s_region] * s_recsize);
+    u16 total;
     u16 done = 0;
     // cppcheck-suppress variableScope
     u16 chunk;
 
+    /* Must come before any s_count_by_region[s_region] access: rel_seq_flush()
+     * is a public entry point with no caller yet (Task 8), and s_region is
+     * SEQ_REGION_NONE (0xFF) until the first rel_open() — indexing the
+     * 9-element array with that before confirming a region is actually
+     * open/dirty would read out of bounds. */
     if (!s_dirty) return BBS_OK;
+    total = (u16)(s_count_by_region[s_region] * s_recsize);
+
     if (!seq_tmp_name(tmp, s_name)) return BBS_EIO;
 
     /* SoftIEC ignores the "@" replace prefix (returns 63), so scratch first. */
@@ -204,7 +211,12 @@ bbs_err_t rel_open(u8 device, u8 partition, const char *name,
     s_max_recs = (u16)(seq_region_capacity(region) / record_size);
     s_device = device;
     s_partition = partition;
-    s_pos = 0;
+    /* rel.c's contract: rel_open() itself leaves the file positioned at
+     * record 1 (CBM DOS convention — see src/data/users.c's login-path
+     * comment), so a caller that never calls rel_position() can still
+     * read/write straight away. Must come after s_base/s_recsize above. */
+    s_pos = 1;
+    s_off = s_base;
     s_dirty = FALSE;
     strcpy(s_name, name);
 
@@ -234,15 +246,18 @@ bbs_err_t rel_position(rel_handle_t h, u16 rec)
     return BBS_OK;
 }
 
-/* CBM REL semantics (src/hal/rel.c reads straight off the open KERNAL data
- * channel): a successful read advances the position to the next record, so
- * callers position ONCE and then loop rel_read() with no intervening
+/* CBM REL semantics (src/hal/rel.c reads/writes straight off the open KERNAL
+ * data channel): a successful read OR write advances the position to the
+ * next record, so callers position once (or rely on rel_open()'s implicit
+ * position 1) and then loop rel_read()/rel_write() with no intervening
  * rel_position() call. src/data/users.c's login-path comment documents the
- * dependency explicitly. rel_write() does not need the same treatment —
- * every rel_write() call site in this codebase positions immediately
- * before it, one record per open (checked: usrptr.c, file_areas.c,
- * votes.c, doors.c x2, usrday.c, file_entries.c x2, users.c x2, boards.c,
- * messages.c — no site loops writes without repositioning between them). */
+ * read-side dependency explicitly; src-editor/setup.c's user/profile
+ * database initializers (rel_write() in a `for` loop, one position before
+ * the loop, none inside it) depend on the write side the same way — checked
+ * directly, not assumed, after an earlier version of this comment asserted
+ * "every rel_write() call site positions immediately before it" without
+ * having looked outside src/. rel_write() gives rel_read() the identical
+ * treatment below. */
 bbs_err_t rel_read(rel_handle_t h, void *buf, u8 record_size, u8 *got)
 {
     (void)h;
@@ -281,6 +296,9 @@ bbs_err_t rel_write(rel_handle_t h, const void *buf, u8 record_size)
 
     reu_data_put(s_off, buf, record_size);
     s_dirty = TRUE;
+
+    s_pos++;
+    s_off = (u16)(s_off + s_recsize);
     return BBS_OK;
 }
 

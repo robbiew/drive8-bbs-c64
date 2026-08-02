@@ -109,13 +109,17 @@ $(AUTH_OVL_PRG): $(BOOT_PRG)
 	@echo "Overlay: $@"
 
 EDITOR_HAL_SRCS := src/err.c src/hal/disk.c src/hal/rel.c
-EDITOR_SRCS := src-editor/setup.c src-editor/reu_stubs.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c src-editor/admin/doors.c
+EDITOR_SRCS := src-editor/setup.c src-editor/ui/util.c src-editor/ui/menu.c src-editor/ui/list.c src-editor/ui/edit.c src-editor/ui/dialog.c src-editor/admin/users.c src-editor/admin/messages.c src-editor/admin/config.c src-editor/admin/files.c src-editor/admin/votes.c src-editor/admin/doors.c
 # No %f used in the editor, so strip the float printf path (~1.8 KB) as BOOT does.
 EDITOR_DEFS := -dNOFLOAT
+# reu_stubs.c satisfies messages.c/users.c's REU-gated calls for the default
+# editor build, which never has a real REU. The SIEC editor links the real
+# src/hal/reu.c instead (see CONFIGURE_SIEC_PRG below) — it needs a working
+# REU because rel_seq.c's rel_open() hard-requires reu_data_available().
 
-$(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
+$(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) src-editor/reu_stubs.c $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
 	@mkdir -p $(OUTDIR)
-	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) $(EDITOR_DEFS) -o=$@ $< $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS)
+	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) $(EDITOR_DEFS) -o=$@ $< $(EDITOR_SRCS) src-editor/reu_stubs.c $(EDITOR_HAL_SRCS) $(DATA_SRCS)
 	@echo "Built: $@"
 
 # ---------------------------------------------------------------------------
@@ -139,10 +143,10 @@ $(BOOT_SIEC_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_
 	  $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
 	@echo "Built: $@"
 
-$(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
+$(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
 	@mkdir -p $(OUTDIR)
 	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(EDITOR_DEFS) $(SIEC_DEFS) -o=$@ \
-	  $< $(EDITOR_SRCS) $(filter-out src/hal/rel.c,$(EDITOR_HAL_SRCS)) $(SIEC_REL_SRC) \
+	  $< $(EDITOR_SRCS) $(filter-out src/hal/rel.c,$(EDITOR_HAL_SRCS)) $(SIEC_REL_SRC) src/hal/reu.c \
 	  $(DATA_SRCS)
 	@echo "Built: $@"
 
