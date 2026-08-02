@@ -64,7 +64,9 @@ static void cfg_set_defaults(void) {
   bbs_cfg.device_doors  = T64_DRIVE_SOFTIEC;
   bbs_cfg.drive_doors   = 3;
   bbs_cfg.init_doors[0] = '\0';
-  bbs_cfg.device_gfiles  = T64_DRIVE_SOFTIEC;
+  /* 0 is not a valid CBM device (8-30), so it doubles as the "no explicit
+   * DEV_GFILES line" sentinel without a separate flag — see cfg_init(). */
+  bbs_cfg.device_gfiles  = 0;
   bbs_cfg.drive_gfiles   = 4;
   bbs_cfg.init_gfiles[0] = '\0';
 #else
@@ -80,7 +82,9 @@ static void cfg_set_defaults(void) {
   bbs_cfg.device_doors = T64_DRIVE_DOORS;
   bbs_cfg.drive_doors = CFG_DRIVE_DEFAULT;
   bbs_cfg.init_doors[0] = '\0';
-  bbs_cfg.device_gfiles = T64_DRIVE_GFILES;
+  /* 0 is not a valid CBM device (8-30), so it doubles as the "no explicit
+   * DEV_GFILES line" sentinel without a separate flag — see cfg_init(). */
+  bbs_cfg.device_gfiles = 0;
   bbs_cfg.drive_gfiles = CFG_DRIVE_DEFAULT;
   bbs_cfg.init_gfiles[0] = '\0';
 #endif
@@ -375,11 +379,14 @@ bbs_err_t cfg_init(void) {
   err = cfg_load_impl();
 
   /* Backward compat: an existing CONFIG has no DEV_GFILES line, so
-   * init_gfiles is still empty here. Inherit the system device/folder so
-   * those installs keep working with zero SysOp action. Must run before
-   * disk_set_section_path(4, ...) below so the SIEC section gets the
+   * device_gfiles is still the cfg_set_defaults() sentinel (0, not a valid
+   * CBM device) here. Inherit the system device/folder so those installs
+   * keep working with zero SysOp action. Gating on the sentinel rather than
+   * init_gfiles[0]=='\0' matters: a bare "DEV_GFILES=9" is a legitimate
+   * explicit spec with no init string, and must not be discarded. Must run
+   * before disk_set_section_path(4, ...) below so the SIEC section gets the
    * inherited path, not an empty one. */
-  if (bbs_cfg.init_gfiles[0] == '\0') {
+  if (bbs_cfg.device_gfiles == 0) {
     bbs_cfg.device_gfiles = bbs_cfg.device_system;
 #ifndef T64_STORE_SEQ
     bbs_cfg.drive_gfiles  = bbs_cfg.drive_system;
