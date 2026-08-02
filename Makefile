@@ -47,7 +47,7 @@ SESSION_SRCS := src/session/session.c src/session/spy80.c src/session/spy80_ansi
 FEATURE_SRCS := src/features/menu.c src/features/menu_tables.c src/features/menu_actions.c src/features/auth.c src/features/newuser.c src/features/bulletin.c src/features/editor.c src/features/mail.c src/features/files.c src/features/xfer.c src/features/chat.c src/features/vote.c src/features/callers.c src/features/sysop.c src/features/doors.c
 PUB_HDRS := include/bbs/version.h include/bbs/config.h include/bbs/types.h include/bbs/err.h include/bbs/drives.h include/bbs/net.h include/bbs/io.h include/bbs/term.h include/bbs/rel.h include/bbs/records.h include/bbs/cfg.h include/bbs/users.h include/bbs/boards.h include/bbs/file_areas.h include/bbs/file_entries.h include/bbs/votes.h include/bbs/messages.h include/bbs/usrptr.h include/bbs/sstatus.h include/bbs/syscnt.h include/bbs/usrday.h include/bbs/editor.h include/bbs/menu.h include/bbs/session.h include/bbs/prompt_cursor.h include/bbs/auth.h include/bbs/bulletin.h include/bbs/mail.h include/bbs/files.h include/bbs/xfer.h include/bbs/chat.h include/bbs/vote.h include/bbs/callers.h include/bbs/sysop.h include/bbs/hal/clock.h include/bbs/hal/disk.h include/bbs/hal/reu.h include/bbs/hal/term.h include/bbs/menu_actions.h include/bbs/doors.h include/bbs/devspec.h
 
-.PHONY: all c64 editor door door-example clean release test lint
+.PHONY: all c64 editor door door-example clean release test lint c64-siec editor-siec
 
 SETUP_DATA  := $(OUTDIR)/config
 SETUP_SRC   := $(ROOT)data/config
@@ -113,6 +113,33 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRC
 	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) $(EDITOR_DEFS) -o=$@ $< $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS)
 	@echo "Built: $@"
 
+# ---------------------------------------------------------------------------
+# SoftIEC build (T64_STORE_SEQ): records live in REU-backed flat SEQ files and
+# drive_* is a section-folder index rather than a CP<n> partition. Selected
+# here by the define and by which rel implementation is linked.
+# ---------------------------------------------------------------------------
+BOOT_SIEC_PRG      := $(OUTDIR)/BOOT-$(VERSION)-SIEC.prg
+CONFIGURE_SIEC_PRG := $(OUTDIR)/CONFIGURE-$(VERSION)-SIEC.prg
+SIEC_DEFS          := -dT64_STORE_SEQ
+SIEC_REL_SRC       := src/hal/rel.c
+
+.PHONY: c64-siec editor-siec
+c64-siec: $(BOOT_SIEC_PRG)
+editor-siec: $(CONFIGURE_SIEC_PRG)
+
+$(BOOT_SIEC_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS) $(PUB_HDRS)
+	@mkdir -p $(OUTDIR)
+	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) $(SIEC_DEFS) -o=$@ -d64=$(OUTDIR)/overlays-siec.d64 \
+	  $< $(filter-out src/hal/rel.c,$(HAL_SRCS)) $(SIEC_REL_SRC) \
+	  $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
+	@echo "Built: $@"
+
+$(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
+	@mkdir -p $(OUTDIR)
+	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(EDITOR_DEFS) $(SIEC_DEFS) -o=$@ \
+	  $< $(EDITOR_SRCS) $(filter-out src/hal/rel.c,$(EDITOR_HAL_SRCS)) $(SIEC_REL_SRC) \
+	  $(DATA_SRCS)
+	@echo "Built: $@"
 
 
 # Storage diagnostics — standalone PRGs that exercise the real HAL against a
@@ -170,6 +197,6 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG)
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG) $(OUTDIR)/overlays-siec.d64
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."

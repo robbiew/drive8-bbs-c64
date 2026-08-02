@@ -14,7 +14,16 @@
 /** Configuration value buffer size (for key and value) */
 #define CFG_KEY_MAX     32
 #define CFG_VALUE_MAX   64
+
+#ifdef T64_STORE_SEQ
+/* SoftIEC build: these four fields hold the absolute section FOLDER path
+ * (e.g. "/USB1/BBS/SYSTEM"), not a DOS init command. They are reinterpreted
+ * rather than renamed because 28 call sites pass them to
+ * cfg_send_drive_init(), which becomes a no-op here. */
+#define CFG_INIT_MAX    24
+#else
 #define CFG_INIT_MAX    16
+#endif
 
 /** Modem carrier-detection mode.
  *  AUTO: probe for U64 UCI support at boot; use U64 if present, otherwise VICE.
@@ -42,6 +51,9 @@ typedef struct {
   u8 idle_timeout_mins;      /* Keyboard idle timeout (minutes); 0 = disabled */
   u16 call_time_limit;       /* Per-access-level time limit (for future expansion) */
 
+  /* In SoftIEC builds drive_* is a SECTION INDEX (0=system, 1=msgs, 2=files,
+   * 3=doors) into the four init_* folder paths, not a CP<n> partition value.
+   * disk_select_partition() resolves it; see bbs/hal/disk.h. */
   /* Device assignments */
   u8 device_system;          /* CBM device for system files (default 8) */
   u8 drive_system;           /* Logical drive / partition for system files */

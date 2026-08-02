@@ -48,6 +48,23 @@ static void cfg_set_defaults(void) {
   bbs_cfg.call_time_limit = 3600;
   bbs_cfg.idle_timeout_mins = 3;
 
+  /* SoftIEC builds own drive_* as a section index (0=system..3=doors) here,
+   * set once rather than assigned-then-overridden, so cppcheck doesn't flag
+   * a redundant assignment on the REL-only values below. */
+#ifdef T64_STORE_SEQ
+  bbs_cfg.device_system = T64_DRIVE_SOFTIEC;
+  bbs_cfg.drive_system  = 0;
+  bbs_cfg.init_system[0] = '\0';
+  bbs_cfg.device_msgs   = T64_DRIVE_SOFTIEC;
+  bbs_cfg.drive_msgs    = 1;
+  bbs_cfg.init_msgs[0] = '\0';
+  bbs_cfg.device_files  = T64_DRIVE_SOFTIEC;
+  bbs_cfg.drive_files   = 2;
+  bbs_cfg.init_files[0] = '\0';
+  bbs_cfg.device_doors  = T64_DRIVE_SOFTIEC;
+  bbs_cfg.drive_doors   = 3;
+  bbs_cfg.init_doors[0] = '\0';
+#else
   bbs_cfg.device_system = T64_DRIVE_SYSTEM;
   bbs_cfg.drive_system = CFG_DRIVE_DEFAULT;
   bbs_cfg.init_system[0] = '\0';
@@ -60,6 +77,7 @@ static void cfg_set_defaults(void) {
   bbs_cfg.device_doors = T64_DRIVE_DOORS;
   bbs_cfg.drive_doors = CFG_DRIVE_DEFAULT;
   bbs_cfg.init_doors[0] = '\0';
+#endif
 
   strcpy(bbs_cfg.modem_init, "ATZ");
   bbs_cfg.baud_rate = 9600;
@@ -155,10 +173,17 @@ void cfg_format_device_spec(char *buf, u8 device, u8 drive, const char *init) {
 }
 
 bbs_err_t cfg_send_drive_init(u8 device, const char *init) {
+#ifdef T64_STORE_SEQ
+  /* No disk to initialize on SoftIEC; init_* holds a folder path here and the
+   * directory switch happens in disk_select_partition(). */
+  (void)device; (void)init;
+  return BBS_OK;
+#else
   if (!init || init[0] == '\0') {
     return BBS_OK;
   }
   return disk_cmd(device, init);
+#endif
 }
 
 /**
