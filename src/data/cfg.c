@@ -13,9 +13,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef T64_BOOT_OVERLAY
-#include <c64/kernalio.h>
-#endif
 
 /* Global config instance */
 cfg_t bbs_cfg;
@@ -321,8 +318,9 @@ static bbs_err_t cfg_load_impl(void) {
    * this program in, so a BBS booted from device 10 reads its config from
    * device 10. Without this the default (T64_DRIVE_SYSTEM, normally 8) wins and
    * a BBS running off any other device silently reads someone else's config and
-   * then fails to find its own USR LOG. cfg_init() already loads the OVL_BOOT
-   * overlay from $BA; this makes the config agree with it.
+   * then fails to find its own USR LOG. main() already loaded OVL_BOOT from
+   * $BA before calling boot_sequence() (which calls cfg_init()); this makes
+   * the config agree with it.
    *
    * Values below 8 mean tape or a bus device that cannot hold files, so the
    * compile-time default is kept in that case.
@@ -362,20 +360,18 @@ static bbs_err_t cfg_load_impl(void) {
 /**
  * cfg_init()
  *
- * Resident entry point for config load.  In the BOOT build it pulls the
- * ovl_boot overlay into the shared $9700 region before running the boot-only
- * parse code, then returns — the overlay is dead weight afterward and the wfc/
- * msgs overlays freely overwrite it.  The overlay loads from the kernal current
- * device ($BA, the disk the BBS booted from) because bbs_cfg.device_system is
- * not populated until cfg_load_impl() runs.  The editor build has no overlay,
- * so this is a thin pass-through.
+ * Resident entry point for config load. In the BOOT build, OVL_BOOT (the
+ * bank cfg_load_impl() and boot_sequence() itself both live in) is already
+ * loaded by the time this runs — main() loads it before calling
+ * boot_sequence(), which is cfg_init()'s only caller — so there is nothing
+ * for cfg_init() to load here itself; an earlier version of this function
+ * did its own redundant OVL_BOOT load for that reason, back when
+ * boot_sequence() was resident and cfg_init() was the first boot-only code
+ * to run. The editor build has no overlay either way, so this is a thin
+ * pass-through in both builds.
  */
 bbs_err_t cfg_init(void) {
   bbs_err_t err;
-#ifdef T64_BOOT_OVERLAY
-  krnio_setnam(P"OVL_BOOT");
-  krnio_load(1, (*(volatile u8 *)0xBA), 1);
-#endif
   err = cfg_load_impl();
 
   /* Backward compat: an existing CONFIG has no DEV_GFILES line, so

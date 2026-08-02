@@ -13,6 +13,7 @@
 
 /* Oscar64 headers */
 #include <c64/vic.h>
+#include <c64/kernalio.h>   /* krnio_setnam/krnio_load — main() loads OVL_BOOT before boot_sequence() runs from it */
 
 /* BBS headers */
 #include "bbs/version.h"
@@ -64,10 +65,13 @@
 #pragma section( wfc_bss,  0, , , bss )
 #pragma region( wfc, 0x9700, 0xC000, , 2, {wfc_code, wfc_data, wfc_bss} )
 
-/* BOOT overlay: config-load code (cfg_init + its parse helpers) runs once at
- * boot and is then dead weight in the resident region.  Bank 3 — same address
- * zone as MSGS/WFC; boot strictly precedes any session, so wfc_init/the first
- * session freely overwrites it.  Frees ~1.7 KB of the cramped main region. */
+/* BOOT overlay: boot_sequence() itself, plus config-load code (cfg_init +
+ * its parse helpers), run once at boot and are then dead weight in the
+ * resident region.  Bank 3 — same address zone as MSGS/WFC; boot strictly
+ * precedes any session, so wfc_init/the first session freely overwrites it.
+ * main() loads this overlay directly (see main()'s doc comment) BEFORE
+ * calling boot_sequence() — boot_sequence can no longer trigger its own
+ * load the way cfg_init used to, since cfg_init() is called from inside it. */
 #pragma overlay( ovl_boot, 3 )
 #pragma section( boot_code, 0 )
 #pragma section( boot_data, 0 )
@@ -154,6 +158,18 @@ static void main_print_upper(const char *text) {
   }
 }
 
+/* boot_sequence() runs exactly once and is boot_code/boot_data, same as
+ * cfg_init()'s parse helpers (cfg.c) and rel_seq_sweep() (rel_seq.c) —
+ * see main()'s doc comment for why main() must load OVL_BOOT itself before
+ * calling this, rather than boot_sequence()'s own cfg_init() call doing it
+ * (the old, pre-move arrangement). __noinline keeps oscar64 from folding
+ * this back into main() at -Oo, which would put its ~1000 bytes of code
+ * back in the resident region this move exists to clear. */
+#ifdef T64_BOOT_OVERLAY
+#pragma code(boot_code)
+#pragma data(boot_data)
+#endif
+
 /**
  * boot_sequence()
  *
@@ -163,7 +179,7 @@ static void main_print_upper(const char *text) {
  *   BBS_OK     — ready to accept calls
  *   BBS_EFATAL — fatal initialization error
  */
-static bbs_err_t boot_sequence(void) {
+static __noinline bbs_err_t boot_sequence(void) {
   bbs_err_t err;
 
   /* Clear screen, set colors */
@@ -310,11 +326,13 @@ static bbs_err_t boot_sequence(void) {
     return BBS_EFATAL;
   }
 
-  /* Initialize WFC state (clock + log buffer) */
-  wfc_init();
-
   return BBS_OK;
 }
+
+#ifdef T64_BOOT_OVERLAY
+#pragma code(code)
+#pragma data(data)
+#endif
 
 /**
  * main_loop()
@@ -433,7 +451,18 @@ static void main_loop(void) {
 /**
  * main()
  *
- * BBS entry point.
+ * BBS entry point. Loads OVL_BOOT itself, before calling boot_sequence()
+ * (which now lives in that overlay) — boot_sequence() can no longer trigger
+ * its own load via cfg_init() the way it used to, since it would already
+ * need to be resident in the overlay bank to run cfg_init() in the first
+ * place. Uses the KERNAL current device ($BA, set by the LOAD that brought
+ * this program in) rather than bbs_cfg.device_system/CFG_DEV_SYSTEM,
+ * exactly as cfg_init()'s own (now-redundant, removed) load did: config
+ * hasn't been read yet at this point, so bbs_cfg isn't populated, and a
+ * compile-time default would read a BBS booted from a non-default device's
+ * OVL_BOOT/CONFIG from the wrong drive. cfg_load_impl() (cfg.c) separately
+ * reads $BA again to pick the matching CONFIG file — the two must agree,
+ * and both reading the same live KERNAL variable is what guarantees that.
  */
 int main(void)
 {
@@ -443,12 +472,23 @@ int main(void)
    * accessible as RAM.  Keeps KERNAL ($E000) and I/O ($D000) active. */
   *((volatile char *)0x01) = 0x36;
 
-  /* Boot sequence */
+  /* Load the boot overlay (bank 3) before boot_sequence() can run from it. */
+  krnio_setnam(P"OVL_BOOT");
+  if (!krnio_load(1, *(volatile u8 *)0xBA, 1)) {
+    main_print("\nERROR: OVL_BOOT LOAD FAILED. HALTING.\n");
+    return 1;
+  }
+
+  /* Boot sequence (now running from OVL_BOOT) */
   err = boot_sequence();
   if (err != BBS_OK) {
     main_print("\nBOOT FAILED. HALTING.\n");
     return 1;
   }
+
+  /* wfc_init() loads OVL_WFC, displacing OVL_BOOT — safe now that
+   * boot_sequence() has returned to resident code. */
+  wfc_init();
 
   /* Main loop */
   main_loop();
