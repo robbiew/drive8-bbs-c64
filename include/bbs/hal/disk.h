@@ -106,6 +106,13 @@ bbs_err_t disk_cmd(u8 device, const char *cmd);
  * nothing (see disk.c for why). */
 bbs_err_t disk_select_partition(u8 device, u8 partition);
 
+/* Load an overlay PRG (a P"OVL_..." literal) from bbs_cfg.device_system,
+ * positioning the drive cursor at the system section first under
+ * T64_STORE_SEQ (a no-op in the REL build). See disk.c for the full
+ * rationale. Returns BBS_EIO if positioning or the load fails — callers
+ * must not run into the overlay region in that case. */
+bbs_err_t disk_load_overlay(const char *name);
+
 #ifdef T64_STORE_SEQ
 /* Register the absolute folder path for section `index` (0=system, 1=msgs,
  * 2=files, 3=doors, 4=gfiles). Stores the POINTER — the caller must keep the string

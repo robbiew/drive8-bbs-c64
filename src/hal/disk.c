@@ -1,6 +1,7 @@
 /* CBM IEC sequential disk I/O using oscar64 kernalio. */
 #include "bbs/hal/disk.h"
 #include "bbs/config.h"
+#include "bbs/cfg.h"
 #include <c64/kernalio.h>
 #include <string.h>
 
@@ -150,6 +151,39 @@ bbs_err_t disk_select_partition(u8 device, u8 partition)
     s_part_partition = partition;
     return BBS_OK;
 #endif
+}
+
+/* Load an overlay PRG (a P"OVL_..." PETSCII literal) from bbs_cfg.device_system.
+ *
+ * In T64_STORE_SEQ builds the drive's directory cursor is persistent state
+ * (see disk_select_partition() above); every overlay load must position it
+ * first or krnio_load silently resolves against whatever folder a prior
+ * operation left the cursor in and fails without telling anyone (the exact
+ * bug this function exists to close — see git history for the WFC-overlay
+ * incident it replaces). All overlays load from the system section (index
+ * 0) because that is where the cursor already sits for nearly all of the
+ * BBS's runtime (content opens go through device_system/drive_system too);
+ * only OVL_BOOT and CONFIG stay at the tree root, loaded before cfg_init()
+ * has registered any section path to CD to. In the REL build,
+ * disk_select_partition() is skipped entirely — overlay loads have never
+ * needed or sent a CP<n> and must not start now.
+ *
+ * Returns BBS_EIO if positioning or the load itself fails. Callers must
+ * not transfer control into the overlay region when this returns non-OK:
+ * the load failing leaves whatever was resident there before, valid or
+ * not, which is exactly the stale-overlay hazard this guards against. */
+bbs_err_t disk_load_overlay(const char *name)
+{
+#ifdef T64_STORE_SEQ
+    if (disk_select_partition(bbs_cfg.device_system, bbs_cfg.drive_system) != BBS_OK) {
+        return BBS_EIO;
+    }
+#endif
+    krnio_setnam(name);
+    if (!krnio_load(1, bbs_cfg.device_system, 1)) {
+        return BBS_EIO;
+    }
+    return BBS_OK;
 }
 
 bbs_err_t disk_open(u8 device, u8 drive, const char *name, disk_mode_t mode)

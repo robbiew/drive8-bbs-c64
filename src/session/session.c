@@ -25,7 +25,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <conio.h>   /* getchx() — raw GETIN, safe while VIC is in bitmap mode */
-#include <c64/kernalio.h>   /* krnio_setnam/krnio_load — OVL_AUTH load before auth_prompt_login */
 
 /* C64 keyboard buffer count (non-blocking check) */
 #define KBD_COUNT (*(volatile u8 *)0xC6)
@@ -852,11 +851,21 @@ bbs_err_t session_step(session_t *s) {
         /* Both handle and password collected; attempt login.
          * auth_prompt_login lives in OVL_AUTH (bank 7) — load it over the
          * overlay zone, then reload OVL_WFC (spy view code) before doing
-         * anything else, same pattern as action_list_boards/OVL_MSGS. */
-        krnio_setnam(P"OVL_AUTH");
-        krnio_load(1, bbs_cfg.device_system, 1);
-        wfc.ovl_wfc_loaded = FALSE;
-        err = auth_prompt_login(s);
+         * anything else, same pattern as action_list_boards/OVL_MSGS.
+         *
+         * auth_prompt_login() lives IN the overlay just requested — on a
+         * failed load it must not run (that would execute whatever is
+         * still at $9700). Falling through with err=BBS_EIO reuses the
+         * existing "bad login" branch below: it already rate-limits and
+         * never distinguishes handle vs password, so folding a load
+         * failure into it needs no new disconnect logic. */
+        if (disk_load_overlay(P"OVL_AUTH") == BBS_OK) {
+          wfc.ovl_wfc_loaded = FALSE;
+          err = auth_prompt_login(s);
+        } else {
+          session_emit(s, "\r\nERROR: OVL_AUTH LOAD FAILED.\r\n");
+          err = BBS_EIO;
+        }
         wfc_reload();
         if (err == BBS_OK) {
           /* Login successful */

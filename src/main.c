@@ -578,7 +578,15 @@ int main(void)
    * accessible as RAM.  Keeps KERNAL ($E000) and I/O ($D000) active. */
   *((volatile char *)0x01) = 0x36;
 
-  /* Load the boot overlay (bank 3) before boot_sequence() can run from it. */
+  /* Load the boot overlay (bank 3) before boot_sequence() can run from it.
+   * Deliberately does NOT call disk_select_partition() (or the shared
+   * disk_load_overlay() every later overlay load goes through) first: in
+   * T64_STORE_SEQ builds that positions the drive at a section folder via
+   * bbs_cfg.init_system, and cfg_init() — which reads CONFIG and populates
+   * init_system — hasn't run yet at this point (it runs later, from inside
+   * this same overlay). This load must and does rely on the drive's boot
+   * cursor, i.e. wherever the LOAD that brought BOOT.PRG in left it — the
+   * tree root, where OVL_BOOT and CONFIG both live for exactly this reason. */
   krnio_setnam(P"OVL_BOOT");
   if (!krnio_load(1, *(volatile u8 *)0xBA, 1)) {
     main_print("\nERROR: OVL_BOOT LOAD FAILED.\n");
