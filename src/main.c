@@ -170,6 +170,34 @@ static void main_print_upper(const char *text) {
 #pragma data(boot_data)
 #endif
 
+#ifdef T64_BOOT_OVERLAY
+/* OVL_BOOT / resident-image pair guard.
+ *
+ * cfg_init() is resident but cfg_load_impl() is in this overlay, so the
+ * resident image carries a hardcoded JSR to wherever THAT link placed
+ * cfg_load_impl. That address moves on any change to boot-path code, and the
+ * SIEC and non-SIEC links place it differently from each other on top of that.
+ * Nothing at runtime checks that the OVL_BOOT sitting on disk came from the
+ * same link as the BOOT-*.PRG that loaded it, and nothing in the build or
+ * deploy tooling distinguishes them either: `make c64` and `make c64-siec`
+ * both write the same build/c64/ovl_boot.prg, last build wins.
+ *
+ * Deploy a BOOT-*.PRG without its matching OVL_BOOT (or vice versa) and that
+ * JSR lands mid-instruction inside whatever function now occupies the address.
+ * The machine usually survives and returns an arbitrary value, which is how
+ * this presents: boot printing "ERROR: CONFIG LOAD FAILED" for an `err` that
+ * cfg_load_impl() has no return statement capable of producing. The failure
+ * looks like memory corruption in the caller and is not.
+ *
+ * The stamp is initialized data, so #pragma data(boot_data) above really does
+ * put it in the overlay (only *initialized* data is redirected — plain
+ * zero-init statics stay in the resident bss; see the s_usrlog_* note below).
+ * Its address is fixed by this link, so a foreign OVL_BOOT is caught by the
+ * bytes at that address not matching. Read through a volatile pointer so
+ * oscar64 cannot fold the comparison against the initializer it can see. */
+static u8 s_boot_ovl_stamp[4] = { 'T', '6', '4', 'B' };
+#endif
+
 /* USR LOG boot-check scratch: same hazard class as src/data/users.c's
  * s_reu_scratch (src/data/users.c:25-30) — oscar64 can overlay a stack slot
  * with another live variable depending on code layout. Proven on real
@@ -191,9 +219,30 @@ static void main_print_upper(const char *text) {
  * zero-init statics still land in the default bss section, i.e. the
  * resident main region — confirmed in the build map (BSSEnd advanced by
  * exactly sizeof(s_usrlog_buf)+2). */
-static bbs_err_t s_usrlog_check;
-static u8         s_usrlog_buf[RECORD_SIZE_USER];
-static u8         s_usrlog_got;
+static bbs_err_t   s_usrlog_check;
+static u8          s_usrlog_buf[RECORD_SIZE_USER];
+static u8          s_usrlog_got;
+/* Same group, same reason: rel_open() writes the handle, then rel_position(),
+ * rel_read() and rel_close() all consume it, so it is live across three calls.
+ * As a local it landed at $ce91 inside boot_sequence@stack, a range oscar64
+ * also hands to session_display_file/display_msg/fentry_add/msg_index_page. */
+static rel_handle_t s_usrlog_h;
+
+/* The ACIA status byte is read once and used twice — printed, then bit-tested
+ * for DSR — with printf() in between. Confirmed in BOOT-0.3.1-SIEC.asm: as a
+ * plain local oscar64 parked it in the shared zero-page temp T0 ($53) at $991b
+ * and re-read it at $9925, i.e. across the printf call, so anything printf's
+ * tree does to T0 lands on the DSR line.
+ *
+ * volatile, and that is load-bearing: file-static alone does NOT move a scalar
+ * out of the shared temps. oscar64 sees a static whose address is never taken,
+ * proves it is function-local, and register-allocates it right back into T0 —
+ * verified by diffing the map and the generated code, which came out
+ * byte-identical to the pre-conversion build with no symbol emitted at all.
+ * The s_usrlog_* group above escapes that only because rel_read()/rel_open()
+ * take their addresses. For a scalar the pointer is never taken, so volatile
+ * is what forces the real BSS load/store this fix depends on. */
+static volatile u8 s_boot_acia;
 
 /**
  * boot_sequence()
@@ -264,12 +313,10 @@ static __noinline bbs_err_t boot_sequence(void) {
     main_print("ERROR: MODEM INIT FAILED\n");
     return BBS_EFATAL;
   }
-  {
-    u8 acia = net_acia_status();
-    printf("  ACIA STATUS: $%02X\n", (unsigned)acia);
-    /* $10 = TX empty (normal idle). Bit 6=0 means DSR active. */
-    main_print(((acia & 0x40) != 0) ? "  DSR: INACTIVE\n" : "  DSR: ACTIVE!\n");
-  }
+  s_boot_acia = net_acia_status();
+  printf("  ACIA STATUS: $%02X\n", (unsigned)s_boot_acia);
+  /* $10 = TX empty (normal idle). Bit 6=0 means DSR active. */
+  main_print(((s_boot_acia & 0x40) != 0) ? "  DSR: INACTIVE\n" : "  DSR: ACTIVE!\n");
   main_print("  DEVICE: ");
   if (bbs_cfg.device_system != bbs_cfg.device_msgs) {
     printf("SYSTEM=%u/%u MSGS=%u/%u",
@@ -306,17 +353,16 @@ static __noinline bbs_err_t boot_sequence(void) {
   /* Check if USR LOG file exists and has data */
   main_print("\nCHECKING USR LOG...\n");
   {
-    rel_handle_t h;
     s_usrlog_check = rel_open(bbs_cfg.device_system, bbs_cfg.drive_system,
-                               "USR LOG", RECORD_SIZE_USER, &h);
+                               "USR LOG", RECORD_SIZE_USER, &s_usrlog_h);
     if (s_usrlog_check == BBS_OK) {
       /* Verify file has data by attempting to read record 1 (SYSOP) */
       s_usrlog_got = 0;
-      s_usrlog_check = rel_position(h, 1);
+      s_usrlog_check = rel_position(s_usrlog_h, 1);
       if (s_usrlog_check == BBS_OK) {
-        s_usrlog_check = rel_read(h, s_usrlog_buf, RECORD_SIZE_USER, &s_usrlog_got);
+        s_usrlog_check = rel_read(s_usrlog_h, s_usrlog_buf, RECORD_SIZE_USER, &s_usrlog_got);
       }
-      rel_close(h);
+      rel_close(s_usrlog_h);
       /* Verify record 1 has SYSOP user (ID=1, not 0 which means empty) */
       if (s_usrlog_check == BBS_OK && s_usrlog_got > 0 && s_usrlog_buf[0] == 1) {
         main_print("  USR LOG: OK\n");
@@ -541,6 +587,22 @@ int main(void)
     *((volatile char *)0x01) = 0x37;
     return 1;
   }
+
+#ifdef T64_BOOT_OVERLAY
+  /* Verify the OVL_BOOT just loaded was built by the same link as this PRG
+   * before jumping into it — see the stamp's definition for what a mismatched
+   * pair does instead. */
+  {
+    const volatile u8 *stamp = s_boot_ovl_stamp;
+    if (stamp[0] != 'T' || stamp[1] != '6' ||
+        stamp[2] != '4' || stamp[3] != 'B') {
+      main_print("\nERROR: OVL_BOOT/BOOT MISMATCH.\n");
+      main_print("REDEPLOY ALL OVL_* WITH BOOT.\n");
+      *((volatile char *)0x01) = 0x37;
+      return 1;
+    }
+  }
+#endif
 
   /* Boot sequence (now running from OVL_BOOT) */
   err = boot_sequence();
