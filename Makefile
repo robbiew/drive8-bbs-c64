@@ -3,6 +3,12 @@
 ROOT        := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 OSCAR64     := $(ROOT)vendor/oscar64/bin/oscar64
 OUTDIR      := $(ROOT)build/c64
+# SIEC build gets its own output directory. oscar64 writes overlay PRGs
+# (ovl_boot.prg, ovl_wfc.prg, ...) beside whatever -o= names, and the REL
+# and SIEC builds compile the same overlay names to different addresses —
+# sharing OUTDIR would let whichever variant built last silently overwrite
+# the other's overlays underneath a still-matching binary.
+OUTDIR_SIEC := $(OUTDIR)/siec
 
 VERSION     := $(shell grep 'BBS_RELEASE_VERSION_COMPACT' $(ROOT)include/bbs/version.h | cut -d'"' -f2)
 
@@ -127,24 +133,36 @@ $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) src-editor/reu_stubs.c $(EDIT
 # drive_* is a section-folder index rather than a CP<n> partition. Selected
 # here by the define and by which rel implementation is linked.
 # ---------------------------------------------------------------------------
-BOOT_SIEC_PRG      := $(OUTDIR)/BOOT-$(VERSION)-SIEC.prg
-CONFIGURE_SIEC_PRG := $(OUTDIR)/CONFIGURE-$(VERSION)-SIEC.prg
+BOOT_SIEC_PRG      := $(OUTDIR_SIEC)/BOOT-$(VERSION)-SIEC.prg
+CONFIGURE_SIEC_PRG := $(OUTDIR_SIEC)/CONFIGURE-$(VERSION)-SIEC.prg
 SIEC_DEFS          := -dT64_STORE_SEQ
 SIEC_REL_SRC       := src/hal/rel_seq.c src/hal/seq_region.c
+
+# Same fixed CBM names as the REL build (loaded by krnio_setnam at runtime —
+# must not change), but oscar64 writes them beside -o=, so pointing -o= at
+# OUTDIR_SIEC is what keeps this set out of the REL build's directory.
+OVERLAYS_D64_SIEC  := $(OUTDIR_SIEC)/overlays-siec.d64
+MSGS_OVL_PRG_SIEC   := $(OUTDIR_SIEC)/ovl_msgs.prg
+BOOT_OVL_PRG_SIEC   := $(OUTDIR_SIEC)/ovl_boot.prg
+WFC_OVL_PRG_SIEC    := $(OUTDIR_SIEC)/ovl_wfc.prg
+DOORS_OVL_PRG_SIEC  := $(OUTDIR_SIEC)/ovl_doors.prg
+FILES_OVL_PRG_SIEC  := $(OUTDIR_SIEC)/ovl_files.prg
+ZMODEM_OVL_PRG_SIEC := $(OUTDIR_SIEC)/ovl_zmodem.prg
+AUTH_OVL_PRG_SIEC   := $(OUTDIR_SIEC)/ovl_auth.prg
 
 .PHONY: c64-siec editor-siec
 c64-siec: $(BOOT_SIEC_PRG)
 editor-siec: $(CONFIGURE_SIEC_PRG)
 
 $(BOOT_SIEC_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS) $(PUB_HDRS)
-	@mkdir -p $(OUTDIR)
-	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) $(SIEC_DEFS) -o=$@ -d64=$(OUTDIR)/overlays-siec.d64 \
+	@mkdir -p $(OUTDIR_SIEC)
+	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) $(SIEC_DEFS) -o=$@ -d64=$(OVERLAYS_D64_SIEC) \
 	  $< $(filter-out src/hal/rel.c,$(HAL_SRCS)) $(SIEC_REL_SRC) \
 	  $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
 	@echo "Built: $@"
 
 $(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
-	@mkdir -p $(OUTDIR)
+	@mkdir -p $(OUTDIR_SIEC)
 	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(EDITOR_DEFS) $(SIEC_DEFS) -o=$@ \
 	  $< $(EDITOR_SRCS) $(filter-out src/hal/rel.c,$(EDITOR_HAL_SRCS)) $(SIEC_REL_SRC) src/hal/reu.c \
 	  $(DATA_SRCS)
@@ -225,6 +243,7 @@ lint:
 	bash tools/lint.sh
 
 clean:
-	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG) $(AUTH_OVL_PRG) $(OUTDIR)/overlays-siec.d64
+	$(RM) $(OUTDIR)/*.prg $(OUTDIR)/*.asm $(OUTDIR)/*.int $(OUTDIR)/*.lbl $(OUTDIR)/*.map $(OUTDIR)/*.bcs $(OUTDIR)/config $(OVERLAYS_D64) $(MSGS_OVL_PRG) $(BOOT_OVL_PRG) $(DOORS_OVL_PRG) $(FILES_OVL_PRG) $(ZMODEM_OVL_PRG) $(AUTH_OVL_PRG)
+	$(RM) -r $(OUTDIR_SIEC)
 	$(RM) -r $(ROOT)build/host
 	@echo "Clean."

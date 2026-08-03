@@ -318,10 +318,13 @@ tools/release.sh --force      # delete existing release and recreate from scratc
 ```
 build/c64/
 ├── TURBO64-<ver>.d81          assembled BBS disk image
-├── BOOT-<ver>.prg        main BBS runtime
-├── CONFIGURE-<ver>.prg   SysOp editor
-├── ovl_msgs.prg          message module overlay (loaded on demand)
-└── ovl_wfc.prg           WFC display overlay (loaded on demand)
+├── BOOT-<ver>.prg        main BBS runtime (REL backend)
+├── CONFIGURE-<ver>.prg   SysOp editor (REL backend)
+├── ovl_*.prg             REL overlays (msgs, wfc, boot, doors, files, zmodem, auth)
+└── siec/                 SoftIEC (T64_STORE_SEQ) build — own dir so its
+    ├── BOOT-<ver>-SIEC.prg          same-named overlays never collide with
+    ├── CONFIGURE-<ver>-SIEC.prg     the REL set above (see `make c64-siec`)
+    └── ovl_*.prg
 
 data/
 ├── users-seed.d81        user database snapshot (from extract-users.sh)

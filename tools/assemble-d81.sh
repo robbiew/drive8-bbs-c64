@@ -223,6 +223,11 @@ echo "Adding boot PRG..."
 echo "Adding configure PRG..."
 "$C1541" "$OUTPUT_DISK" -write "$CONFIGURE_PRG" "$(cbm_name "$CONFIGURE_PRG")" >/dev/null 2>&1 || { echo "ERROR: failed to write configure PRG" >&2; exit 1; }
 
+# Overlays below are read explicitly from build/c64/ (the REL build's
+# output dir) — never build/c64/siec/. The SIEC build (make c64-siec) writes
+# its own same-named overlays there instead, compiled to different addresses;
+# this disk carries the REL binary, so it must only ever pick up REL overlays.
+
 # Add MSGS overlay (bulletin board, message base, editor, user-pointer modules)
 MSGS_OVL_PRG="$ROOT/build/c64/ovl_msgs.prg"
 if [ -f "$MSGS_OVL_PRG" ]; then
