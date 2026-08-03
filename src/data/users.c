@@ -122,10 +122,18 @@ static bbs_err_t user_open_rel(u8 device, const char *name, u8 record_size,
  * Load a user record by user ID.
  */
 bbs_err_t user_by_id(u8 id, user_record_t *out_rec, u8 device) {
-  bbs_err_t err;
   rel_handle_t h;
+  /* err/got/buf alias the shared rel_scratch under T64_STORE_SEQ rather than
+   * being plain locals — see the comment on rel_scratch_buf/got/err in bbs/rel.h. */
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define got rel_scratch_got
+#define buf rel_scratch_buf
+#else
+  bbs_err_t err;
   u8 got;
   u8 buf[RECORD_SIZE_USER];
+#endif
 
   if (id == 0) {
     return BBS_EBADARG;
@@ -174,6 +182,11 @@ bbs_err_t user_by_id(u8 id, user_record_t *out_rec, u8 device) {
 
   return BBS_OK;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef got
+#undef buf
+#endif
 
 /**
  * user_by_handle()
@@ -253,9 +266,14 @@ u8 user_by_handle(const char *handle, u8 device) {
  * Write a user record back to disk.
  */
 bbs_err_t user_save(const user_record_t *rec, u8 device) {
-  bbs_err_t err;
   rel_handle_t h;
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define buf rel_scratch_buf
+#else
+  bbs_err_t err;
   u8 buf[RECORD_SIZE_USER];
+#endif
 
   if (!rec || rec->id == 0) {
     return BBS_EBADARG;
@@ -290,6 +308,10 @@ bbs_err_t user_save(const user_record_t *rec, u8 device) {
 
   return err;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef buf
+#endif
 
 /**
  * user_next_id()
@@ -543,9 +565,14 @@ static void user_profile_unpack(user_profile_record_t *rec, const u8 *buf) {
 }
 
 bbs_err_t user_profile_save(const user_profile_record_t *rec, u8 device) {
-  bbs_err_t err;
   rel_handle_t h;
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define buf rel_scratch_buf
+#else
+  bbs_err_t err;
   u8 buf[RECORD_SIZE_USER_PROFILE];
+#endif
 
   if (!rec || rec->id == 0) return BBS_EBADARG;
 
@@ -560,12 +587,22 @@ bbs_err_t user_profile_save(const user_profile_record_t *rec, u8 device) {
   rel_close(h);
   return err;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef buf
+#endif
 
 bbs_err_t user_profile_by_id(u8 id, user_profile_record_t *out_rec, u8 device) {
-  bbs_err_t err;
   rel_handle_t h;
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define got rel_scratch_got
+#define buf rel_scratch_buf
+#else
+  bbs_err_t err;
   u8 buf[RECORD_SIZE_USER_PROFILE];
   u8 got;
+#endif
 
   if (id == 0 || !out_rec) return BBS_EBADARG;
 
@@ -587,3 +624,8 @@ bbs_err_t user_profile_by_id(u8 id, user_profile_record_t *out_rec, u8 device) {
 
   return BBS_OK;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef got
+#undef buf
+#endif

@@ -123,9 +123,18 @@ bbs_err_t msg_index_get(u8 board_id, u16 msg_id,
                          msg_index_record_t *out, u8 device)
 {
     rel_handle_t h;
+    /* err/got/buf alias the shared rel_scratch under T64_STORE_SEQ — see the
+     * comment on rel_scratch_buf/got/err in bbs/rel.h. (Renamed from s_msg_buf, which
+     * read as a static but never was one.) */
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define got rel_scratch_got
+#define buf rel_scratch_buf
+#else
     bbs_err_t err;
     u8 got;
-    u8 s_msg_buf[RECORD_SIZE_MSG_IDX];
+    u8 buf[RECORD_SIZE_MSG_IDX];
+#endif
 
     if (!out || msg_id == 0 || board_id == 0) return BBS_EBADARG;
 
@@ -145,18 +154,23 @@ bbs_err_t msg_index_get(u8 board_id, u16 msg_id,
     err = rel_position(h, (u16)msg_id);
     if (err != BBS_OK) { rel_close(h); return err; }
 
-    memset(s_msg_buf, 0, RECORD_SIZE_MSG_IDX);
-    err = rel_read(h, (void *)s_msg_buf, RECORD_SIZE_MSG_IDX, &got);
+    memset(buf, 0, RECORD_SIZE_MSG_IDX);
+    err = rel_read(h, (void *)buf, RECORD_SIZE_MSG_IDX, &got);
     rel_close(h);
 
     if (err != BBS_OK) return err;
     if (got < RECORD_READ_MIN) return BBS_EIO;
     if (got < RECORD_SIZE_MSG_IDX)
-        memset(s_msg_buf + got, 0, RECORD_SIZE_MSG_IDX - got);
+        memset(buf + got, 0, RECORD_SIZE_MSG_IDX - got);
 
-    msg_unpack(out, s_msg_buf);
+    msg_unpack(out, buf);
     return BBS_OK;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef got
+#undef buf
+#endif
 
 static void msg_row_from_rec(msg_list_row_t *row, const msg_index_record_t *rec)
 {
@@ -256,8 +270,13 @@ bbs_err_t msg_index_stats(u8 board_id, u8 device, u16 *out_total, u16 *out_delet
 bbs_err_t msg_index_put(u8 board_id, const msg_index_record_t *rec, u8 device)
 {
     rel_handle_t h;
+#ifdef T64_STORE_SEQ
+#define err rel_scratch_err
+#define buf rel_scratch_buf
+#else
     bbs_err_t err;
-    u8 s_msg_buf[RECORD_SIZE_MSG_IDX];
+    u8 buf[RECORD_SIZE_MSG_IDX];
+#endif
 
     if (!rec || rec->msg_id == 0 || board_id == 0) return BBS_EBADARG;
 
@@ -268,8 +287,8 @@ bbs_err_t msg_index_put(u8 board_id, const msg_index_record_t *rec, u8 device)
     err = rel_position(h, (u16)rec->msg_id);
     if (err != BBS_OK) { rel_close(h); return err; }
 
-    msg_pack(rec, s_msg_buf);
-    err = rel_write(h, (const void *)s_msg_buf, RECORD_SIZE_MSG_IDX);
+    msg_pack(rec, buf);
+    err = rel_write(h, (const void *)buf, RECORD_SIZE_MSG_IDX);
     rel_close(h);
 
     if (err != BBS_OK) return err;
@@ -286,6 +305,10 @@ bbs_err_t msg_index_put(u8 board_id, const msg_index_record_t *rec, u8 device)
 
     return BBS_OK;
 }
+#ifdef T64_STORE_SEQ
+#undef err
+#undef buf
+#endif
 
 /* ---- Scan visitor pattern ----------------------------------------- */
 

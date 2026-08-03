@@ -44,6 +44,16 @@ static u16 s_count_by_region[REGION_COUNT_MAX];
 
 static u8 s_io[64];
 
+/* Definitions for the shared scratch declared in bbs/rel.h — see that
+ * comment for why one process-wide instance (and three flat globals rather
+ * than a struct) is safe and necessary. Declared here, alongside the
+ * backend they protect, ahead of the boot_code pragma switch below so they
+ * land in resident bss regardless of which overlay bank last loaded (every
+ * data-layer caller, in any bank, must see the same addresses). */
+u8        rel_scratch_buf[REL_SCRATCH_SIZE];
+u8        rel_scratch_got;
+bbs_err_t rel_scratch_err;
+
 static bbs_err_t region_load(void)
 {
     u16 cap = seq_region_capacity(s_region);
