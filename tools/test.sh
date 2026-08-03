@@ -68,5 +68,11 @@ elif ! diff -u "$ROOT/tests/golden/term_xlate.txt" "$OUT/term_xlate.txt"; then
     fails=1
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+    python3 "$ROOT/tests/test_migrate_d81.py" || fails=1
+else
+    echo "python3 not found - skipping migrate-d81 tests"
+fi
+
 if [ "$fails" -ne 0 ]; then echo "HOST TESTS FAILED"; exit 1; fi
 echo "ALL HOST TESTS PASSED"
