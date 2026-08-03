@@ -32,6 +32,27 @@
 #   --device <n>          SoftIEC bus id (default: 11; env T64_SIEC_DEVICE)
 #   --base <path>         Default Path on the Ultimate (default: /USB1/TURBO64;
 #                          env T64_SIEC_BASE)
+#   --clean               Before uploading, remove stale files under --base
+#                          that are not part of this deploy — old BOOT/ovl
+#                          binaries, src-diag/ diagnostics, probe scratch
+#                          (PERF.DAT*, SP1*, STRAND/), and any *.seq whose
+#                          stripped name collides with a file this deploy
+#                          writes (see NOTES below for why that collision is
+#                          dangerous on SoftIEC). User/message/file-area data
+#                          is never touched — see tools/siec_clean.py for the
+#                          exact classification rules. A dry run (no
+#                          --execute) prints the rules and the local deploy
+#                          manifest only, making NO network calls, same as
+#                          every other c64u invocation in this script. With
+#                          --execute, it lists the live tree, prints exactly
+#                          what would be removed vs. kept (recognized and
+#                          unrecognized), and asks for interactive
+#                          confirmation before deleting anything (skip with
+#                          --yes). After uploading, it re-lists the tree and
+#                          diffs it against the manifest, catching both
+#                          leftovers and upload failures.
+#   --yes                  Skip --clean's interactive delete confirmation.
+#                           Ignored without --clean.
 #
 # uiec options:
 #   --uiec-device <n>     Physical drive's device number (default: 10; env
@@ -81,7 +102,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 show_help() {
-    sed -n '2,71p' "$0"
+    sed -n '2,90p' "$0"
 }
 
 TARGET="${1:-}"
@@ -90,6 +111,9 @@ shift || true
 EXECUTE=0
 LAUNCH=0
 BUILD=1
+CLEAN=0
+CLEAN_YES=0
+VERIFY_FAILED=0
 D81_SEED="$ROOT/data/users-seed.d81"
 D81_DRIVE="a"
 SIEC_DEVICE="${T64_SIEC_DEVICE:-11}"
@@ -101,6 +125,8 @@ while [[ $# -gt 0 ]]; do
         --execute)      EXECUTE=1; shift ;;
         --launch)       LAUNCH=1; shift ;;
         --no-build)     BUILD=0; shift ;;
+        --clean)        CLEAN=1; shift ;;
+        --yes)          CLEAN_YES=1; shift ;;
         --seed)         D81_SEED="$2"; shift 2 ;;
         --drive)        D81_DRIVE="$2"; shift 2 ;;
         --device)       SIEC_DEVICE="$2"; shift 2 ;;
@@ -116,6 +142,13 @@ case "$TARGET" in
     -h|--help|"") show_help; exit 0 ;;
     *) echo "Unknown target: $TARGET (expected d81, siec, or uiec)" >&2; exit 1 ;;
 esac
+
+if [ "$CLEAN" -eq 1 ] && [ "$TARGET" != "siec" ]; then
+    echo "ERROR: --clean is only supported for the siec target (d81 replaces the" >&2
+    echo "whole disk image, so staleness cannot accumulate; uiec has no network" >&2
+    echo "filesystem access — see the deploy_uiec notes)." >&2
+    exit 1
+fi
 
 if [ ! -x "$BIN" ]; then
     echo "ERROR: c64u not found at $BIN" >&2
@@ -173,6 +206,141 @@ deploy_d81() {
     echo "    RUN"
 }
 
+# --clean helpers. Bash 3.2 on macOS has no associative arrays, hence the
+# case statement instead of a section->path map.
+siec_section_path() {
+    case "$1" in
+        ROOT) echo "$SIEC_BASE" ;;
+        *)    echo "$SIEC_BASE/$1" ;;
+    esac
+}
+
+# Fetches `c64u fs ls <path> --json` for ROOT + the four sections into
+# "$work"/<SECTION>.json and prints a matching --listing SECTION=path
+# argument list on stdout (one per line, for the caller to collect). Always
+# a real network call — only invoked from inside an EXECUTE=1 branch, never
+# from a dry run. A directory that does not exist yet (e.g. first-ever
+# deploy) is treated as empty rather than failing the whole pass.
+siec_fetch_listings() {
+    local work="$1"
+    local section path out
+    for section in ROOT SYSTEM MSGS FILES DOORS; do
+        path="$(siec_section_path "$section")"
+        out="$work/$section.json"
+        if ! "$BIN" fs ls "$path" --json >"$out" 2>"$work/$section.err"; then
+            echo "[]" >"$out"
+            echo -e "${YELLOW}  (could not list ${path} — treating as empty; see ${work}/${section}.err)${NC}" >&2
+        fi
+        echo "--listing"
+        echo "$section=$out"
+    done
+}
+
+# Pre-upload: classify what is currently under $SIEC_BASE and remove what's
+# safe to remove. Dry run makes NO network calls (same contract as every
+# other c64u invocation here) — it can only show the rules and the local
+# manifest, not real per-file decisions. --execute fetches the live tree,
+# prints the classification, and requires typed confirmation before
+# deleting anything unless --yes was passed.
+siec_clean_pass() {
+    local manifest="$1"
+    local boot_name
+    boot_name="$(grep -m1 '^BOOT-.*\.prg$' "$manifest" || true)"
+
+    echo -e "${BLUE}--clean: evaluating ${SIEC_BASE} for stale files...${NC}"
+
+    if [ "$EXECUTE" -eq 0 ]; then
+        echo -e "${YELLOW}[dry-run] would run: c64u fs ls --json against ${SIEC_BASE} and its${NC}"
+        echo -e "${YELLOW}SYSTEM/MSGS/FILES/DOORS subfolders. Nothing is fetched from the device${NC}"
+        echo -e "${YELLOW}in a dry run. Rules applied once real listings are available (--execute):${NC}"
+        echo "  REMOVE  BOOT-*.prg / BOOT*.PRG other than ${boot_name:-<the BOOT binary for this deploy>}"
+        echo "  REMOVE  ovl_*.prg outside this deploy's root/SYSTEM locations"
+        echo "  REMOVE  known src-diag/ diagnostic PRGs: SIECPROBE SEQTEST SEQNAME USRREAD"
+        echo "          USRSWEEP CFGREAD PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL"
+        echo "  REMOVE  probe scratch: PERF.DAT*, SP1*, and the STRAND/ fixture directory"
+        echo "  REMOVE  *.seq files whose stripped name collides with a file this deploy writes"
+        echo "  KEEP    USR LOG, USR PROF, ACCESS, CALLERS, syscnt*, USR.PTR*, USR.DAY*,"
+        echo "          BOARDS*, B<n>.IDX*, B<n>.TXT*, UDS*, UD<n>*, VOTE1*, DOORS*, T64.SIEC"
+        echo "  KEEP    every file this deploy is about to write ($(wc -l <"$manifest" | tr -d ' ') files)"
+        echo "  KEEP    anything else, reported unrecognized for manual review"
+        echo -e "${YELLOW}Pass --execute to fetch the live listing, see exact per-file decisions,${NC}"
+        echo -e "${YELLOW}and (after typed confirmation, or --yes) delete.${NC}"
+        echo ""
+        return
+    fi
+
+    local work removals n confirm
+    work="$(mktemp -d)"
+    local listing_args=()
+    while IFS= read -r line; do
+        listing_args+=("$line")
+    done < <(siec_fetch_listings "$work")
+
+    removals="$work/removals.txt"
+    if ! python3 "$ROOT/tools/siec_clean.py" classify \
+            --manifest "$manifest" --base "$SIEC_BASE" \
+            "${listing_args[@]}" --emit-removals "$removals"; then
+        echo -e "${RED}ERROR: --clean classification failed (see above) — aborting" \
+                 "without deleting anything.${NC}" >&2
+        exit 1
+    fi
+    echo ""
+
+    if [ ! -s "$removals" ]; then
+        echo -e "${GREEN}--clean: nothing to remove.${NC}"
+        echo ""
+        return
+    fi
+
+    n=$(wc -l <"$removals" | tr -d ' ')
+    if [ "$CLEAN_YES" -ne 1 ]; then
+        echo -e "${YELLOW}About to delete ${n} file(s) listed above from ${SIEC_BASE}.${NC}"
+        confirm=""
+        read -r -p "Type YES to confirm deletion: " confirm || true
+        if [ "$confirm" != "YES" ]; then
+            echo "Aborted — nothing deleted."
+            exit 1
+        fi
+    fi
+
+    while IFS= read -r path; do
+        run_c64u fs rm "$path"
+    done <"$removals"
+    echo ""
+}
+
+# Post-upload: re-list the tree and diff it against the manifest, catching
+# both leftovers (a REMOVE-classified entry still present) and upload
+# failures (a manifest entry that never arrived). Only runs under
+# --execute — a dry run uploaded nothing, so there is nothing to verify.
+siec_verify_pass() {
+    local manifest="$1"
+
+    if [ "$EXECUTE" -eq 0 ]; then
+        echo -e "${YELLOW}[dry-run] --clean: post-upload verification skipped — nothing" \
+                 "was uploaded in a dry run (requires --execute).${NC}"
+        return
+    fi
+
+    echo -e "${BLUE}--clean: verifying uploaded tree against the manifest...${NC}"
+    local work
+    work="$(mktemp -d)"
+    local listing_args=()
+    while IFS= read -r line; do
+        listing_args+=("$line")
+    done < <(siec_fetch_listings "$work")
+
+    if python3 "$ROOT/tools/siec_clean.py" verify \
+            --manifest "$manifest" --base "$SIEC_BASE" "${listing_args[@]}"; then
+        echo -e "${GREEN}--clean: post-upload verification OK — remote tree matches" \
+                 "the manifest.${NC}"
+    else
+        echo -e "${RED}--clean: post-upload verification found problems (see above).${NC}" >&2
+        VERIFY_FAILED=1
+    fi
+    echo ""
+}
+
 deploy_siec() {
     if [ "$BUILD" -eq 1 ]; then
         echo -e "${BLUE}Building SIEC binaries...${NC}"
@@ -195,15 +363,27 @@ deploy_siec() {
     python3 "$ROOT/tools/migrate-d81.py" "$image" "$tree" \
         --base "$SIEC_BASE" --device "$SIEC_DEVICE"
 
+    local manifest="$ROOT/build/c64/siec-tree.manifest"
+    (cd "$tree" && find . -type f | sed 's#^\./##') | LC_ALL=C sort >"$manifest"
+
     echo -e "${BLUE}Uploading tree to ${SIEC_BASE} (device ${SIEC_DEVICE})...${NC}"
     run_c64u fs mkdir "$SIEC_BASE" || true
     for section in SYSTEM MSGS FILES DOORS; do
         run_c64u fs mkdir "$SIEC_BASE/$section" || true
     done
+
+    if [ "$CLEAN" -eq 1 ]; then
+        siec_clean_pass "$manifest"
+    fi
+
     while IFS= read -r -d '' f; do
         local rel="${f#"$tree"/}"
         run_c64u fs upload "$f" "$SIEC_BASE/$rel"
     done < <(find "$tree" -type f -print0)
+
+    if [ "$CLEAN" -eq 1 ]; then
+        siec_verify_pass "$manifest"
+    fi
 
     local boot_name="BOOT-${VERSION_COMPACT}-SIEC"
     if [ "$LAUNCH" -eq 1 ]; then
@@ -289,3 +469,9 @@ case "$TARGET" in
     siec) deploy_siec ;;
     uiec) deploy_uiec ;;
 esac
+
+if [ "${VERIFY_FAILED:-0}" -eq 1 ]; then
+    echo -e "${RED}Deploy finished but --clean's post-upload verification found" \
+             "problems (see above). Exiting non-zero.${NC}" >&2
+    exit 1
+fi

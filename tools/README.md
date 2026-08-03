@@ -239,10 +239,26 @@ real hardware.
 | `--seed <d81>` | (d81/uiec) seed disk for the user DB (default: `data/users-seed.d81`) |
 | `--drive <a\|b>` | (d81/uiec) internal drive slot |
 | `--device <n>` / `--base <path>` | (siec) SoftIEC bus id / Default Path (env `T64_SIEC_DEVICE` / `T64_SIEC_BASE`) |
+| `--clean` | (siec only) remove stale files under `--base` before uploading — old BOOT/ovl binaries, `src-diag/` diagnostics, probe scratch, and any `*.seq` leftover that collides with a file this deploy writes (see below) |
+| `--yes` | Skip `--clean`'s interactive delete confirmation |
 
 Run `tools/deploy.sh --help` for the full per-target breakdown, including
 why `c64u runners run-prg` cannot launch the `siec` target at all (it
 forces device 8 and truncates the path).
+
+**`--clean` (siec only):** SoftIEC derives the CBM filename by stripping a
+host-side type-marker extension, so a scratch file named `USR LOG.seq`
+sitting beside the real `USR LOG` presents the SAME CBM name — which one
+opens is undefined. `--clean` classifies (via `tools/siec_clean.py`)
+everything currently under `--base` as safe-to-remove or must-keep, and
+defaults to keeping: anything not positively matched by a remove rule is
+reported unrecognized and left alone. User/message/file-area data (`USR
+LOG`, `ACCESS`, `BOARDS*`, `UDS*`, ...) is never touched. A dry run makes
+no network calls — it only prints the rules and the local manifest; pass
+`--execute` to fetch the live listing, see exact per-file decisions, and
+(after typed confirmation, or `--yes`) delete. After uploading, it re-lists
+the tree and diffs it against the manifest to catch both leftovers and
+upload failures.
 
 ---
 
