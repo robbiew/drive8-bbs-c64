@@ -75,16 +75,32 @@ void      rel_seq_require_storage(void);
  * accessor with the same "read/write, close, then read the result" shape
  * needs the same protection.
  *
- * One process-wide instance, not one per file/function: rel.c and rel_seq.c
- * both enforce a single open file at a time (s_open), so no two rel_read/
- * rel_write calls are ever in flight simultaneously — a shared buffer is
- * safe by construction. Sized to the largest record type in use
- * (file_entry_record_t, 100 bytes; see include/bbs/records.h).
+ * One process-wide instance, not one per file/function — but "single open
+ * file at a time" is not by itself why that's safe. What actually makes it
+ * safe: every function that populates this scratch before calling
+ * rel_open() (usrday_save, usrptr_save — pack into the shared buf, then
+ * open) is safe only because rel_open()/region_load()/region_flush() never
+ * touch rel_scratch_buf/got/err themselves, only their own s_io. If a
+ * future rel_open()-path change ever borrows this scratch, that ordering
+ * breaks silently.
  *
- * REL-only builds are not exposed to this: rel.c's rel_read()/rel_write()
- * call krnio_read()/krnio_write() over the open KERNAL channel, never
- * reu_data_get()/reu_data_put(), so these externs are SEQ-only rather than
- * adding dead BSS to REL builds for an unproven risk.
+ * Gated on T64_STORE_SEQ for budget reasons, not because REL is immune to
+ * the underlying hazard. The mechanism proven on hardware in
+ * boot_sequence()'s USR LOG check (src/main.c, commit c9a7701) was oscar64's
+ * frame-overlay allocator reusing a live stack slot across a rel_close()
+ * call — `check` (a status variable, not a DMA target) came back corrupt
+ * with the read itself having succeeded (`got = 30, buf[0] = 1`). That is a
+ * property of oscar64's stack-slot allocator, not of which rel_* backend is
+ * linked, so it is latent and unproven under REL, exactly as reasoned there
+ * — not disproven. This fix is scoped to T64_STORE_SEQ anyway because REL
+ * builds (BOOT, CONFIGURE) already have ample headroom and are the shipping
+ * backend with no field reports, while CONFIGURE-SIEC has 39 bytes free and
+ * a shared region is cheaper than 23 separate per-function frames; extending
+ * the same treatment to REL is a pure budget call, revisit if REL ever shows
+ * the symptom. Sized to the largest record type in use
+ * (RECORD_SIZE_FILE_ENTRY, 100 bytes; see include/bbs/records.h) — the
+ * static_assert-style check below ties that to the record constants it must
+ * stay >= to, rather than leaving the relationship implicit.
  *
  * Three flat globals, not one struct: oscar64's preprocessor cannot expand
  * an object-like macro whose body is a struct-member expression (confirmed
@@ -94,6 +110,9 @@ void      rel_seq_require_storage(void);
  * these through `#define err rel_scratch_err` (etc.) so the function bodies
  * below don't need to change at all. */
 #define REL_SCRATCH_SIZE RECORD_SIZE_FILE_ENTRY
+typedef char rel_scratch_size_check[
+    (REL_SCRATCH_SIZE >= RECORD_SIZE_USER_PROFILE &&
+     REL_SCRATCH_SIZE >= RECORD_SIZE_MSG_IDX) ? 1 : -1];
 extern u8        rel_scratch_buf[REL_SCRATCH_SIZE];
 extern u8        rel_scratch_got;
 extern bbs_err_t rel_scratch_err;

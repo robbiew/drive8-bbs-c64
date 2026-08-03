@@ -124,8 +124,10 @@ bbs_err_t msg_index_get(u8 board_id, u16 msg_id,
 {
     rel_handle_t h;
     /* err/got/buf alias the shared rel_scratch under T64_STORE_SEQ — see the
-     * comment on rel_scratch_buf/got/err in bbs/rel.h. (Renamed from s_msg_buf, which
-     * read as a static but never was one.) */
+     * comment on rel_scratch_buf/got/err in bbs/rel.h. (Renamed from
+     * s_msg_buf, which read as a static but never was one — same rename
+     * applied to msg_index_put/msg_index_stats below, unconditionally,
+     * since it was misleading regardless of backend.) */
 #ifdef T64_STORE_SEQ
 #define err rel_scratch_err
 #define got rel_scratch_got
@@ -240,7 +242,7 @@ bbs_err_t msg_index_stats(u8 board_id, u8 device, u16 *out_total, u16 *out_delet
     rel_handle_t h;
     bbs_err_t err;
     u8 got;
-    u8 s_msg_buf[RECORD_SIZE_MSG_IDX];
+    u8 buf[RECORD_SIZE_MSG_IDX];
     msg_index_record_t rec;
     u16 idx, total = 0, deleted = 0;
 
@@ -251,12 +253,12 @@ bbs_err_t msg_index_stats(u8 board_id, u8 device, u16 *out_total, u16 *out_delet
 
     rel_position(h, 1);
     for (idx = 1; idx <= CFG_MSG_MAX_PER_BOARD; idx++) {
-        memset(s_msg_buf, 0, RECORD_SIZE_MSG_IDX);
-        err = rel_read(h, (void *)s_msg_buf, RECORD_SIZE_MSG_IDX, &got);
+        memset(buf, 0, RECORD_SIZE_MSG_IDX);
+        err = rel_read(h, (void *)buf, RECORD_SIZE_MSG_IDX, &got);
         if (err != BBS_OK || got < RECORD_READ_MIN) break;   /* past last record */
         if (got < RECORD_SIZE_MSG_IDX)
-            memset(s_msg_buf + got, 0, RECORD_SIZE_MSG_IDX - got);
-        msg_unpack(&rec, s_msg_buf);
+            memset(buf + got, 0, RECORD_SIZE_MSG_IDX - got);
+        msg_unpack(&rec, buf);
         total++;
         if (rec.flags & MSG_F_DELETED) deleted++;
     }

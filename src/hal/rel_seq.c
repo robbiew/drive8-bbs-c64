@@ -390,17 +390,28 @@ bbs_err_t rel_write(rel_handle_t h, const void *buf, u8 record_size)
     if (s_pos > s_max_recs) return BBS_EFULL;
 
     /* Extending past the high-water mark zero-fills the gap, so a sparse
-     * write behaves the way it does against a preallocated REL file. The
-     * fill offset is stepped by s_recsize per record rather than
-     * recomputed by multiplication each iteration. */
+     * write behaves the way it does against a preallocated REL file.
+     * s_io is only 64 bytes, but s_recsize can be up to 100 (RECORD_SIZE_
+     * FILE_ENTRY) — a fixed per-record memset/DMA of s_recsize bytes (the
+     * previous shape here) overran s_io by up to 36 bytes on every sparse
+     * USR PROF/UD<n> write, corrupting whatever follows it in bss (as of
+     * this file, rel_scratch_buf). Chunk against sizeof(s_io) instead,
+     * the way region_flush() already does for its own DMA loop — since
+     * every byte written is zero, record boundaries don't need to line up
+     * with chunk boundaries, only the total byte count does. */
     if (s_count_by_region[s_region] + 1 < s_pos) {
         u16 fill_off = (u16)(s_base + (u16)s_count_by_region[s_region] * s_recsize);
-        memset(s_io, 0, s_recsize);
-        do {
-            reu_data_put(fill_off, s_io, s_recsize);
-            fill_off = (u16)(fill_off + s_recsize);
-            s_count_by_region[s_region]++;
-        } while (s_count_by_region[s_region] + 1 < s_pos);
+        u16 remaining = (u16)((u16)((s_pos - 1) - s_count_by_region[s_region]) * s_recsize);
+        // cppcheck-suppress variableScope
+        u16 chunk;
+        memset(s_io, 0, sizeof(s_io));
+        while (remaining) {
+            chunk = (remaining > sizeof(s_io)) ? (u16)sizeof(s_io) : remaining;
+            reu_data_put(fill_off, s_io, chunk);
+            fill_off = (u16)(fill_off + chunk);
+            remaining = (u16)(remaining - chunk);
+        }
+        s_count_by_region[s_region] = (u16)(s_pos - 1);
     }
     if (s_pos > s_count_by_region[s_region]) s_count_by_region[s_region] = s_pos;
 
