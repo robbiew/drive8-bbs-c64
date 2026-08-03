@@ -170,6 +170,31 @@ static void main_print_upper(const char *text) {
 #pragma data(boot_data)
 #endif
 
+/* USR LOG boot-check scratch: same hazard class as src/data/users.c's
+ * s_reu_scratch (src/data/users.c:25-30) — oscar64 can overlay a stack slot
+ * with another live variable depending on code layout. Proven on real
+ * BOOT-SIEC hardware: with these as plain locals, boot_sequence() logged
+ * "check = BBS_ENOTFOUND, got = 30, buf[0] = 1" after a rel_read() that
+ * either DMA-wrote 30 bytes into buf (rel_seq.c) or didn't touch it at all
+ * on the BBS_ENOTFOUND path — a combination the callee cannot produce, so
+ * `check` itself was stack garbage, not the read result. Making buf, check,
+ * and got file-static (this fixed address is immune to the overlay) was the
+ * one change that turned it into a clean "USR LOG: OK" boot.
+ * Unconditional rather than #ifdef T64_STORE_SEQ: rel.c's rel_read() reads a
+ * KERNAL channel byte-by-byte instead of DMA-ing, so the REL backend has
+ * never shown this failure, but the overlay is a property of oscar64's
+ * stack allocator, not of which rel_* backend is linked, so the hazard is
+ * latent there too — one code path beats two, and 32 bytes is cheap next to
+ * both builds' free BSS. Note this function being boot_code/boot_data (see
+ * the pragma switch above) does NOT move these into the boot overlay's own
+ * bss: oscar64 only redirects *initialized* data via #pragma data(); plain
+ * zero-init statics still land in the default bss section, i.e. the
+ * resident main region — confirmed in the build map (BSSEnd advanced by
+ * exactly sizeof(s_usrlog_buf)+2). */
+static bbs_err_t s_usrlog_check;
+static u8         s_usrlog_buf[RECORD_SIZE_USER];
+static u8         s_usrlog_got;
+
 /**
  * boot_sequence()
  *
@@ -282,19 +307,18 @@ static __noinline bbs_err_t boot_sequence(void) {
   main_print("\nCHECKING USR LOG...\n");
   {
     rel_handle_t h;
-    bbs_err_t check = rel_open(bbs_cfg.device_system, bbs_cfg.drive_system,
-                                "USR LOG", RECORD_SIZE_USER, &h);
-    if (check == BBS_OK) {
+    s_usrlog_check = rel_open(bbs_cfg.device_system, bbs_cfg.drive_system,
+                               "USR LOG", RECORD_SIZE_USER, &h);
+    if (s_usrlog_check == BBS_OK) {
       /* Verify file has data by attempting to read record 1 (SYSOP) */
-      u8 buf[RECORD_SIZE_USER];
-      u8 got = 0;
-      check = rel_position(h, 1);
-      if (check == BBS_OK) {
-        check = rel_read(h, buf, RECORD_SIZE_USER, &got);
+      s_usrlog_got = 0;
+      s_usrlog_check = rel_position(h, 1);
+      if (s_usrlog_check == BBS_OK) {
+        s_usrlog_check = rel_read(h, s_usrlog_buf, RECORD_SIZE_USER, &s_usrlog_got);
       }
       rel_close(h);
       /* Verify record 1 has SYSOP user (ID=1, not 0 which means empty) */
-      if (check == BBS_OK && got > 0 && buf[0] == 1) {
+      if (s_usrlog_check == BBS_OK && s_usrlog_got > 0 && s_usrlog_buf[0] == 1) {
         main_print("  USR LOG: OK\n");
 #ifndef T64_STORE_SEQ
         /* Load the user-record cache into REU (robust file-static DMA path);

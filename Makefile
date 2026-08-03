@@ -166,6 +166,9 @@ $(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_H
 #   USRSWEEP  reproduces the BOOT-SIEC order (cfg fields, require_storage, sweep) around
 #             a USR LOG read, to isolate what breaks it
 #   SEQNAME   does a SoftIEC content file need a host .SEQ extension to open
+#   CFGREAD   does cfg_init() actually populate the section paths before the USR LOG
+#             read — the boot-order difference USRSWEEP couldn't isolate (pinned the
+#             oscar64 stack-slot frame-overlay bug fixed in main.c's boot_sequence())
 # Usage: make diag        (all four land in build/c64/)
 DIAG_HAL := src/err.c src/hal/disk.c
 DIAG_FLAGS := $(CFLAGS) -i=$(ROOT)src-diag -dNOFLOAT
@@ -191,7 +194,11 @@ diag:
 	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c \
 	  src/data/cfg.c src/data/devspec.c
 	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/SEQNAME.prg src-diag/seqname.c $(DIAG_HAL)
-	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE SEQTEST USRREAD USRSWEEP SEQNAME in $(OUTDIR)"
+	$(OSCAR64) $(DIAG_FLAGS) $(SIEC_DEFS) -o=$(OUTDIR)/CFGREAD.prg src-diag/cfgread.c \
+	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c \
+	  src/data/cfg.c src/data/devspec.c \
+	  src/platform/cbmdos/net.c src/net/at_response.c src/net/telnet_iac.c
+	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE SEQTEST USRREAD USRSWEEP SEQNAME CFGREAD in $(OUTDIR)"
 
 # Build a door PRG at $9700.  Usage: make door DOOR=<name>
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg
