@@ -56,15 +56,11 @@
 #   keystroke starts it (COPYALL waits on getch(), not a BASIC line, so the
 #   sendkey chunking bug does not apply). This has NOT been validated
 #   against real hardware by this script — treat it as experimental and
-#   watch the console. COPYALL itself is a diagnostic under src-diag/, out
-#   of scope to modify here; two things about it are worth knowing before
-#   relying on it:
-#     - its file list hardcodes "BOOT-0.3.1"/"CONFIGURE-0.3.1": if the repo
-#       version has moved on since copyall.c was last edited, it silently
-#       copies nothing for those two names. This script warns when the
-#       versions disagree.
-#     - its file list does not include OVL_AUTH, so a device populated via
-#       COPYALL will fail login until that overlay is copied by hand.
+#   watch the console. COPYALL itself is a diagnostic under src-diag/;
+#   its file list derives BOOT/CONFIGURE names from BBS_RELEASE_VERSION_COMPACT
+#   and includes OVL_AUTH, so it cannot drift the way earlier builds did. This
+#   script still verifies the built PRG's embedded strings before staging (see
+#   deploy_uiec) rather than trusting that source claim blind.
 #
 # Environment:
 #   T64_SIEC_DEVICE   default SoftIEC bus id (11)
@@ -247,20 +243,30 @@ deploy_uiec() {
         (cd "$ROOT" && make diag)
     fi
 
-    local copyall_versions
-    copyall_versions="$(grep -o '"BOOT-[0-9.]*"' "$ROOT/src-diag/copyall.c" | tr -d '"' | sed 's/^BOOT-//')"
-    if [ "$copyall_versions" != "$VERSION_COMPACT" ]; then
-        echo -e "${RED}WARNING: src-diag/copyall.c hardcodes version ${copyall_versions}," \
-                 "but this build is ${VERSION_COMPACT}.${NC}"
-        echo -e "${RED}COPYALL will silently skip BOOT-${VERSION_COMPACT} and CONFIGURE-${VERSION_COMPACT}" \
-                 "(it does exact-name matches). This is a copyall.c issue, out of scope here" \
-                 "(no C source changes) — fix the hardcoded names there before relying on it.${NC}"
+    # Verify the BUILT PRG, not the source text: copyall.c derives its
+    # BOOT/CONFIGURE names from BBS_RELEASE_VERSION_COMPACT via C preprocessor
+    # string concatenation, so grepping the source for a literal version
+    # string would no longer find one. Checking the compiled binary's
+    # embedded strings instead confirms what COPYALL will actually try to
+    # open, not just what the source claims to do.
+    local copyall_prg="$ROOT/build/c64/COPYALL.prg"
+    local missing=""
+    for want in "BOOT-${VERSION_COMPACT}" "CONFIGURE-${VERSION_COMPACT}" "OVL_AUTH"; do
+        if ! strings "$copyall_prg" | grep -qx "$want"; then
+            missing="${missing}${missing:+, }${want}"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        echo -e "${RED}WARNING: build/c64/COPYALL.prg does not contain expected string(s):" \
+                 "${missing}.${NC}"
+        echo -e "${RED}COPYALL would silently skip these files. Check src-diag/copyall.c's" \
+                 "file list against include/bbs/version.h before relying on it.${NC}"
+    else
+        echo -e "${GREEN}Verified: COPYALL.prg's embedded file list includes" \
+                 "BOOT-${VERSION_COMPACT}, CONFIGURE-${VERSION_COMPACT}, and OVL_AUTH.${NC}"
     fi
-    echo -e "${YELLOW}NOTE: copyall.c's file list also does not include OVL_AUTH — the copy" \
-             "will be missing the login overlay until that is added by hand.${NC}"
     echo ""
 
-    local copyall_prg="$ROOT/build/c64/COPYALL.prg"
     if [ "$LAUNCH" -eq 1 ]; then
         echo -e "${BLUE}Attempting best-effort launch of COPYALL (EXPERIMENTAL, unverified on hardware)...${NC}"
         local remote="/USB1/T64COPYALL.PRG"

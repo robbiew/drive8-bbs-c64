@@ -13,25 +13,49 @@
 #include "bbs/err.h"
 #include "bbs/config.h"
 #include "bbs/hal/disk.h"
+#include "bbs/version.h"
 
 #define LF_SRC 2
 #define LF_DST 3
 
-/* Program and content files only. CONFIG, CALLERS and ACCESS are deliberately
+/* Each entry carries its own PRG/SEQ flag instead of a parallel "first N are
+   PRG" count - adding or reordering an entry can't desync a hand-maintained
+   number from the array again. BOOT/CONFIGURE names are built from
+   BBS_RELEASE_VERSION_COMPACT (C99 adjacent string-literal concatenation) so
+   this list can never drift from the version the Makefile actually names the
+   PRGs after.
+
+   Program and content files only. CONFIG, CALLERS and ACCESS are deliberately
    NOT copied: they are per-install data, and overwriting a SysOp's device
    configuration during a program update is destructive. */
-static const char *files[] = {
-    "BOOT-0.3.1",   "CONFIGURE-0.3.1", "OVL_MSGS",  "OVL_WFC",
-    "OVL_BOOT",     "OVL_DOORS",       "OVL_FILES", "OVL_ZMODEM",
-    "FORTUNE",
-    "G.LOGIN",      "G.LOGIN 0",   "G.LOGIN 1 80", "G.LOGIN 2 80",
-    "G.NEWUSER",    "G.TERM",
-    "M.DOORS",      "M.FILES",     "M.MAIN",       "M.MAIN 1 80",
-    "M.MSGS",       "M.MSGS 1 80", "M.READ",
-    "P.DOORS",      "P.FILES",     "P.MAIN",       "P.MAIN 1 80",
-    "P.MSGS",       "P.READ",      "P.READ 1 80"
+typedef struct {
+    const char *name;
+    bool_t is_prg;
+} copy_file_t;
+
+static const copy_file_t files[] = {
+    { "BOOT-" BBS_RELEASE_VERSION_COMPACT,      TRUE },
+    { "CONFIGURE-" BBS_RELEASE_VERSION_COMPACT, TRUE },
+    { "OVL_MSGS",    TRUE },
+    { "OVL_WFC",     TRUE },
+    { "OVL_BOOT",    TRUE },
+    { "OVL_DOORS",   TRUE },
+    { "OVL_FILES",   TRUE },
+    { "OVL_ZMODEM",  TRUE },
+    { "OVL_AUTH",    TRUE },
+    { "FORTUNE",     TRUE },
+    { "G.LOGIN",      FALSE }, { "G.LOGIN 0",   FALSE },
+    { "G.LOGIN 1 80", FALSE }, { "G.LOGIN 2 80", FALSE },
+    { "G.NEWUSER",    FALSE }, { "G.TERM",       FALSE },
+    { "M.DOORS",      FALSE }, { "M.FILES",      FALSE },
+    { "M.MAIN",       FALSE }, { "M.MAIN 1 80",  FALSE },
+    { "M.MSGS",       FALSE }, { "M.MSGS 1 80",  FALSE },
+    { "M.READ",       FALSE },
+    { "P.DOORS",      FALSE }, { "P.FILES",      FALSE },
+    { "P.MAIN",       FALSE }, { "P.MAIN 1 80",  FALSE },
+    { "P.MSGS",       FALSE }, { "P.READ",       FALSE },
+    { "P.READ 1 80",  FALSE }
 };
-#define NPRG  9                      /* first NPRG entries are PRG, rest SEQ */
 #define NFILE (sizeof(files)/sizeof(files[0]))
 
 static u8 buf[128];
@@ -85,8 +109,8 @@ int main(void)
     }
 
     for (i = 0; i < (u8)NFILE; i++) {
-        bool_t ok = copy_one(sdev, ddev, files[i], (bool_t)(i < NPRG));
-        printf("%c %s\n", ok ? '.' : '!', files[i]);
+        bool_t ok = copy_one(sdev, ddev, files[i].name, files[i].is_prg);
+        printf("%c %s\n", ok ? '.' : '!', files[i].name);
         if (!ok) bad++;
     }
     printf("\nDONE. %u FAILED.\n", (unsigned)bad);
