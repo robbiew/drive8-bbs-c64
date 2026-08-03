@@ -310,13 +310,36 @@ static __noinline bbs_err_t boot_sequence(void) {
 #endif
       } else {
         main_print("  USR LOG: EMPTY\n");
-        /* Clean up the empty file that was auto-created by rel_open */
+#ifdef T64_STORE_SEQ
+        /* Do NOT scratch here. Under rel_seq.c, rel_open() never creates
+         * anything on disk — it only stages data in REU and persists on
+         * flush (region_load() treats DOS 62 "not found" and a genuine read
+         * failure the same way: an empty in-REU region). So a failed check
+         * below is not proof this is a stub rel_open() just made; it can
+         * just as easily be a real, populated USR LOG that failed to read
+         * (wrong CD:, a KERNAL channel left open by something between
+         * cfg_init() and here, etc). Scratching on that guess is exactly
+         * the bug that deleted a live 101-user database on real hardware —
+         * leave the file alone and make the sysop investigate instead. */
+        main_print("\nERROR: USR LOG COULD NOT BE READ\n");
+        main_print("FILE ON DISK WAS NOT DELETED.\n");
+        main_print("DO NOT REINITIALIZE WITH CONFIGURE\n");
+        main_print("UNLESS NO DATABASE EXISTS - CHECK THE\n");
+        main_print("REU AND STORAGE PATH, THEN REBOOT.\n");
+#else
+        /* Clean up the empty file that was auto-created by rel_open: under
+         * the REL backend (this file only) rel_open() creates the file on
+         * disk immediately if it did not already exist, so reaching here
+         * means an empty stub that this same boot just made, and removing
+         * it is safe. This reasoning does not hold for T64_STORE_SEQ — see
+         * the branch above. */
         disk_scratch(bbs_cfg.device_system, bbs_cfg.drive_system, "USR LOG");
         main_print("\nERROR: USR LOG FILE NOT INITIALIZED\n");
         main_print("RUN CONFIGURE-");
         main_print(BBS_RELEASE_VERSION_COMPACT);
         main_print(".PRG TO INITIALIZE\n");
         main_print("THE USER DATABASE BEFORE RUNNING BOOT.\n");
+#endif
         return BBS_EFATAL;
       }
     } else {

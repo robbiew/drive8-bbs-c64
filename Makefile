@@ -162,6 +162,10 @@ $(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_H
 #   WIPE    scratch every file on a device/partition (destructive)
 #   COPYALL copy the T/64 program set between devices, through the C64
 #   SIECPROBE SoftIEC SEQ correctness gates and cost measurements (throwaway)
+#   USRREAD   USR LOG raw-open vs rel_seq read, standalone (found the boot data-loss bug)
+#   USRSWEEP  reproduces the BOOT-SIEC order (cfg fields, require_storage, sweep) around
+#             a USR LOG read, to isolate what breaks it
+#   SEQNAME   does a SoftIEC content file need a host .SEQ extension to open
 # Usage: make diag        (all four land in build/c64/)
 DIAG_HAL := src/err.c src/hal/disk.c
 DIAG_FLAGS := $(CFLAGS) -i=$(ROOT)src-diag -dNOFLOAT
@@ -181,7 +185,13 @@ diag:
 	  $(DIAG_HAL) src/hal/reu.c
 	$(OSCAR64) $(DIAG_FLAGS) $(SIEC_DEFS) -o=$(OUTDIR)/SEQTEST.prg src-diag/seqtest.c \
 	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c
-	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE SEQTEST in $(OUTDIR)"
+	$(OSCAR64) $(DIAG_FLAGS) $(SIEC_DEFS) -o=$(OUTDIR)/USRREAD.prg src-diag/usrread.c \
+	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c
+	$(OSCAR64) $(DIAG_FLAGS) $(SIEC_DEFS) -o=$(OUTDIR)/USRSWEEP.prg src-diag/usrsweep.c \
+	  $(DIAG_HAL) src/hal/rel_seq.c src/hal/seq_region.c src/hal/reu.c \
+	  src/data/cfg.c src/data/devspec.c
+	$(OSCAR64) $(DIAG_FLAGS) -o=$(OUTDIR)/SEQNAME.prg src-diag/seqname.c $(DIAG_HAL)
+	@echo "Built: PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL SIECPROBE SEQTEST USRREAD USRSWEEP SEQNAME in $(OUTDIR)"
 
 # Build a door PRG at $9700.  Usage: make door DOOR=<name>
 # Source: devkit/examples/<name>.c  Output: build/c64/<NAME>.prg
