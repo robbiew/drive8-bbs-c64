@@ -535,14 +535,18 @@ int main(void)
   /* Load the boot overlay (bank 3) before boot_sequence() can run from it. */
   krnio_setnam(P"OVL_BOOT");
   if (!krnio_load(1, *(volatile u8 *)0xBA, 1)) {
-    main_print("\nERROR: OVL_BOOT LOAD FAILED. HALTING.\n");
+    main_print("\nERROR: OVL_BOOT LOAD FAILED.\n");
+    /* Restore BASIC ROM before returning — see the block below the final
+     * return for why every exit path needs this, not just this one. */
+    *((volatile char *)0x01) = 0x37;
     return 1;
   }
 
   /* Boot sequence (now running from OVL_BOOT) */
   err = boot_sequence();
   if (err != BBS_OK) {
-    main_print("\nBOOT FAILED. HALTING.\n");
+    main_print("\nBOOT FAILED.\n");
+    *((volatile char *)0x01) = 0x37;
     return 1;
   }
 
@@ -552,6 +556,13 @@ int main(void)
 
   /* Main loop */
   main_loop();
+
+  /* Restore BASIC ROM ($01 = $37) before returning to BASIC on every exit
+   * path, fatal or not. Oscar64's startup RTS-es back to BASIC once main()
+   * returns; if BASIC ROM is still banked out, that RTS runs into RAM (our
+   * BSS at $A000-$BFFF) instead of BASIC code — observed on hardware as an
+   * endless reboot loop instead of a READY. prompt a SysOp could act on. */
+  *((volatile char *)0x01) = 0x37;
 
   return 0;
 }

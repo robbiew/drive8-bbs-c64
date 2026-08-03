@@ -90,6 +90,13 @@ int main(void)
            disk_status(dev) != 62 ? "PROMOTED-OK" : "LOST-BAD");
     disk_close();
 
+    /* rel_open()/rel_seq_recover() above went through disk_select_
+     * partition(), which CD:'d into SYSTEM/ and left the cursor there.
+     * SoftIEC's current directory is drive state that survives a C64 reset
+     * and a power cycle, so leaving it there breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("DONE.\n");
     getch();
     return 0;

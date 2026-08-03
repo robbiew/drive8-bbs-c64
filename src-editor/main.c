@@ -158,6 +158,9 @@ int main(void)
     err = cfg_init();
     if (err != BBS_OK && err != BBS_ENOTFOUND) {
         printf("ERROR: CONFIG INIT FAILED\n");
+        /* Same restore as the bottom of main() (see its comment) — this is
+         * an early exit and BASIC ROM is still banked out at this point. */
+        *((volatile char *)0x01) = 0x37;
         return 1;
     }
 

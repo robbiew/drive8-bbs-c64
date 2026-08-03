@@ -43,6 +43,11 @@ int main(void)
     chk("CONFIG");
     chk("T64.SIEC");
 
+    /* SoftIEC's current directory is drive state that survives a C64 reset
+     * and a power cycle — leaving the cursor in SYSTEM/ breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("\nDONE.\n");
     getch();
     return 0;

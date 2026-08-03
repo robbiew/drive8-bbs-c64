@@ -69,6 +69,11 @@ int main(void)
     printf("  GOT %u ID %u NAME %c%c%c%c%c\n", (unsigned)got,
            (unsigned)buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
 
+    /* SoftIEC's current directory is drive state that survives a C64 reset
+     * and a power cycle — leaving the cursor in SYSTEM/ breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("\nDONE.\n");
     getch();
     return 0;

@@ -80,6 +80,12 @@ int main(void)
            (unsigned)eo, (unsigned)ep, (unsigned)er, (unsigned)got,
            (unsigned)buf[0], buf[0] == 1 ? "OK" : "BAD");
 
+    /* rel_open() above left the cursor inside SYSTEM/ via disk_select_
+     * partition(). SoftIEC's current directory is drive state that survives
+     * a C64 reset and a power cycle, so leaving it there breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("\nDONE.\n");
     getch();
     return 0;

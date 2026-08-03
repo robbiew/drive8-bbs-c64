@@ -99,6 +99,13 @@ int main(void)
     rel_reset();   /* same: AFTER must hit disk, not the BEFORE/POSTRQ cache */
     try_read("AFTER");
 
+    /* Every try_read() above went through rel_open() -> disk_select_
+     * partition(), which CD:'d into SYSTEM/ and left the cursor there.
+     * SoftIEC's current directory is drive state that survives a C64 reset
+     * and a power cycle, so leaving it there breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("\nDONE.\n");
     getch();
     return 0;

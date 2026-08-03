@@ -245,6 +245,14 @@ int main(void)
                (unsigned)bbs_cfg.reu_detected_size, (unsigned)reu_bank_count());
     }
 
+    /* T3/T4 above deliberately strand the cursor mid-test to measure CD:
+     * recovery, and already CD back themselves before returning — this is
+     * a final safety net, not a substitute for that. SoftIEC's current
+     * directory is drive state that survives a C64 reset and a power
+     * cycle, so ending anywhere but the tree root breaks the next
+     * LOAD"BOOTSIEC",11 from BASIC with FILE NOT FOUND. */
+    disk_cmd(dev, "CD:/USB1/TURBO64");
+
     printf("DONE.\n");
     getch();
     return 0;
