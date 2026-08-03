@@ -1,5 +1,5 @@
 """Unit tests for the .d81 -> SoftIEC SEQ migration."""
-import sys, pathlib
+import os, sys, pathlib, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
 
 import importlib
@@ -39,6 +39,118 @@ try:
     check("spec.toolong", "no raise", "ValueError")
 except ValueError:
     pass
+
+# --- classify_entry: which disk entries get migrated, and where -----------
+
+# Fixed REL sets still resolve by name (case-insensitive against the disk).
+check("classify.rel_fixed", mig.classify_entry("usr log", "rel"),
+      ("USR LOG", "SYSTEM", 30))
+
+# Per-board / per-area REL sets that RECORD_SETS cannot see: only reachable
+# once a board or file area has been created, so they must be discovered
+# from the disk listing rather than assumed.
+check("classify.board_idx", mig.classify_entry("b3.idx", "rel"),
+      ("B3.IDX", "MSGS", mig.RECORD_SIZE_MSG_IDX))
+check("classify.ud_area", mig.classify_entry("ud2", "rel"),
+      ("UD2", "FILES", mig.RECORD_SIZE_FILE_ENTRY))
+# "uds" itself is the fixed set, not a dynamic UD<n> — must not double-match.
+check("classify.uds_is_fixed", mig.classify_entry("uds", "rel"),
+      ("UDS", "FILES", 40))
+
+# ACCESS and CALLERS are SEQ, so RECORD_SETS (REL-only) skips them; this is
+# the gap Part 1 exists to close.
+check("classify.access", mig.classify_entry("access", "seq"),
+      ("ACCESS", "SYSTEM", None))
+check("classify.callers", mig.classify_entry("callers", "seq"),
+      ("CALLERS", "SYSTEM", None))
+
+# Message bodies (SEQ, not REL) live alongside their B<n>.IDX in MSGS/.
+check("classify.board_txt", mig.classify_entry("b7.txt", "seq"),
+      ("B7.TXT", "MSGS", None))
+
+# gfiles/menus/prompts keep their exact on-disk (lowercase) spelling.
+check("classify.gfile", mig.classify_entry("g.login 1 80", "seq"),
+      ("g.login 1 80", "SYSTEM", None))
+check("classify.menu", mig.classify_entry("m.main", "seq"),
+      ("m.main", "SYSTEM", None))
+check("classify.prompt", mig.classify_entry("p.read", "seq"),
+      ("p.read", "SYSTEM", None))
+
+# The REL-build's legacy "config" SEQ data file is a different format from
+# the SIEC CONFIG this tool writes; it must not be copied over verbatim.
+check("classify.legacy_config_excluded", mig.classify_entry("config", "seq"), None)
+
+# Anything unrecognized must come back None (reported, not silently copied
+# or silently dropped) rather than raising or matching by accident.
+check("classify.unknown_seq", mig.classify_entry("readme", "seq"), None)
+check("classify.unknown_rel", mig.classify_entry("mystery", "rel"), None)
+
+
+# --- CONFIG must land at the tree ROOT, never SYSTEM/ ----------------------
+
+with tempfile.TemporaryDirectory() as td:
+    specs = {
+        "SYSTEM": "11;/USB1/TURBO64/SYSTEM",
+        "MSGS":   "11;/USB1/TURBO64/MSGS",
+        "FILES":  "11;/USB1/TURBO64/FILES",
+        "DOORS":  "11;/USB1/TURBO64/DOORS",
+    }
+    os.makedirs(os.path.join(td, "SYSTEM"))
+    mig.write_config(td, specs)
+    check("config.at_root", os.path.isfile(os.path.join(td, "CONFIG")), True)
+    check("config.not_in_system",
+          os.path.isfile(os.path.join(td, "SYSTEM", "CONFIG")), False)
+
+
+# --- a missing overlay or binary is reported, not silently skipped --------
+
+with tempfile.TemporaryDirectory() as td:
+    # Nothing built yet: every required artifact should come back missing.
+    missing = mig.find_missing_siec_artifacts(td, "9.9.9")
+    check("siec.all_missing_when_empty", "ovl_boot.prg" in missing, True)
+    check("siec.all_missing_when_empty", "BOOT-9.9.9-SIEC.prg" in missing, True)
+    check("siec.all_missing_when_empty", "ovl_auth.prg" in missing, True)
+    check("siec.missing_count", len(missing),
+          len(mig.ROOT_SIEC_ARTIFACTS) + 1 + len(mig.SYSTEM_SIEC_ARTIFACTS))
+
+    # Build everything except one overlay: exactly that one is reported.
+    for n in mig.ROOT_SIEC_ARTIFACTS + ["BOOT-9.9.9-SIEC.prg"]:
+        open(os.path.join(td, n), "w").close()
+    for n in mig.SYSTEM_SIEC_ARTIFACTS:
+        if n == "ovl_auth.prg":
+            continue
+        open(os.path.join(td, n), "w").close()
+    missing = mig.find_missing_siec_artifacts(td, "9.9.9")
+    check("siec.one_missing", missing, ["ovl_auth.prg"])
+
+    # Complete set: nothing missing, and copy_siec_artifacts places binaries
+    # at the root vs SYSTEM/ per the verified layout.
+    open(os.path.join(td, "ovl_auth.prg"), "w").close()
+    check("siec.none_missing", mig.find_missing_siec_artifacts(td, "9.9.9"), [])
+
+    outdir = os.path.join(td, "out")
+    os.makedirs(os.path.join(outdir, "SYSTEM"))
+    copied = mig.copy_siec_artifacts(td, "9.9.9", outdir)
+    check("siec.copied_count", len(copied),
+          len(mig.ROOT_SIEC_ARTIFACTS) + 1 + len(mig.SYSTEM_SIEC_ARTIFACTS))
+    check("siec.boot_at_root",
+          os.path.isfile(os.path.join(outdir, "BOOT-9.9.9-SIEC.prg")), True)
+    check("siec.ovl_boot_at_root",
+          os.path.isfile(os.path.join(outdir, "ovl_boot.prg")), True)
+    check("siec.ovl_wfc_in_system",
+          os.path.isfile(os.path.join(outdir, "SYSTEM", "ovl_wfc.prg")), True)
+    check("siec.ovl_wfc_not_at_root",
+          os.path.isfile(os.path.join(outdir, "ovl_wfc.prg")), False)
+
+
+# --- read_version parses BBS_RELEASE_VERSION_COMPACT -----------------------
+
+with tempfile.TemporaryDirectory() as td:
+    hdr = os.path.join(td, "version.h")
+    with open(hdr, "w") as f:
+        f.write('#define BBS_RELEASE_VERSION_COMPACT "9.9.9"\n')
+    check("version.parsed", mig.read_version(hdr), "9.9.9")
+
 
 print(f"migrate_d81: {fails} failed")
 sys.exit(1 if fails else 0)

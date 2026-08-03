@@ -173,6 +173,79 @@ RUN
 
 ---
 
+### `migrate-d81.py` — Convert a .d81 to the SoftIEC Folder Tree
+
+Reads a seeded `.d81` and writes the flat SEQ folder tree the SoftIEC
+(`T64_STORE_SEQ`) build reads: REL sets trimmed and converted to SEQ, ACCESS/
+CALLERS/gfiles/menus/prompts copied over, and the SIEC binaries (`ovl_*.prg`,
+`BOOT-<ver>-SIEC.prg`) copied in from `build/c64/siec/`. Non-destructive — the
+source `.d81` is never modified.
+
+```bash
+python3 tools/migrate-d81.py <image.d81> <outdir> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--base <path>` | SoftIEC Default Path the tree will live at (default: `/USB1/TURBO64`) |
+| `--device <n>` | SoftIEC bus id written into `CONFIG` (default: `11`) |
+| `--siec-build-dir <path>` | Where `make c64-siec` put its output (default: `build/c64/siec`) |
+| `--allow-incomplete` | Write the tree even if a SIEC binary is missing (will not boot) |
+| `--c1541 <path>` | Override the `c1541` tool (env `C1541`) |
+
+By default the tool **fails loudly** (exit 1) if any overlay or the
+`BOOT-<ver>-SIEC.prg` binary is missing from `--siec-build-dir`, printing
+`make c64-siec` as the fix — a tree that looks complete but is missing a
+boot artifact fails silently on hardware, which is the exact trap this
+tool exists to close. `--allow-incomplete` is an explicit opt-out for
+inspecting the data layout only, not a way to produce a deployable tree.
+
+**Output layout:**
+```
+<outdir>/CONFIG, ovl_boot.prg, BOOT-<ver>-SIEC.prg
+<outdir>/SYSTEM/  other 6 overlays, USR LOG, USR PROF, ACCESS, CALLERS,
+                  T64.SIEC, all gfiles/menus/prompts
+<outdir>/MSGS/    T64.SIEC (+ USR.PTR, BOARDS, B<n>.IDX, B<n>.TXT)
+<outdir>/FILES/   T64.SIEC (+ UDS, UD<n>)
+<outdir>/DOORS/   T64.SIEC (+ DOORS)
+```
+CONFIG and ovl_boot.prg must be at the root: `main()` loads `OVL_BOOT` and
+`cfg_init()` reads `CONFIG` before any section path is registered, using
+whatever directory the KERNAL cursor is already in.
+
+---
+
+### `deploy.sh` — Build, Deploy, and Launch to Any Test Target
+
+One command to build, deploy, and (best-effort) launch against any of the
+three test targets: `d81` (device 8, emulated 1581), `siec` (device 11,
+SoftIEC folder tree), `uiec` (device 10, physical uIEC/sd2iec — staged via
+device 8 and driven through `COPYALL`, since its media is not network
+reachable).
+
+```bash
+tools/deploy.sh <d81|siec|uiec> [options]
+```
+
+**Safe by default:** every `c64u` call is printed, not executed, unless
+`--execute` is passed. Review the printed commands before pointing this at
+real hardware.
+
+| Option | Description |
+|--------|-------------|
+| `--execute` | Actually run the `c64u` / upload calls (default: dry run) |
+| `--launch` | Best-effort launch after deploying (see script header for per-target reliability notes — `siec` in particular is not reliable; the exact manual boot commands are always printed) |
+| `--no-build` | Skip the `make` step |
+| `--seed <d81>` | (d81/uiec) seed disk for the user DB (default: `data/users-seed.d81`) |
+| `--drive <a\|b>` | (d81/uiec) internal drive slot |
+| `--device <n>` / `--base <path>` | (siec) SoftIEC bus id / Default Path (env `T64_SIEC_DEVICE` / `T64_SIEC_BASE`) |
+
+Run `tools/deploy.sh --help` for the full per-target breakdown, including
+why `c64u runners run-prg` cannot launch the `siec` target at all (it
+forces device 8 and truncates the path).
+
+---
+
 ### `fetch-u64.sh` — Download Live BBS Disk
 
 Downloads the live `TURBO64-<ver>.D81` from U64 to the project root (or a specified path). Useful for inspecting the live disk without modifying it.
@@ -309,7 +382,10 @@ tools/release.sh --force      # delete existing release and recreate from scratc
 | `VICE_CMD` | `x64sc` | `deploy-vice.sh`, `build.sh` |
 | `TCPSER_CMD` | `tcpser` | `deploy-vice.sh` |
 | `T64_SD_PATH` | (none) | `deploy-u64.sh`, `fetch-u64.sh`, `extract-users.sh`, `extract-boards.sh` |
-| `C1541` | `c1541` | `assemble-d81.sh`, `extract-boards.sh` |
+| `C1541` | `c1541` | `assemble-d81.sh`, `extract-boards.sh`, `migrate-d81.py` |
+| `T64_SIEC_DEVICE` | `11` | `deploy.sh` |
+| `T64_SIEC_BASE` | `/USB1/TURBO64` | `deploy.sh` |
+| `T64_UIEC_DEVICE` | `10` | `deploy.sh` (informational — see script header) |
 
 ---
 
@@ -350,6 +426,8 @@ build/release/
 | `deploy-vice.sh` | Launch VICE with modem bridge and RTC cartridge |
 | `assemble-d81.sh` | Assemble bootable D8 disk image |
 | `deploy-u64.sh` | Upload BBS (and optionally boards) disk to U64 |
+| `deploy.sh` | Build + deploy + best-effort launch to d81 / siec / uiec |
+| `migrate-d81.py` | Convert a seeded `.d81` into the SoftIEC folder tree |
 | `fetch-u64.sh` | Download live BBS disk from U64 |
 | `extract-users.sh` | Snapshot user database from U64 |
 | `extract-boards.sh` | Snapshot boards disk from U64 |
