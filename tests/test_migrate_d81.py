@@ -106,35 +106,38 @@ with tempfile.TemporaryDirectory() as td:
 
 with tempfile.TemporaryDirectory() as td:
     # Nothing built yet: every required artifact should come back missing.
-    missing = mig.find_missing_siec_artifacts(td, "9.9.9")
+    missing = mig.find_missing_siec_artifacts(td)
     check("siec.all_missing_when_empty", "ovl_boot.prg" in missing, True)
-    check("siec.all_missing_when_empty", "BOOT-9.9.9-SIEC.prg" in missing, True)
+    check("siec.all_missing_when_empty", "BOOT-SIEC.prg" in missing, True)
+    check("siec.all_missing_when_empty", "CONFIGURE-SIEC.prg" in missing, True)
     check("siec.all_missing_when_empty", "ovl_auth.prg" in missing, True)
     check("siec.missing_count", len(missing),
-          len(mig.ROOT_SIEC_ARTIFACTS) + 1 + len(mig.SYSTEM_SIEC_ARTIFACTS))
+          len(mig.ROOT_SIEC_ARTIFACTS) + len(mig.SYSTEM_SIEC_ARTIFACTS))
 
     # Build everything except one overlay: exactly that one is reported.
-    for n in mig.ROOT_SIEC_ARTIFACTS + ["BOOT-9.9.9-SIEC.prg"]:
+    for n in mig.ROOT_SIEC_ARTIFACTS:
         open(os.path.join(td, n), "w").close()
     for n in mig.SYSTEM_SIEC_ARTIFACTS:
         if n == "ovl_auth.prg":
             continue
         open(os.path.join(td, n), "w").close()
-    missing = mig.find_missing_siec_artifacts(td, "9.9.9")
+    missing = mig.find_missing_siec_artifacts(td)
     check("siec.one_missing", missing, ["ovl_auth.prg"])
 
     # Complete set: nothing missing, and copy_siec_artifacts places binaries
     # at the root vs SYSTEM/ per the verified layout.
     open(os.path.join(td, "ovl_auth.prg"), "w").close()
-    check("siec.none_missing", mig.find_missing_siec_artifacts(td, "9.9.9"), [])
+    check("siec.none_missing", mig.find_missing_siec_artifacts(td), [])
 
     outdir = os.path.join(td, "out")
     os.makedirs(os.path.join(outdir, "SYSTEM"))
-    copied = mig.copy_siec_artifacts(td, "9.9.9", outdir)
+    copied = mig.copy_siec_artifacts(td, outdir)
     check("siec.copied_count", len(copied),
-          len(mig.ROOT_SIEC_ARTIFACTS) + 1 + len(mig.SYSTEM_SIEC_ARTIFACTS))
+          len(mig.ROOT_SIEC_ARTIFACTS) + len(mig.SYSTEM_SIEC_ARTIFACTS))
     check("siec.boot_at_root",
-          os.path.isfile(os.path.join(outdir, "BOOT-9.9.9-SIEC.prg")), True)
+          os.path.isfile(os.path.join(outdir, "BOOT-SIEC.prg")), True)
+    check("siec.configure_at_root",
+          os.path.isfile(os.path.join(outdir, "CONFIGURE-SIEC.prg")), True)
     check("siec.ovl_boot_at_root",
           os.path.isfile(os.path.join(outdir, "ovl_boot.prg")), True)
     check("siec.ovl_wfc_in_system",
@@ -158,15 +161,6 @@ with tempfile.TemporaryDirectory() as td:
     check("door.copied", copied, [mig.DOOR_PRG_DST])
     check("door.lands_in_doors_lowercase",
           os.path.isfile(os.path.join(outdir, "DOORS", mig.DOOR_PRG_DST)), True)
-
-
-# --- read_version parses BBS_RELEASE_VERSION_COMPACT -----------------------
-
-with tempfile.TemporaryDirectory() as td:
-    hdr = os.path.join(td, "version.h")
-    with open(hdr, "w") as f:
-        f.write('#define BBS_RELEASE_VERSION_COMPACT "9.9.9"\n')
-    check("version.parsed", mig.read_version(hdr), "9.9.9")
 
 
 print(f"migrate_d81: {fails} failed")

@@ -11,12 +11,13 @@ against the manifest deploy.sh already built (the local siec-tree).
 Why this exists: SoftIEC derives the CBM filename by stripping a
 host-side type-marker extension, so a diagnostic scratch file named
 "USR LOG.seq" and the real "USR LOG" database present to the C64 as the
-SAME name — which one opens is undefined. A stale binary from a previous
-version is the same class of danger (BOOT-0.3.0-SIEC.prg beside
-BOOT-0.3.1-SIEC.prg). Getting a remove decision WRONG here can destroy a
-user database, so every rule below defaults to keeping: an entry that
-isn't positively matched by a remove rule is reported unrecognized and
-left alone, never deleted on the assumption it is junk.
+SAME name — which one opens is undefined. A stale binary left over from
+before BOOT-SIEC.prg / CONFIGURE-SIEC.prg became fixed, version-independent
+names is the same class of danger — e.g. a pre-rename BOOT-0.3.1-SIEC.prg
+sitting beside the current BOOT-SIEC.prg. Getting a remove decision WRONG
+here can destroy a user database, so every rule below defaults to keeping:
+an entry that isn't positively matched by a remove rule is reported
+unrecognized and left alone, never deleted on the assumption it is junk.
 
 Two subcommands:
   classify   pre-upload: decide what's safe to remove before a fresh
@@ -59,6 +60,7 @@ PROTECTED_PATTERNS = (
 )
 
 BOOT_RE = re.compile(r"^BOOT[-.].*\.PRG$", re.IGNORECASE)
+CONFIGURE_RE = re.compile(r"^CONFIGURE[-.].*\.PRG$", re.IGNORECASE)
 OVL_RE = re.compile(r"^ovl_.*\.prg$", re.IGNORECASE)
 SEQ_RE = re.compile(r"^(.*)\.seq$", re.IGNORECASE)
 
@@ -119,6 +121,9 @@ def classify_entry(section, name, manifest):
 
     if BOOT_RE.match(name):
         return ("REMOVE", "stale/foreign BOOT binary (not part of this deploy)")
+
+    if CONFIGURE_RE.match(name):
+        return ("REMOVE", "stale/foreign CONFIGURE binary (not part of this deploy)")
 
     if OVL_RE.match(name):
         return ("REMOVE", "ovl_*.prg not part of this deploy (wrong version or location)")

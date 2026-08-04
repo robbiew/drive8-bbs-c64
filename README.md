@@ -23,8 +23,12 @@ store the user/message/file/door database:
 
 | Your hardware | Build | Media |
 |---|---|---|
-| C64 Ultimate, **Software IEC** | `BOOT-0.4.0-SIEC.prg` / `CONFIGURE-0.4.0-SIEC.prg` | a folder on the Ultimate's USB stick or SD card — **no disk image mounted** |
+| C64 Ultimate, **Software IEC** | `BOOT-SIEC.prg` / `CONFIGURE-SIEC.prg` | a folder on the Ultimate's USB stick or SD card — **no disk image mounted** |
 | sd2iec / uIEC / 1571 / 1581 / emulated 1581 (incl. VICE) | `BOOT-0.4.0.prg` / `CONFIGURE-0.4.0.prg` | `TURBO64-0.4.0.d81` |
+
+The SIEC binaries deliberately have fixed, version-independent names — CBM filenames
+top out at 16 characters, and `CONFIGURE-0.4.0-SIEC` (20) could never load. The version
+isn't lost: it's compiled in and shown on the boot screen.
 
 If you're not sure which one you have: if you access your Ultimate's storage as a mounted
 USB/SD folder tree through its web UI or menu (not as a `.d81` you attach to a virtual
@@ -102,12 +106,13 @@ for the SIEC equivalent.
 make all          # compile BOOT and CONFIGURE PRGs
 make disk         # assemble TURBO64-<ver>.d81 from build output + data/
 make disk-with-users  # same, but fetches live user database from C64U first
-make c64-siec     # compile BOOT-<ver>-SIEC.prg (SoftIEC: SEQ+REU records)
-make editor-siec  # compile CONFIGURE-<ver>-SIEC.prg
+make c64-siec     # compile BOOT-SIEC.prg (SoftIEC: SEQ+REU records)
+make editor-siec  # compile CONFIGURE-SIEC.prg
 ```
 
 Output: `build/c64/BOOT-<ver>.prg`, `build/c64/CONFIGURE-<ver>.prg`, `build/c64/TURBO64-<ver>.d81`,
-`build/c64/siec/BOOT-<ver>-SIEC.prg`, `build/c64/siec/CONFIGURE-<ver>-SIEC.prg`. The SIEC build has
+`build/c64/siec/BOOT-SIEC.prg`, `build/c64/siec/CONFIGURE-SIEC.prg` (fixed names — the
+compiled-in version still shows on the boot screen). The SIEC build has
 no disk-image target — see [Setting up the SoftIEC build](#setting-up-the-softiec-build).
 
 See [`tools/README.md`](tools/README.md) for the full reference.
@@ -359,7 +364,8 @@ Start with `PTEST` — it answers in seconds whether a device supports partition
 
 ## Setting up the SoftIEC build
 
-The SIEC build (`BOOT-0.4.0-SIEC.prg` / `CONFIGURE-0.4.0-SIEC.prg`) never mounts a disk
+The SIEC build (`BOOT-SIEC.prg` / `CONFIGURE-SIEC.prg` — fixed, version-independent
+names; see [Which Build Do I Want?](#which-build-do-i-want)) never mounts a disk
 image. Instead it reads and writes SEQ files inside a folder tree on the Ultimate's own
 USB/SD storage, addressed through Software IEC (device 11 by default). That tree has to
 exist and be laid out correctly before the SIEC build will boot — building it is what
@@ -378,11 +384,12 @@ exist and be laid out correctly before the SIEC build will boot — building it 
 ```
 TURBO64-0.4.0.d81            the REL disk image — used here only as a data SOURCE
 tools/migrate-d81.py          the migration tool
-include/bbs/version.h         read by migrate-d81.py to name the SIEC binaries correctly
+include/bbs/version.h         the compiled-in version (shown on the boot screen);
+                               SIEC binary names are fixed and don't need this to build
 build/c64/FORTUNE.prg         the example door (shared between both builds)
 build/c64/siec/
-  BOOT-0.4.0-SIEC.prg
-  CONFIGURE-0.4.0-SIEC.prg
+  BOOT-SIEC.prg
+  CONFIGURE-SIEC.prg
   ovl_boot.prg  ovl_wfc.prg  ovl_msgs.prg  ovl_doors.prg  ovl_files.prg
   ovl_zmodem.prg  ovl_auth.prg
 ```
@@ -404,16 +411,11 @@ python3 tools/migrate-d81.py TURBO64-0.4.0.d81 siec-tree \
   `/USB1/...` for a USB stick, `/SD/...` for the SD card.
 - `--device` — the SoftIEC device number as T/64 will see it (11 is the Ultimate default).
 
-This produces `siec-tree/` containing `CONFIG`, `ovl_boot.prg`, `BOOT-0.4.0-SIEC.prg` at
-its root, and `SYSTEM/`, `MSGS/`, `FILES/`, `DOORS/` folders holding the remaining
-overlays, the migrated `USR LOG`/`USR PROF`/`ACCESS`/`CALLERS` records, gfiles, and the
-example door. **`migrate-d81.py` does not copy `CONFIGURE-0.4.0-SIEC.prg`** — copy it into
-`siec-tree/` by hand (same folder as `BOOT-0.4.0-SIEC.prg`) if you want to run CONFIGURE
-over SoftIEC too:
-
-```bash
-cp build/c64/siec/CONFIGURE-0.4.0-SIEC.prg siec-tree/
-```
+This produces `siec-tree/` containing `CONFIG`, `ovl_boot.prg`, `BOOT-SIEC.prg`, and
+`CONFIGURE-SIEC.prg` at its root, and `SYSTEM/`, `MSGS/`, `FILES/`, `DOORS/` folders
+holding the remaining overlays, the migrated `USR LOG`/`USR PROF`/`ACCESS`/`CALLERS`
+records, gfiles, and the example door. `migrate-d81.py` copies both SIEC binaries
+automatically — there is no manual copy step for CONFIGURE.
 
 Then copy the entire contents of `siec-tree/` onto the stick or card at the `--base` path
 you gave above (Ultimate web UI, FTP, or however you move files onto its storage), so that
@@ -422,7 +424,13 @@ device 11 at boot — the whole point of SoftIEC is that there is no image to at
 
 Boot with:
 ```
-LOAD"BOOT-0.4.0-SIEC",11
+LOAD"BOOT-SIEC",11
+RUN
+```
+
+To run the SysOp editor over SoftIEC instead:
+```
+LOAD"CONFIGURE-SIEC",11
 RUN
 ```
 

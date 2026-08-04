@@ -18,10 +18,16 @@ T/64 now ships **two binaries**:
     For 1541/1571/1581, sd2iec/uIEC, or the C64 Ultimate's emulated 1581.
     Unchanged from prior releases: mount TURBO64-__VERSION__.d81, as before.
 
-  BOOT-__VERSION__-SIEC.prg / CONFIGURE-__VERSION__-SIEC.prg
+  BOOT-SIEC.prg / CONFIGURE-SIEC.prg
     For the C64 Ultimate's Software IEC (device 11 by default). No disk
     image is mounted — the BBS reads and writes SEQ files in a folder tree
-    on the Ultimate's own USB/SD storage instead.
+    on the Ultimate's own USB/SD storage instead. These two names are
+    fixed and version-independent, unlike the pair above — CBM filenames
+    top out at 16 characters, and a version-suffixed CONFIGURE name
+    overflows that as soon as the version string grows (this shipped
+    briefly as CONFIGURE-__VERSION__-SIEC.prg internally, 20 characters,
+    and could never load — see "Fixed in v__VERSION__" below). The
+    version isn't lost: it's compiled in and shown on the boot screen.
 
 SoftIEC has no REL file support, which is the file format T/64's entire
 database (users, boards, messages, file areas, doors) was built on. Rather
@@ -94,6 +100,14 @@ complete install — pressing the door key just failed. `migrate-d81.py` now
 copies it in automatically, and refuses to produce an incomplete tree
 silently — it fails loudly and tells you to `make door-example` first if
 the PRG isn't where it expects.
+
+**CONFIGURE-__VERSION__-SIEC.prg could not be loaded at all.** CBM
+filenames cap out at 16 characters; that name was 20, so a SoftIEC SysOp
+had no way to configure their BBS — LOAD always came back ?FILE NOT FOUND.
+BOOT-SIEC.prg and CONFIGURE-SIEC.prg are now fixed, version-independent
+names (dropping the version suffix the REL binaries still carry), so this
+cannot recur when the version string grows. `migrate-d81.py` also now
+copies CONFIGURE-SIEC.prg into the tree automatically, alongside BOOT-SIEC.prg.
 
 
 Storage: what works on which device
@@ -175,7 +189,7 @@ SoftIEC build (C64 Ultimate only — no disk image):
 1. Run tools/migrate-d81.py against TURBO64-__VERSION__.d81 to build a
    folder tree (see README — "Setting up the SoftIEC build")
 2. Copy the tree's contents onto the Ultimate's USB/SD storage
-3. LOAD "BOOT-__VERSION__-SIEC",11
+3. LOAD "BOOT-SIEC",11
 4. RUN
 
 For full instructions see README.txt inside the archive.

@@ -5,7 +5,7 @@ Non-destructive: reads the image, writes a new directory. The source .d81 is
 never modified, so a failed run loses nothing.
 
 Produces the layout verified on hardware:
-    <outdir>/         CONFIG, ovl_boot.prg, BOOT-<ver>-SIEC.prg
+    <outdir>/         CONFIG, ovl_boot.prg, BOOT-SIEC.prg, CONFIGURE-SIEC.prg
     <outdir>/SYSTEM/  the other six overlays, USR LOG, USR PROF, ACCESS,
                       CALLERS, T64.SIEC, all gfiles/menus/prompts
     <outdir>/MSGS/    T64.SIEC (+ USR.PTR, BOARDS, B<n>.IDX, B<n>.TXT)
@@ -66,11 +66,19 @@ SEQ_FIXED = {
 # genuinely unrecognized entry the SysOp should look at.
 EXPECTED_SEQ_SKIP = {"config"}
 
-# The SIEC binaries this tree cannot boot without. Root: ovl_boot.prg plus
-# the BOOT-<ver>-SIEC.prg binary itself (main() loads OVL_BOOT before cfg_init
-# runs, at the tree root). SYSTEM/: the other six overlays, loaded later once
-# disk_select_partition() has positioned the cursor there.
-ROOT_SIEC_ARTIFACTS = ["ovl_boot.prg"]   # + BOOT-<ver>-SIEC.prg, added by name
+# The SIEC binaries this tree cannot boot (or be configured) without. Root:
+# ovl_boot.prg, BOOT-SIEC.prg itself (main() loads OVL_BOOT before cfg_init
+# runs, at the tree root), and CONFIGURE-SIEC.prg (the SysOp editor — without
+# it a SoftIEC install has no way to configure the BBS at all). BOOT-SIEC.prg
+# / CONFIGURE-SIEC.prg are fixed, version-independent names (see Makefile) —
+# unlike the REL binaries, they do NOT get a $(VERSION) suffix, because CBM
+# filenames top out at 16 chars and "CONFIGURE-<ver>-SIEC" overflows that as
+# soon as the version string grows past a couple of characters (verified on
+# hardware as a plain ?FILE NOT FOUND: CONFIGURE-0.4.0-SIEC was 20 chars).
+# The version isn't lost — it's compiled in and shown on the boot screen.
+# SYSTEM/: the other six overlays, loaded later once disk_select_partition()
+# has positioned the cursor there.
+ROOT_SIEC_ARTIFACTS = ["ovl_boot.prg", "BOOT-SIEC.prg", "CONFIGURE-SIEC.prg"]
 SYSTEM_SIEC_ARTIFACTS = [
     "ovl_wfc.prg", "ovl_msgs.prg", "ovl_doors.prg",
     "ovl_files.prg", "ovl_zmodem.prg", "ovl_auth.prg",
@@ -180,19 +188,9 @@ def extract(c1541, image, name, dest, suffix):
     return r.returncode == 0 and os.path.exists(dest)
 
 
-def read_version(version_header):
-    with open(version_header) as f:
-        content = f.read()
-    m = re.search(r'BBS_RELEASE_VERSION_COMPACT\s+"([^"]+)"', content)
-    if not m:
-        sys.exit(f"could not find BBS_RELEASE_VERSION_COMPACT in {version_header}")
-    return m.group(1)
-
-
-def find_missing_siec_artifacts(siec_dir, version):
+def find_missing_siec_artifacts(siec_dir):
     """Names (relative to siec_dir) of any required SIEC binary not present."""
-    boot_name = f"BOOT-{version}-SIEC.prg"
-    wanted = ROOT_SIEC_ARTIFACTS + [boot_name] + SYSTEM_SIEC_ARTIFACTS
+    wanted = ROOT_SIEC_ARTIFACTS + SYSTEM_SIEC_ARTIFACTS
     return [n for n in wanted if not os.path.isfile(os.path.join(siec_dir, n))]
 
 
@@ -212,14 +210,13 @@ def find_missing_door(door_build_dir):
     return [DOOR_PRG_SRC]
 
 
-def copy_siec_artifacts(siec_dir, version, outdir):
+def copy_siec_artifacts(siec_dir, outdir):
     """Copy whichever of the required SIEC binaries are present in siec_dir
     into outdir (root vs SYSTEM/ per the verified layout). Caller is
     responsible for the fail-loud/allow-incomplete decision beforehand.
     """
-    boot_name = f"BOOT-{version}-SIEC.prg"
     copied = []
-    for n in ROOT_SIEC_ARTIFACTS + [boot_name]:
+    for n in ROOT_SIEC_ARTIFACTS:
         src = os.path.join(siec_dir, n)
         if os.path.isfile(src):
             shutil.copy2(src, os.path.join(outdir, n))
@@ -274,15 +271,14 @@ def main():
                     help="path to the VICE c1541 tool")
     ap.add_argument("--siec-build-dir",
                     default=os.path.join(root, "build", "c64", "siec"),
-                    help="where ovl_*.prg / BOOT-<ver>-SIEC.prg were built "
-                         "(default: build/c64/siec, i.e. 'make c64-siec')")
+                    help="where ovl_*.prg / BOOT-SIEC.prg / CONFIGURE-SIEC.prg "
+                         "were built (default: build/c64/siec, i.e. "
+                         "'make c64-siec && make editor-siec')")
     ap.add_argument("--door-build-dir",
                     default=os.path.join(root, "build", "c64"),
                     help="where FORTUNE.prg was built (default: build/c64, "
                          "i.e. 'make door-example' — NOT --siec-build-dir; "
                          "doors are shared between the REL and SIEC flavors)")
-    ap.add_argument("--version-header",
-                    default=os.path.join(root, "include", "bbs", "version.h"))
     ap.add_argument("--allow-incomplete", action="store_true",
                     help="produce the tree even if SIEC binaries are missing "
                          "(the result will NOT boot; for inspecting the data "
@@ -301,8 +297,7 @@ def main():
     # binary fails silently at the C64 — the exact trap this tool exists to
     # remove. --allow-incomplete is an explicit opt-out for inspecting the
     # data layout only; it is not a way to produce a deployable tree.
-    version = read_version(args.version_header)
-    missing_bin = find_missing_siec_artifacts(args.siec_build_dir, version)
+    missing_bin = find_missing_siec_artifacts(args.siec_build_dir)
     # The example door is checked here too, not skipped past silently: a
     # DOORS/ folder with nothing in it is exactly the "looks complete but
     # isn't" trap this tool exists to remove, just for the DOORS feature
@@ -313,8 +308,9 @@ def main():
         if missing_bin:
             parts.append(
                 "missing SIEC build artifact(s) in {}: {}\n"
-                "This tree would not boot on hardware. Build them first:\n"
-                "    make c64-siec".format(
+                "This tree would not boot (or could not be configured) on "
+                "hardware. Build them first:\n"
+                "    make c64-siec && make editor-siec".format(
                     args.siec_build_dir, ", ".join(missing_bin))
             )
         if missing_door:
@@ -379,7 +375,7 @@ def main():
     # back to compile-time defaults — it boots fine and reads the wrong device.
     write_config(args.outdir, specs)
 
-    copied = copy_siec_artifacts(args.siec_build_dir, version, args.outdir)
+    copied = copy_siec_artifacts(args.siec_build_dir, args.outdir)
     door_copied = copy_door_artifact(args.door_build_dir, args.outdir)
 
     for line in converted:

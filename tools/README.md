@@ -178,8 +178,10 @@ RUN
 Reads a seeded `.d81` and writes the flat SEQ folder tree the SoftIEC
 (`T64_STORE_SEQ`) build reads: REL sets trimmed and converted to SEQ, ACCESS/
 CALLERS/gfiles/menus/prompts copied over, and the SIEC binaries (`ovl_*.prg`,
-`BOOT-<ver>-SIEC.prg`) copied in from `build/c64/siec/`. Non-destructive — the
-source `.d81` is never modified.
+`BOOT-SIEC.prg`, `CONFIGURE-SIEC.prg`) copied in from `build/c64/siec/`.
+Non-destructive — the source `.d81` is never modified. `BOOT-SIEC.prg` /
+`CONFIGURE-SIEC.prg` are fixed, version-independent names — see
+[the naming rationale](../README.md#which-build-do-i-want).
 
 ```bash
 python3 tools/migrate-d81.py <image.d81> <outdir> [options]
@@ -193,16 +195,17 @@ python3 tools/migrate-d81.py <image.d81> <outdir> [options]
 | `--allow-incomplete` | Write the tree even if a SIEC binary is missing (will not boot) |
 | `--c1541 <path>` | Override the `c1541` tool (env `C1541`) |
 
-By default the tool **fails loudly** (exit 1) if any overlay or the
-`BOOT-<ver>-SIEC.prg` binary is missing from `--siec-build-dir`, printing
-`make c64-siec` as the fix — a tree that looks complete but is missing a
-boot artifact fails silently on hardware, which is the exact trap this
-tool exists to close. `--allow-incomplete` is an explicit opt-out for
-inspecting the data layout only, not a way to produce a deployable tree.
+By default the tool **fails loudly** (exit 1) if any overlay, `BOOT-SIEC.prg`,
+or `CONFIGURE-SIEC.prg` is missing from `--siec-build-dir`, printing
+`make c64-siec && make editor-siec` as the fix — a tree that looks complete
+but is missing a boot artifact (or has no way to run the SysOp editor) fails
+silently on hardware, which is the exact trap this tool exists to close.
+`--allow-incomplete` is an explicit opt-out for inspecting the data layout
+only, not a way to produce a deployable tree.
 
 **Output layout:**
 ```
-<outdir>/CONFIG, ovl_boot.prg, BOOT-<ver>-SIEC.prg
+<outdir>/CONFIG, ovl_boot.prg, BOOT-SIEC.prg, CONFIGURE-SIEC.prg
 <outdir>/SYSTEM/  other 6 overlays, USR LOG, USR PROF, ACCESS, CALLERS,
                   T64.SIEC, all gfiles/menus/prompts
 <outdir>/MSGS/    T64.SIEC (+ USR.PTR, BOARDS, B<n>.IDX, B<n>.TXT)
@@ -414,9 +417,9 @@ build/c64/
 ├── CONFIGURE-<ver>.prg   SysOp editor (REL backend)
 ├── ovl_*.prg             REL overlays (msgs, wfc, boot, doors, files, zmodem, auth)
 └── siec/                 SoftIEC (T64_STORE_SEQ) build — own dir so its
-    ├── BOOT-<ver>-SIEC.prg          same-named overlays never collide with
-    ├── CONFIGURE-<ver>-SIEC.prg     the REL set above (see `make c64-siec`)
-    └── ovl_*.prg
+    ├── BOOT-SIEC.prg          fixed, version-independent names (same-named
+    ├── CONFIGURE-SIEC.prg     overlays never collide with the REL set above
+    └── ovl_*.prg              — see `make c64-siec` / `make editor-siec`)
 
 data/
 ├── users-seed.d81        user database snapshot (from extract-users.sh)

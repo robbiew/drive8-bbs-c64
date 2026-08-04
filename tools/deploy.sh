@@ -521,6 +521,7 @@ siec_clean_pass() {
         echo -e "${YELLOW}SYSTEM/MSGS/FILES/DOORS subfolders. Nothing is fetched from the device${NC}"
         echo -e "${YELLOW}in a dry run. Rules applied once real listings are available (--execute):${NC}"
         echo "  REMOVE  BOOT-*.prg / BOOT*.PRG other than ${boot_name:-<the BOOT binary for this deploy>}"
+        echo "  REMOVE  CONFIGURE-*.prg / CONFIGURE*.PRG other than CONFIGURE-SIEC.prg"
         echo "  REMOVE  ovl_*.prg outside this deploy's root/SYSTEM locations"
         echo "  REMOVE  known src-diag/ diagnostic PRGs: SIECPROBE SEQTEST SEQNAME USRREAD"
         echo "          USRSWEEP CFGREAD PTEST RELTEST CPTEST DIR EXISTS CLEAN WIPE COPYALL"
@@ -658,7 +659,9 @@ deploy_siec() {
         siec_verify_pass "$manifest"
     fi
 
-    local boot_name="BOOT-${VERSION_COMPACT}-SIEC"
+    # BOOT-SIEC is a fixed, version-independent name (see Makefile) — unlike
+    # the REL BOOT binary above, it does not carry $VERSION_COMPACT.
+    local boot_name="BOOT-SIEC"
     if [ "$LAUNCH" -eq 1 ]; then
         echo -e "${BLUE}Attempting best-effort launch via sendkey (UNRELIABLE — watch the console)...${NC}"
         run_c64u machine sendkey "LOAD\"${boot_name}\",${SIEC_DEVICE}"
@@ -674,6 +677,11 @@ deploy_siec() {
     echo "    RUN"
     echo "(if sendkey drops the RETURN, type these by hand — send the text and"
     echo " '\\n' as separate keystrokes if scripting it again)"
+    echo ""
+    echo "CONFIGURE-SIEC is at the tree root alongside BOOT-SIEC (migrate-d81.py"
+    echo "copies it automatically). To run it instead:"
+    echo "    LOAD\"CONFIGURE-SIEC\",${SIEC_DEVICE}"
+    echo "    RUN"
     echo ""
     echo -e "${YELLOW}Reminder: the SoftIEC current directory persists across a reset.${NC}"
     echo "This script only uploads over FTP (does not touch IEC bus DOS state), so"

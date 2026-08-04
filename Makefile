@@ -86,6 +86,7 @@ $(SETUP_DATA): $(SETUP_SRC)
 $(BOOT_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS) $(PUB_HDRS)
 	@mkdir -p $(OUTDIR)
 	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) -o=$@ -d64=$(OVERLAYS_D64) $< $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
+	@n="$$(basename $@ .prg)"; if [ $${#n} -gt 16 ]; then echo "ERROR: CBM name '$$n' is $${#n} chars (C64 limit 16): $@" >&2; exit 1; fi
 	@echo "Built: $@"
 
 # ovl_msgs.prg / ovl_boot.prg are produced as side-effects of the BOOT_PRG -d64
@@ -126,15 +127,24 @@ EDITOR_DEFS := -dNOFLOAT
 $(CONFIGURE_PRG): src-editor/main.c $(EDITOR_SRCS) src-editor/reu_stubs.c $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
 	@mkdir -p $(OUTDIR)
 	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(CFLAGS) $(EDITOR_DEFS) -o=$@ $< $(EDITOR_SRCS) src-editor/reu_stubs.c $(EDITOR_HAL_SRCS) $(DATA_SRCS)
+	@n="$$(basename $@ .prg)"; if [ $${#n} -gt 16 ]; then echo "ERROR: CBM name '$$n' is $${#n} chars (C64 limit 16): $@" >&2; exit 1; fi
 	@echo "Built: $@"
 
 # ---------------------------------------------------------------------------
 # SoftIEC build (T64_STORE_SEQ): records live in REU-backed flat SEQ files and
 # drive_* is a section-folder index rather than a CP<n> partition. Selected
 # here by the define and by which rel implementation is linked.
+#
+# BOOT-SIEC / CONFIGURE-SIEC deliberately do NOT carry $(VERSION) in the
+# name, unlike the REL binaries above. CBM filenames top out at 16 chars;
+# CONFIGURE-$(VERSION)-SIEC.prg was 20 (CONFIGURE-0.4.0-SIEC) and could
+# never load — ?FILE NOT FOUND every time, verified on hardware. Fixed,
+# version-independent names close that off for good instead of surviving
+# only until the version string grows again. The version isn't lost: it's
+# compiled in (include/bbs/version.h) and shown on the boot screen.
 # ---------------------------------------------------------------------------
-BOOT_SIEC_PRG      := $(OUTDIR_SIEC)/BOOT-$(VERSION)-SIEC.prg
-CONFIGURE_SIEC_PRG := $(OUTDIR_SIEC)/CONFIGURE-$(VERSION)-SIEC.prg
+BOOT_SIEC_PRG      := $(OUTDIR_SIEC)/BOOT-SIEC.prg
+CONFIGURE_SIEC_PRG := $(OUTDIR_SIEC)/CONFIGURE-SIEC.prg
 SIEC_DEFS          := -dT64_STORE_SEQ
 SIEC_REL_SRC       := src/hal/rel_seq.c src/hal/seq_region.c
 
@@ -159,6 +169,7 @@ $(BOOT_SIEC_PRG): src/main.c $(HAL_SRCS) $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_
 	$(OSCAR64) $(CFLAGS) $(BOOT_DEFS) $(SIEC_DEFS) -o=$@ -d64=$(OVERLAYS_D64_SIEC) \
 	  $< $(filter-out src/hal/rel.c,$(HAL_SRCS)) $(SIEC_REL_SRC) \
 	  $(DATA_SRCS) $(SESSION_SRCS) $(FEATURE_SRCS)
+	@n="$$(basename $@ .prg)"; if [ $${#n} -gt 16 ]; then echo "ERROR: CBM name '$$n' is $${#n} chars (C64 limit 16): $@" >&2; exit 1; fi
 	@echo "Built: $@"
 
 $(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_HAL_SRCS) $(DATA_SRCS) $(PUB_HDRS)
@@ -166,6 +177,7 @@ $(CONFIGURE_SIEC_PRG): src-editor/main.c $(EDITOR_SRCS) src/hal/reu.c $(EDITOR_H
 	$(OSCAR64) $(CFLAGS) -i=$(ROOT)src-editor $(EDITOR_DEFS) $(SIEC_DEFS) -o=$@ \
 	  $< $(EDITOR_SRCS) $(filter-out src/hal/rel.c,$(EDITOR_HAL_SRCS)) $(SIEC_REL_SRC) src/hal/reu.c \
 	  $(DATA_SRCS)
+	@n="$$(basename $@ .prg)"; if [ $${#n} -gt 16 ]; then echo "ERROR: CBM name '$$n' is $${#n} chars (C64 limit 16): $@" >&2; exit 1; fi
 	@echo "Built: $@"
 
 

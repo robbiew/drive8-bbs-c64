@@ -147,8 +147,11 @@ BLANK_DISK="$ROOT/data/blank-disk.d81"
 DOOR_PRG="$ROOT/build/c64/FORTUNE.prg"
 
 SIEC_DIR="$ROOT/build/c64/siec"
-BOOT_SIEC_PRG="$SIEC_DIR/BOOT-${VERSION}-SIEC.prg"
-CONFIGURE_SIEC_PRG="$SIEC_DIR/CONFIGURE-${VERSION}-SIEC.prg"
+# BOOT-SIEC / CONFIGURE-SIEC are fixed, version-independent names (see
+# Makefile) — unlike BOOT_PRG/CONFIGURE_PRG above, they do not carry
+# $VERSION. The version is still compiled in and shown on the boot screen.
+BOOT_SIEC_PRG="$SIEC_DIR/BOOT-SIEC.prg"
+CONFIGURE_SIEC_PRG="$SIEC_DIR/CONFIGURE-SIEC.prg"
 SIEC_OVERLAYS=(ovl_boot.prg ovl_wfc.prg ovl_msgs.prg ovl_doors.prg ovl_files.prg ovl_zmodem.prg ovl_auth.prg)
 
 MIGRATE_TOOL="$ROOT/tools/migrate-d81.py"
@@ -180,12 +183,13 @@ done
 #       --base /USB1/TURBO64 --device 11
 #
 # migrate-d81.py's own defaults (--siec-build-dir build/c64/siec,
-# --door-build-dir build/c64, --version-header include/bbs/version.h) then
-# resolve correctly with no path surgery, and there is only one documented
-# invocation to keep in sync instead of a second "for the zip" variant.
-# CONFIGURE-<ver>-SIEC.prg is not migrated automatically (migrate-d81.py has
-# no editor-copy step), so it ships in build/c64/siec/ for a SysOp to copy
-# into the tree by hand — see README's SoftIEC section.
+# --door-build-dir build/c64) then resolve correctly with no path surgery,
+# and there is only one documented invocation to keep in sync instead of a
+# second "for the zip" variant. migrate-d81.py copies both BOOT-SIEC.prg and
+# CONFIGURE-SIEC.prg into the tree automatically — no manual copy step.
+# include/bbs/version.h ships alongside for reference (the compiled-in
+# version shown on the boot screen); migrate-d81.py no longer reads it,
+# since the SIEC binary names are fixed and version-independent.
 
 RELEASE_DIR="$ROOT/build/release"
 rm -rf "$RELEASE_DIR"
