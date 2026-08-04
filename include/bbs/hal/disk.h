@@ -98,12 +98,23 @@ bbs_err_t disk_rename(u8 device, u8 drive,
 /* Send a raw command string to the drive command channel (e.g. "I0"). */
 bbs_err_t disk_cmd(u8 device, const char *cmd);
 
-/* Select drive partition `partition` on `device` via the "CP<n>" command
- * channel command. Partitions are persistent drive state (not filename
- * state), so this must be called before any filename that assumes a given
- * partition is current. Caches the last selected (device, partition) pair
- * and is a no-op when already selected. `partition == 0` always sends
- * nothing (see disk.c for why). */
+/* Select the storage location `partition` addresses on `device`. Partitions
+ * are persistent drive state (not filename state), so this must be called
+ * before any filename that assumes a given partition is current. Caches the
+ * last selected (device, partition) pair and is a no-op when already
+ * selected. The command sent, and what `partition == 0` means, differ by
+ * build:
+ *
+ * REL (default) build: `partition` is a CP<n> drive partition, sent via the
+ * "CP<n>" command channel command. `partition == 0` always sends nothing —
+ * see disk.c for why that must stay byte-for-byte quiet.
+ *
+ * T64_STORE_SEQ build: `partition` is a SECTION INDEX (0=system, 1=msgs,
+ * 2=files, 3=doors, 4=gfiles) and this issues an absolute "CD:<path>" to the
+ * folder registered for that index via disk_set_section_path(). 0 (system)
+ * is an ordinary section like any other, not a no-op case; this sends
+ * nothing only when the index has no path registered yet (e.g. before
+ * cfg_init() has run). */
 bbs_err_t disk_select_partition(u8 device, u8 partition);
 
 /* Load an overlay PRG (a P"OVL_..." literal) from bbs_cfg.device_system,
