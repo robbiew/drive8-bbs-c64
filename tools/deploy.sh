@@ -10,8 +10,9 @@
 #   siec  Device 11, SoftIEC. Runs tools/migrate-d81.py to build the folder
 #         tree, then uploads it to the device's Default Path over FTP.
 #   uiec  Device 10, a physical uIEC/sd2iec. Not reachable over the network:
-#         stages device 8 (same as the d81 target) and drives COPYALL
-#         through the C64 to copy the program set across. See NOTES below.
+#         stages device 8 (same as the d81 target, plus COPYALL written onto
+#         that same image) and drives COPYALL through the C64 to copy the
+#         program set across. See NOTES below.
 #
 # Options (all targets):
 #   --execute            Actually call c64u / upload. Default: DRY RUN —
@@ -73,15 +74,21 @@
 #   type the two printed lines by hand.
 #
 #   uiec automation (--launch): COPYALL.prg is itself loaded via run-prg
-#   (device 8, so run-prg's forced device is correct), then a bare "C"
-#   keystroke starts it (COPYALL waits on getch(), not a BASIC line, so the
-#   sendkey chunking bug does not apply). This has NOT been validated
-#   against real hardware by this script — treat it as experimental and
-#   watch the console. COPYALL itself is a diagnostic under src-diag/;
-#   its file list derives BOOT/CONFIGURE names from BBS_RELEASE_VERSION_COMPACT
-#   and includes OVL_AUTH, so it cannot drift the way earlier builds did. This
-#   script still verifies the built PRG's embedded strings before staging (see
-#   deploy_uiec) rather than trusting that source claim blind.
+#   (device 8, so run-prg's forced device is correct), then a "C" keystroke
+#   starts it (COPYALL waits on getch(), not a BASIC line, so the sendkey
+#   chunking bug above does not apply). VERIFIED on hardware: the first
+#   sendkey "C" after run-prg is reliably dropped — COPYALL was still
+#   sitting at its "PRESS C TO START" prompt until a second, identical
+#   sendkey landed — so deploy_uiec sends "C" twice. Watch the console
+#   regardless; c64u still can't read the "DONE. N FAILED." result back.
+#   COPYALL itself is a diagnostic under src-diag/; its file list derives
+#   BOOT/CONFIGURE names from BBS_RELEASE_VERSION_COMPACT and includes
+#   OVL_AUTH, so it cannot drift the way earlier builds did. This script
+#   still verifies the built PRG's embedded strings before staging (see
+#   deploy_uiec) rather than trusting that source claim blind. deploy_uiec
+#   also writes COPYALL.prg onto the staged device-8 image itself (via
+#   assemble-d81.sh --extra-prg) so the printed manual LOAD"COPYALL",8 is
+#   actually true — it used to name a file that was never on the disk.
 #
 # Environment:
 #   T64_SIEC_DEVICE   default SoftIEC bus id (11)
@@ -102,7 +109,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 show_help() {
-    sed -n '2,90p' "$0"
+    sed -n '2,98p' "$0"
 }
 
 TARGET="${1:-}"
@@ -173,6 +180,12 @@ fi
 echo ""
 
 deploy_d81() {
+    # Optional: absolute path to one extra host PRG to stage onto the image
+    # (forwarded to assemble-d81.sh --extra-prg). Only deploy_uiec passes
+    # this (COPYALL); called with no argument here it stays empty, so the
+    # plain d81 target and every release build remain diagnostic-free.
+    local extra_prg="${1:-}"
+
     if [ "$BUILD" -eq 1 ]; then
         echo -e "${BLUE}Building REL binaries...${NC}"
         (cd "$ROOT" && make c64 && make editor)
@@ -186,7 +199,11 @@ deploy_d81() {
     fi
 
     echo -e "${BLUE}Assembling seeded disk image...${NC}"
-    bash "$ROOT/tools/assemble-d81.sh" --seed-users "$D81_SEED"
+    if [ -n "$extra_prg" ]; then
+        bash "$ROOT/tools/assemble-d81.sh" --seed-users "$D81_SEED" --extra-prg "$extra_prg"
+    else
+        bash "$ROOT/tools/assemble-d81.sh" --seed-users "$D81_SEED"
+    fi
 
     local image="$ROOT/build/c64/TURBO64-${VERSION_COMPACT}.d81"
     echo -e "${BLUE}Mounting to internal drive ${D81_DRIVE} (device 8)...${NC}"
@@ -221,6 +238,17 @@ siec_section_path() {
 # a real network call — only invoked from inside an EXECUTE=1 branch, never
 # from a dry run. A directory that does not exist yet (e.g. first-ever
 # deploy) is treated as empty rather than failing the whole pass.
+#
+# --json is NOT optional here. Plain `c64u fs ls <dir>` (vendor/c64u, the
+# upstream Go binary) panics — output.GetFileIcon does LastIndex(name, ".")
+# and slices on the -1 result — on any entry with no extension. Every
+# directory this project cares about has one: CONFIG at the tree root,
+# USR LOG / ACCESS / CALLERS / T64.SIEC under SYSTEM/. Do not "simplify"
+# this back to human-readable output — it would panic the classify/verify
+# pass on exactly the trees it exists to protect (--clean's protected-file
+# logic failing open is the dangerous direction). This is the only call
+# site in tools/ that shells out to `fs ls`; siec_clean.py never talks to
+# c64u itself, it only parses the JSON this function already captured.
 siec_fetch_listings() {
     local work="$1"
     local section path out
@@ -412,11 +440,10 @@ deploy_siec() {
 
 deploy_uiec() {
     echo -e "${YELLOW}uiec (device ${UIEC_DEVICE}) has no network path — its media is not${NC}"
-    echo -e "${YELLOW}reachable from this script. Staging device 8, then driving COPYALL${NC}"
-    echo -e "${YELLOW}through the C64 to copy the program set across (src-diag/copyall.c).${NC}"
+    echo -e "${YELLOW}reachable from this script. COPYALL is written onto the same staged${NC}"
+    echo -e "${YELLOW}device-8 image (assemble-d81.sh --extra-prg), then driven through the${NC}"
+    echo -e "${YELLOW}C64 to copy the program set across (src-diag/copyall.c).${NC}"
     echo ""
-
-    deploy_d81
 
     if [ "$BUILD" -eq 1 ]; then
         echo -e "${BLUE}Building diagnostics (COPYALL)...${NC}"
@@ -447,18 +474,31 @@ deploy_uiec() {
     fi
     echo ""
 
+    # COPYALL is staged onto THIS deploy's own device-8 image via
+    # assemble-d81.sh --extra-prg (see deploy_d81) so the manual LOAD"COPYALL"
+    # instruction below is actually true. Never passed for the plain d81
+    # target or `make disk` — release images stay diagnostic-free.
+    deploy_d81 "$copyall_prg"
+
     if [ "$LAUNCH" -eq 1 ]; then
-        echo -e "${BLUE}Attempting best-effort launch of COPYALL (EXPERIMENTAL, unverified on hardware)...${NC}"
+        echo -e "${BLUE}Attempting best-effort launch of COPYALL via run-prg + sendkey...${NC}"
         local remote="/USB1/T64COPYALL.PRG"
         run_c64u fs upload "$copyall_prg" "$remote"
         run_c64u runners run-prg "$remote"
         sleep 1
+        # Verified on hardware: the first sendkey "C" after run-prg is
+        # reliably dropped — COPYALL was still sitting at its "PRESS C TO
+        # START" prompt until a second, identical sendkey landed. Same class
+        # of flakiness as the siec target's RETURN handling above; send it
+        # twice rather than relying on the first to land.
+        run_c64u machine sendkey "C"
         run_c64u machine sendkey "C"
         echo "Watch the console for 'DONE. N FAILED.' — this script cannot read it back."
     fi
 
     echo ""
-    echo -e "${GREEN}uiec staging done.${NC} On the C64 (device 8 is now the seeded d81):"
+    echo -e "${GREEN}uiec staging done.${NC} COPYALL is on device 8's image. On the C64"
+    echo "(device 8 is now the seeded d81):"
     echo "    LOAD\"COPYALL\",8"
     echo "    RUN"
     echo "    (press C to start; it copies device 8 -> device ${UIEC_DEVICE} partition 1)"
