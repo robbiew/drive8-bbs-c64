@@ -177,8 +177,6 @@ static void main_menu(void)
 
 int main(void)
 {
-    bbs_err_t err;
-
     /* Bank out BASIC ROM so BSS placed at $A000-$BFFF by linker is accessible */
     *((volatile char *)0x01) = 0x36;
 
@@ -192,32 +190,16 @@ int main(void)
     iocharmap(IOCHM_PETSCII_2);
     printf("INITIALIZING...\n");
 
-    err = cfg_init();
-    if (err != BBS_OK && err != BBS_ENOTFOUND) {
-        printf("ERROR: CONFIG INIT FAILED\n");
-        /* bbs_cfg.init_system/drive_system are still their pre-cfg_init()
-         * defaults here, so disk_reset_cursor_root() is a correct no-op in
-         * both builds (see src/main.c's matching early exit and disk.c's
-         * doc comment on disk_reset_cursor_root()). Called anyway so this
-         * exit doesn't silently rot if that ever changes.
-         *
-         * #ifndef'd out under T64_STORE_SEQ: CONFIGURE-SIEC has only 47
-         * bytes of BSS headroom (measured from BSSEnd in the .map — see the
-         * other call site below for the full story) and neither call fits.
-         * REL CONFIGURE has ~2346 bytes free and gets the fix; SIEC
-         * CONFIGURE keeps its pre-existing stranded-cursor bug rather than
-         * dropping a feature to make room (standing project constraint). */
-#ifndef T64_STORE_SEQ
-        disk_reset_cursor_root(bbs_cfg.device_system);
-#endif
-        /* A sysop whose config fails to load needs a usable prompt just as
-         * much as a normal QUIT — hold the error on screen for a keypress
-         * before editor_exit_to_reset() clears it (see that function's
-         * doc comment for why RTS-to-BASIC is not safe here). */
-        ui_press_any_key();
-        editor_exit_to_reset();
-        return 1;
-    }
+    /* Return value deliberately discarded: cfg_init() cannot fail. It is a
+     * pass-through for cfg_load_impl() (src/data/cfg.c), whose only two exits
+     * are BBS_ENOTFOUND (disk_open on CONFIG failed — defaults are already
+     * loaded by cfg_set_defaults(), so that is a normal first-run install)
+     * and BBS_OK. There is no third value, so a "config init failed" branch
+     * here was unreachable by construction; it was carried for two releases
+     * and cost bytes CONFIGURE-SIEC could not spare. If cfg_load_impl() ever
+     * grows a real error return, reinstate a check here — do not assume this
+     * comment stayed true. */
+    (void)cfg_init();
 
 #ifdef T64_STORE_SEQ
     /* rel_open() (rel_seq.c) hard-requires a working REU — without this call
@@ -249,21 +231,15 @@ int main(void)
      * bug reported on hardware: exiting REL CONFIGURE left a physical
      * sd2iec on partition 2 while the install lived in partition 1.
      *
-     * #ifndef'd out under T64_STORE_SEQ: adding both call sites in this file
-     * grows CONFIGURE-SIEC's code enough to push BSSStart 79 bytes later —
-     * code and bss share one region (see this file's #pragma region), and
-     * the calls also pull in disk_reset_cursor_root()'s SEQ body itself,
-     * previously dead-stripped here since nothing in the editor called it.
-     * 79 bytes blows through the build's 47-byte headroom: oscar64 fails to
-     * link with "Could not place object 's_lflag' — Size 32 Available 0",
-     * an exact 32-byte shortfall confirmed with `-rmp`'s error map (total
-     * requested bss is unchanged at 1811 bytes; only BSSStart moved).
-     * Left unmodified per the no-forced-fit / nothing-gets-dropped
-     * constraint — CONFIGURE-SIEC keeps the pre-existing stranded-cursor bug
-     * rather than losing a feature to make room. */
-#ifndef T64_STORE_SEQ
+     * Now compiled into BOTH builds. It was previously #ifndef'd out under
+     * T64_STORE_SEQ because the call — which also pulls in
+     * disk_reset_cursor_root()'s SEQ body, otherwise dead-stripped here —
+     * pushed BSSStart 79 bytes later, against only 47 bytes of headroom
+     * (code and bss share one region; see this file's #pragma region).
+     * Deleting the unreachable cfg_init() failure branch above freed 54
+     * bytes, taking CONFIGURE-SIEC's headroom to 92 and letting this fit
+     * with room to spare. Nothing was dropped to make room. */
     disk_reset_cursor_root(bbs_cfg.device_system);
-#endif
 
     /* Hold GOODBYE. on screen for a keypress — editor_exit_to_reset()'s
      * reset jump clears the screen almost immediately (KERNAL CINT), so
