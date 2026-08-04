@@ -58,7 +58,32 @@ static const copy_file_t files[] = {
 };
 #define NFILE (sizeof(files)/sizeof(files[0]))
 
+/* Row budget for the final summary: the C64 screen is 25 rows, and the "." /
+   "!" progress lines (one per NFILE) already scroll the early ones off long
+   before the run ends - the exact problem this fix addresses. Re-printing
+   every failed name would just move the same problem down: with all NFILE
+   files failing, "DONE. N FAILED." itself would scroll off the top before
+   the last name printed, leaving the operator exactly as blind as before.
+   Cap the re-printed list well under the full screen and say "AND N MORE"
+   for the rest - the count from "DONE." is always exact even when the list
+   is truncated. */
+#define MAX_FAIL_SHOW 15
+
 static u8 buf[128];
+
+/* Failed-file indices, not copied name strings: files[] already holds the
+   names, so recording the index costs 1 byte per failure instead of
+   duplicating up to 39 bytes (sizeof sn/dn) per name. Sized to the worst
+   case (every file fails) so the loop below never needs a bounds check
+   against a smaller buffer. File-static, matching s_read_status below and
+   buf above: main()'s loop writes this across repeated calls into copy_one()
+   (which itself calls krnio_ and disk_ functions every iteration), and this
+   file already treats "must stay correct across such a call" as reason
+   enough to use a fixed BSS slot rather than lean on a stack local - see
+   src/data/users.c:25-30 for the underlying oscar64 hazard (no hardware
+   stack; per-function frames can overlap a callee's frame across a call). */
+static u8 s_fail_idx[NFILE];
+static u8 s_fail_n;
 
 /* Per-chunk source read status (krnio_pstatus[LF_SRC], captured right after
    krnio_read). Held file-static, not a copy_one() local: it must stay valid
@@ -128,7 +153,7 @@ static bool_t copy_one(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
 
 int main(void)
 {
-    u8 sdev = 8, ddev = 10, i, bad = 0;
+    u8 sdev = 8, ddev = 10, i;
 
     printf("\x93\x8e");
     printf("COPY T/64 SET  8 -> 10 PART 1\n");
@@ -144,9 +169,26 @@ int main(void)
     for (i = 0; i < (u8)NFILE; i++) {
         bool_t ok = copy_one(sdev, ddev, files[i].name, files[i].is_prg);
         printf("%c %s\n", ok ? '.' : '!', files[i].name);
-        if (!ok) bad++;
+        if (!ok) s_fail_idx[s_fail_n++] = i;
     }
-    printf("\nDONE. %u FAILED.\n", (unsigned)bad);
+    printf("\nDONE. %u FAILED.\n", (unsigned)s_fail_n);
+
+    /* Re-print the failed NAMES, not just the count: with NFILE=30 on a
+       25-row screen, the "." / "!" lines above have long since scrolled the
+       failing ones out of view by the time DONE prints. Capped at
+       MAX_FAIL_SHOW (see above) so a bad run (many failures) can't scroll
+       DONE itself back off the top while this list is still printing. */
+    if (s_fail_n) {
+        bool_t truncated = s_fail_n > MAX_FAIL_SHOW;
+        u8 show = truncated ? MAX_FAIL_SHOW : s_fail_n;
+        printf("FAILED:\n");
+        for (i = 0; i < show; i++) {
+            printf("%s\n", files[s_fail_idx[i]].name);
+        }
+        if (truncated) {
+            printf("...AND %u MORE\n", (unsigned)(s_fail_n - show));
+        }
+    }
     getch();
     return 0;
 }
