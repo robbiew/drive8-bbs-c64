@@ -242,8 +242,9 @@ _drive_mount_fail() {
 # contract that nothing touches hardware without --execute.
 assert_drive_mounted() {
     local drive="$1" context="$2" mode="${3:-fatal}"
-    local upper
+    local upper lower
     upper="$(printf '%s' "$drive" | tr '[:lower:]' '[:upper:]')"
+    lower="$(printf '%s' "$drive" | tr '[:upper:]' '[:lower:]')"
 
     if [ "$EXECUTE" -eq 0 ]; then
         echo -e "${YELLOW}[dry-run] would verify: drive ${upper} shows a mounted image" \
@@ -259,9 +260,26 @@ ${out}" "$upper" "$context"
         return
     fi
 
+    # `c64u drives list` groups each drive under an UNINDENTED header line and
+    # indents that drive's fields beneath it:
+    #
+    #     ● a (Enabled)
+    #       Bus ID:            #8
+    #       Mounted Image:     ● /Temp/temp0000
+    #
+    #     ● b (Enabled)
+    #       Mounted Image:     ─ (no disk)
+    #
+    # So the block boundary is "line does not start with whitespace", and the
+    # drive is identified by " <letter> (" within that header — the leading
+    # glyph is a multi-byte bullet that varies with enabled/disabled state, so
+    # do not anchor on it. Scoping to one drive's block is load-bearing: a
+    # naive grep for "Mounted Image" across the whole output also sees drive b,
+    # the IEC drive and the printer, all of which normally report "(no disk)",
+    # and would report every deploy as unmounted.
     local block
-    block="$(printf '%s\n' "$out" | awk -v want="Drive ${upper}" '
-        /^Drive [A-Za-z]/ { active = (index($0, want) == 1) }
+    block="$(printf '%s\n' "$out" | awk -v want=" ${lower} (" '
+        /^[^[:space:]]/ { active = (index($0, want) > 0) }
         active { print }
     ')"
 
@@ -285,26 +303,27 @@ ${out}" "$upper" "$context"
 # (0-255) on success, or the literal string "unknown" if the read failed or
 # produced something unparsable. Only ever called under EXECUTE=1.
 #
-# Deliberately redirects to a real file rather than capturing via command
-# substitution: `machine read-mem --help` documents two output modes ("The
-# output can be redirected to a file or viewed as hex dump"), and only the
-# file-redirect path is unambiguous to parse — the hex-dump text framing is
-# untested against live hardware here and may depend on TTY detection.
-# Capturing via `$(...)` also risks bash silently mangling a NUL byte
-# (buffer depth 0), which is exactly the value this function most needs to
-# report correctly.
+# Uses --json. Plain `machine read-mem` writes a FORMATTED HEX DUMP to
+# stdout, never raw bytes, so redirecting it to a file and expecting one
+# byte back always fails — verified on hardware, where this reported
+# "unknown" every time and fell through to the blind extra keystroke.
+# --json returns {"address":"$00c6","data":"01","length":1}; the value
+# arrives as hex TEXT, which also sidesteps the NUL-byte problem that makes
+# a raw-byte capture unsafe for depth 0 — the single value this most needs
+# to report correctly.
 uiec_kbd_buffer_depth() {
-    local tmp
-    tmp="$(mktemp)"
-    if "$BIN" machine read-mem 00c6 --length 1 >"$tmp" 2>/dev/null; then
-        if [ "$(wc -c <"$tmp" | tr -d ' ')" = "1" ]; then
-            od -An -tu1 "$tmp" | tr -d ' \n'
-            rm -f "$tmp"
-            return
-        fi
+    local out hex
+    if ! out="$("$BIN" machine read-mem 00c6 --length 1 --json 2>/dev/null)"; then
+        echo "unknown"
+        return
     fi
-    rm -f "$tmp"
-    echo "unknown"
+    hex="$(printf '%s' "$out" \
+        | sed -n 's/.*"data"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F][0-9a-fA-F]*\)".*/\1/p')"
+    if [ -z "$hex" ]; then
+        echo "unknown"
+        return
+    fi
+    printf '%d\n' "0x${hex}"
 }
 
 # Sends the "C" keystroke that starts COPYALL after run-prg has loaded it,
