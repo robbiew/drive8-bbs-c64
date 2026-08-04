@@ -49,9 +49,16 @@ int main(void) {
     /* WINDOW is sized by B<n>.IDX (200 x 63), the larger of its two tenants */
     EXPECT_EQ("cap.window",   seq_region_capacity(SEQ_REGION_WINDOW), 12600);
 
-    /* every region ends where the next begins, and the last fits in bank 2 */
-    EXPECT_EQ("layout.contiguous",
-              seq_region_offset(1) == seq_region_offset(0) + seq_region_capacity(0), 1);
+    /* every region ends where the next begins (checks all 8 links, index 0
+     * through WINDOW), and the last fits in bank 2 */
+    {
+        u8 i;
+        for (i = 0; i < REGION_COUNT_MAX - 1; i++) {
+            EXPECT_EQ("layout.contiguous",
+                      seq_region_offset((u8)(i + 1)) ==
+                          seq_region_offset(i) + seq_region_capacity(i), 1);
+        }
+    }
     EXPECT_EQ("layout.fits",
               (long)seq_region_offset(SEQ_REGION_WINDOW)
               + seq_region_capacity(SEQ_REGION_WINDOW) <= 0x10000L, 1);
@@ -60,6 +67,10 @@ int main(void) {
     EXPECT_STR("tmp.name", buf, "USR LOG.NEW");
     EXPECT_EQ("tmp.b20.ok", seq_tmp_name(buf, "B20.IDX"), 1);
     EXPECT_STR("tmp.b20", buf, "B20.IDX.NEW");
+    /* 12 chars + ".NEW" = 16, exactly at the CBM lookup limit — the ACCEPT
+     * boundary paired with tmp.toolong's REJECT boundary one char over */
+    EXPECT_EQ("tmp.12ok", seq_tmp_name(buf, "ABCDEFGHIJKL"), 1);
+    EXPECT_STR("tmp.12name", buf, "ABCDEFGHIJKL.NEW");
     /* 13 chars + ".NEW" = 17, past the 16-char CBM lookup limit */
     EXPECT_EQ("tmp.toolong", seq_tmp_name(buf, "ABCDEFGHIJKLM"), 0);
     EXPECT_EQ("tmp.null", seq_tmp_name(buf, 0), 0);
