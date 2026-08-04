@@ -39,7 +39,7 @@ static u8 s_part_partition = 0;
 #ifdef T64_STORE_SEQ
 /* Absolute folder path per section, registered by disk_set_section_path()
  * once cfg_init() has read CONFIG. Pointers only — see disk.h. */
-static const char *s_section_path[5] = { 0, 0, 0, 0, 0 };
+static const char *s_section_path[CFG_SECTION_COUNT] = { 0, 0, 0, 0, 0 };
 
 /* Marker-file arrival check runs once per section, the first time its
  * folder is selected. CD: to a wrong/missing folder returns DOS status 0
@@ -49,7 +49,7 @@ static const char *s_section_path[5] = { 0, 0, 0, 0, 0 };
  * folder is correct. 62 = file not found is the only trustworthy signal;
  * disk_open() returning BBS_OK is not (KERNAL OPEN succeeds on any device
  * that answers, regardless of whether the file exists). */
-static bool_t s_section_verified[5] = { FALSE, FALSE, FALSE, FALSE, FALSE };
+static bool_t s_section_verified[CFG_SECTION_COUNT] = { FALSE, FALSE, FALSE, FALSE, FALSE };
 
 /* Last folder path actually CD:'d to, alongside the device it was sent on.
  * gfiles commonly share the system folder (a different section index,
@@ -59,7 +59,7 @@ static const char *s_last_path = 0;
 
 void disk_set_section_path(u8 index, const char *path)
 {
-    if (index < 5) s_section_path[index] = path;
+    if (index < CFG_SECTION_COUNT) s_section_path[index] = path;
 }
 
 /* Opens the marker directly through krnio rather than disk_open(): the
@@ -148,7 +148,7 @@ bbs_err_t disk_select_partition(u8 device, u8 partition)
     char cmd[28];
     const char *path;
 
-    if (partition >= 5) return BBS_EIO;
+    if (partition >= CFG_SECTION_COUNT) return BBS_EIO;
     path = s_section_path[partition];
     if (!path || path[0] == '\0') return BBS_OK;
 

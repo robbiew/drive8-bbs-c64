@@ -25,6 +25,14 @@
 #define CFG_INIT_MAX    16
 #endif
 
+/* Number of storage sections: system, msgs, files, doors, gfiles — one per
+ * device_/drive_/init_ triple below. Defined here rather than in
+ * bbs/hal/disk.h because the section set is owned by the config layer (this
+ * struct is where the five sections are actually enumerated); disk.c's
+ * T64_STORE_SEQ section-index arrays just consume this count to size and
+ * bounds-check themselves. */
+#define CFG_SECTION_COUNT  5
+
 /** Modem carrier-detection mode.
  *  AUTO: probe for U64 UCI support at boot; use U64 if present, otherwise VICE.
  *  VICE: force AT-string mode (VICE/tcpser — DSR line is meaningless).
