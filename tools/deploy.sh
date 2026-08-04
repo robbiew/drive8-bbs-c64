@@ -79,8 +79,15 @@
 #   chunking bug above does not apply). VERIFIED on hardware: the first
 #   sendkey "C" after run-prg is reliably dropped — COPYALL was still
 #   sitting at its "PRESS C TO START" prompt until a second, identical
-#   sendkey landed — so deploy_uiec sends "C" twice. Watch the console
-#   regardless; c64u still can't read the "DONE. N FAILED." result back.
+#   sendkey landed. But COPYALL's RESULT screen ("DONE. N FAILED.") also
+#   ends on a getch(), so blindly sending "C" twice risks the opposite
+#   failure: if the first keystroke actually landed, the second sits in the
+#   buffer and silently dismisses the results before anyone reads them.
+#   uiec_start_copyall sends "C" once, then polls the keyboard-buffer depth
+#   at $00C6 via `machine read-mem` (0 = consumed, i.e. COPYALL read it and
+#   moved on) and only resends if it never drains within a short timeout —
+#   see that function for the full reasoning. This has NOT been re-verified
+#   against hardware since the polling logic was added.
 #   COPYALL itself is a diagnostic under src-diag/; its file list derives
 #   BOOT/CONFIGURE names from BBS_RELEASE_VERSION_COMPACT and includes
 #   OVL_AUTH, so it cannot drift the way earlier builds did. This script
@@ -89,6 +96,24 @@
 #   also writes COPYALL.prg onto the staged device-8 image itself (via
 #   assemble-d81.sh --extra-prg) so the printed manual LOAD"COPYALL",8 is
 #   actually true — it used to name a file that was never on the disk.
+#
+#   Mount assertions: a C64 reset (which `runners run-prg` performs as part
+#   of launching a PRG) can silently drop a mounted disk image from an
+#   internal drive. Driving COPYALL against an empty device 8 either copies
+#   nothing or deadlocks the IEC bus with interrupts disabled — a full
+#   machine hang requiring a physical reset — and has been observed to
+#   truncate the destination files instead of failing loudly. assert_drive_
+#   mounted (see below) checks `c64u drives list`'s human-readable "Mounted
+#   Image:" line (NOT --json: that call doesn't crash, but its success-path
+#   schema was never observed against live hardware in the pass that added
+#   this, whereas the human-readable line format is directly observed
+#   ground truth) at three points: right after deploy_d81 mounts, right
+#   before deploy_uiec drives COPYALL, and again right after run-prg's
+#   reset but before the start keystroke. All three abort the whole deploy
+#   on failure. A fourth, non-fatal check runs after the copy completes —
+#   it can't inspect the destination (uiec has no network path) but a
+#   dropped device-8 mount there is strong evidence of a mid-run unmount
+#   that would explain a partial copy. UNVERIFIED ON HARDWARE.
 #
 # Environment:
 #   T64_SIEC_DEVICE   default SoftIEC bus id (11)
@@ -109,7 +134,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 show_help() {
-    sed -n '2,98p' "$0"
+    sed -n '2,123p' "$0"
 }
 
 TARGET="${1:-}"
@@ -173,6 +198,191 @@ run_c64u() {
     fi
 }
 
+# Internal helper for assert_drive_mounted — prints the failure and, in
+# fatal mode, aborts the whole deploy. Split out so the same messaging
+# serves both the pre-copy (fatal) and post-copy (warn-only) call sites.
+_drive_mount_fail() {
+    local mode="$1" detail="$2" upper="$3" context="$4"
+    echo -e "${RED}${detail}${NC}" >&2
+    echo -e "${RED}A C64 reset drops the mounted image — run-prg and other resets can" \
+             "silently unmount it, and that is almost certainly what happened here.${NC}" >&2
+    if [ "$mode" = "fatal" ]; then
+        echo -e "${RED}Aborting before ${context}: driving COPYALL against an empty" \
+                 "device 8 is how the machine hangs. Re-run the staging step" \
+                 "(deploy_d81 / drives mount-upload) and try again.${NC}" >&2
+        exit 1
+    else
+        echo -e "${YELLOW}Continuing, but treat the copy that just ran as suspect:" \
+                 "re-stage and re-run, then verify block counts on the destination" \
+                 "before trusting it.${NC}" >&2
+    fi
+}
+
+# Confirms internal drive $1 (a|b) currently shows a mounted image, by
+# parsing `c64u drives list`'s human-readable output. $2 is a short
+# description of what we're about to do, used in messages. $3 is "fatal"
+# (default — abort the whole deploy) or "warn" (print and continue; used
+# only for the post-copy sanity check, where the copy already happened and
+# aborting can't undo it).
+#
+# Why parse the human-readable form instead of --json: `c64u drives list
+# --json` was checked and does NOT crash — it returns a well-formed JSON
+# error envelope when the host is unreachable — so it isn't unsafe to call.
+# But its success-path schema (field names for "which drive", "is media
+# mounted") was never observed against live hardware in the pass that added
+# this check, and this vendored tool has already been caught failing badly
+# elsewhere (`fs ls --json` panics with a Go stack trace on any
+# extensionless filename). Guessing at an unverified JSON key for a check
+# whose entire job is to prevent a machine hang is the wrong trade. The
+# human-readable "Mounted Image:" line, by contrast, is directly observed
+# ground truth — it shows "─ (no disk)" when empty and "● /path" when
+# mounted — so that's what's parsed here.
+#
+# Dry run: makes no network call and always passes, matching run_c64u's
+# contract that nothing touches hardware without --execute.
+assert_drive_mounted() {
+    local drive="$1" context="$2" mode="${3:-fatal}"
+    local upper
+    upper="$(printf '%s' "$drive" | tr '[:lower:]' '[:upper:]')"
+
+    if [ "$EXECUTE" -eq 0 ]; then
+        echo -e "${YELLOW}[dry-run] would verify: drive ${upper} shows a mounted image" \
+                 "(c64u drives list) before ${context}.${NC}"
+        return
+    fi
+
+    echo -e "${BLUE}Verifying drive ${upper} has a mounted image (${context})...${NC}"
+    local out
+    if ! out="$("$BIN" drives list 2>&1)"; then
+        _drive_mount_fail "$mode" "'c64u drives list' failed:
+${out}" "$upper" "$context"
+        return
+    fi
+
+    local block
+    block="$(printf '%s\n' "$out" | awk -v want="Drive ${upper}" '
+        /^Drive [A-Za-z]/ { active = (index($0, want) == 1) }
+        active { print }
+    ')"
+
+    if [ -z "$block" ] || ! printf '%s\n' "$block" | grep -q "Mounted Image"; then
+        _drive_mount_fail "$mode" "could not find a 'Mounted Image' line for drive ${upper} in:
+${out}" "$upper" "$context"
+        return
+    fi
+
+    if printf '%s\n' "$block" | grep -q "Mounted Image.*(no disk)"; then
+        _drive_mount_fail "$mode" "drive ${upper} has NO disk mounted" "$upper" "$context"
+        return
+    fi
+
+    echo -e "${GREEN}Drive ${upper}: image mounted — OK.${NC}"
+}
+
+# Reads the C64 keyboard-buffer depth at $00C6 ("number of keys queued and
+# not yet consumed by the kernal") via a real DMA memory read, for
+# uiec_start_copyall's consumption check below. Echoes the byte value
+# (0-255) on success, or the literal string "unknown" if the read failed or
+# produced something unparsable. Only ever called under EXECUTE=1.
+#
+# Deliberately redirects to a real file rather than capturing via command
+# substitution: `machine read-mem --help` documents two output modes ("The
+# output can be redirected to a file or viewed as hex dump"), and only the
+# file-redirect path is unambiguous to parse — the hex-dump text framing is
+# untested against live hardware here and may depend on TTY detection.
+# Capturing via `$(...)` also risks bash silently mangling a NUL byte
+# (buffer depth 0), which is exactly the value this function most needs to
+# report correctly.
+uiec_kbd_buffer_depth() {
+    local tmp
+    tmp="$(mktemp)"
+    if "$BIN" machine read-mem 00c6 --length 1 >"$tmp" 2>/dev/null; then
+        if [ "$(wc -c <"$tmp" | tr -d ' ')" = "1" ]; then
+            od -An -tu1 "$tmp" | tr -d ' \n'
+            rm -f "$tmp"
+            return
+        fi
+    fi
+    rm -f "$tmp"
+    echo "unknown"
+}
+
+# Sends the "C" keystroke that starts COPYALL after run-prg has loaded it,
+# handling the reliably-dropped-first-keystroke problem without risking a
+# surplus keystroke that would dismiss COPYALL's result screen.
+#
+# Background: COPYALL blocks on getch() at "PRESS C TO START". Verified on
+# hardware in an earlier pass: the first `machine sendkey "C"` after
+# `runners run-prg` is reliably dropped — COPYALL sits at the prompt until
+# an identical second keystroke lands. The script used to paper over this
+# by always sending "C" twice, unconditionally. That is unsafe here
+# specifically because COPYALL's RESULT screen ("DONE. N FAILED.") also
+# ends on a getch(): if the first "C" actually landed this time, the blind
+# second send sits in the keyboard buffer and silently dismisses the
+# results before anyone can read them — trading a dropped start for a lost
+# result, which is strictly worse for a script that already can't read the
+# result back over the API.
+#
+# So: send once, then poll the keyboard-buffer depth at $00C6 instead of
+# guessing. 0 means the byte was consumed (COPYALL read it and is now
+# copying); nonzero means it's still sitting there unread. Only resend if
+# polling shows it was never consumed inside a short timeout, and never
+# send more than two keystrokes total, matching the one-extra-key behavior
+# already verified reliable on hardware. If the depth read ever comes back
+# "unknown" (see uiec_kbd_buffer_depth), this falls back immediately to
+# that same one extra send rather than looping on a signal it can't trust.
+#
+# UNVERIFIED ON HARDWARE: the polling logic itself (as opposed to the
+# plain double-send it replaces) has not been run against a real C64U.
+uiec_start_copyall() {
+    if [ "$EXECUTE" -eq 0 ]; then
+        echo "[dry-run] c64u machine sendkey C"
+        echo "[dry-run] would poll \$00C6 (keyboard buffer depth) for consumption," \
+             "resending \"C\" at most once more, only if it never drains to 0."
+        return
+    fi
+
+    echo -e "${BLUE}Sending start keystroke (C)...${NC}"
+    "$BIN" machine sendkey "C"
+
+    local tries=0 depth="unknown" consumed=0
+    while [ "$tries" -lt 6 ]; do
+        sleep 0.3
+        depth="$(uiec_kbd_buffer_depth)"
+        if [ "$depth" = "0" ]; then
+            consumed=1
+            break
+        fi
+        if [ "$depth" = "unknown" ]; then
+            break
+        fi
+        tries=$((tries + 1))
+    done
+
+    if [ "$consumed" -eq 1 ]; then
+        echo -e "${GREEN}Keystroke consumed (\$00C6 == 0) — COPYALL is running.${NC}"
+        return
+    fi
+
+    if [ "$depth" = "unknown" ]; then
+        echo -e "${YELLOW}Could not read \$00C6 — falling back to the one extra keystroke" \
+                 "verified reliable on hardware.${NC}"
+    else
+        echo -e "${YELLOW}Keystroke not yet consumed after ${tries} checks — resending" \
+                 "once (known-dropped-first-key case).${NC}"
+    fi
+
+    "$BIN" machine sendkey "C"
+    sleep 0.3
+    depth="$(uiec_kbd_buffer_depth)"
+    if [ "$depth" = "0" ]; then
+        echo -e "${GREEN}Keystroke consumed after resend.${NC}"
+    else
+        echo -e "${YELLOW}Still unconfirmed (\$00C6=${depth}) — watch the console; not" \
+                 "sending a third keystroke (risk of dismissing the results screen).${NC}"
+    fi
+}
+
 echo -e "${BLUE}T/64 deploy: target=${TARGET} version=${VERSION_COMPACT} execute=${EXECUTE} launch=${LAUNCH}${NC}"
 if [ "$EXECUTE" -eq 0 ]; then
     echo -e "${YELLOW}DRY RUN — no c64u command below will actually execute. Pass --execute to run for real.${NC}"
@@ -208,6 +418,11 @@ deploy_d81() {
     local image="$ROOT/build/c64/TURBO64-${VERSION_COMPACT}.d81"
     echo -e "${BLUE}Mounting to internal drive ${D81_DRIVE} (device 8)...${NC}"
     run_c64u drives mount-upload "$D81_DRIVE" "$image" --type d81 --mode readwrite
+
+    # Confirm the mount actually took, rather than trusting the upload
+    # call's success message — see assert_drive_mounted for why this
+    # matters.
+    assert_drive_mounted "$D81_DRIVE" "trusting this mount for the deploy"
 
     if [ "$LAUNCH" -eq 1 ]; then
         echo -e "${BLUE}Launching (run-prg forces device 8, which is correct here)...${NC}"
@@ -482,17 +697,34 @@ deploy_uiec() {
 
     if [ "$LAUNCH" -eq 1 ]; then
         echo -e "${BLUE}Attempting best-effort launch of COPYALL via run-prg + sendkey...${NC}"
+
+        # Critical check: staging (deploy_d81, above) may have happened
+        # minutes ago by the time we actually get here. Don't trust that
+        # earlier check — verify again, right before driving COPYALL.
+        assert_drive_mounted "$D81_DRIVE" "driving COPYALL"
+
         local remote="/USB1/T64COPYALL.PRG"
         run_c64u fs upload "$copyall_prg" "$remote"
         run_c64u runners run-prg "$remote"
         sleep 1
-        # Verified on hardware: the first sendkey "C" after run-prg is
-        # reliably dropped — COPYALL was still sitting at its "PRESS C TO
-        # START" prompt until a second, identical sendkey landed. Same class
-        # of flakiness as the siec target's RETURN handling above; send it
-        # twice rather than relying on the first to land.
-        run_c64u machine sendkey "C"
-        run_c64u machine sendkey "C"
+
+        # run-prg just reset the machine to launch COPYALL — this is
+        # precisely where the mount can vanish (a mounted image does not
+        # survive a reset), so check again before sending the start
+        # keystroke. This is the check that matters most: staging succeeds,
+        # the reset drops the mount, and everything downstream goes quiet.
+        assert_drive_mounted "$D81_DRIVE" "sending the COPYALL start keystroke"
+
+        uiec_start_copyall
+
+        # Non-fatal: the copy already ran, so aborting now can't undo
+        # anything. But if device 8 also lost its mount somewhere along the
+        # way, that's strong evidence of a mid-run unmount that would
+        # explain a partial/truncated copy — worth flagging even though
+        # this script has no network path to device 10 to check the
+        # destination directly.
+        assert_drive_mounted "$D81_DRIVE" "the copy that just ran" "warn"
+
         echo "Watch the console for 'DONE. N FAILED.' — this script cannot read it back."
     fi
 
