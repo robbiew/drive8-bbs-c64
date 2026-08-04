@@ -76,6 +76,17 @@ SYSTEM_SIEC_ARTIFACTS = [
     "ovl_files.prg", "ovl_zmodem.prg", "ovl_auth.prg",
 ]
 
+# The bundled example door. Unlike the overlays above, it is NOT built into
+# --siec-build-dir: `make door` always writes to the shared $(OUTDIR)
+# (build/c64/FORTUNE.prg), never $(OUTDIR_SIEC), because a door has no
+# overlay-address conflict between the REL and SIEC build flavors (Makefile's
+# `door` target). --door-build-dir therefore defaults to build/c64's parent,
+# not the siec/ subdirectory. DOORS/ is where it must land: doors.c's
+# door_run() resolves a door's configured section via disk_select_partition(),
+# and the example door ships configured for section 3 (doors).
+DOOR_PRG_SRC = "FORTUNE.prg"   # build/c64/FORTUNE.prg, from `make door-example`
+DOOR_PRG_DST = "fortune.prg"   # DOORS/fortune.prg; SoftIEC strips ".prg" -> CBM name FORTUNE
+
 
 def trim_records(data, record_size):
     """Drop trailing all-zero records; pad a ragged tail to a whole record."""
@@ -185,6 +196,22 @@ def find_missing_siec_artifacts(siec_dir, version):
     return [n for n in wanted if not os.path.isfile(os.path.join(siec_dir, n))]
 
 
+def find_missing_door(door_build_dir):
+    """[] if the example door PRG is present in door_build_dir, else [name].
+
+    A missing door does not stop the tree from booting the way a missing
+    overlay does, but it is not a silent-skip case either: DOORS/ would come
+    up empty, the DOORS feature has nothing to demonstrate, and every
+    COPYALL run reports FORTUNE as a failure with no clue why (the exact
+    trap this fix removes — see tools/deploy.sh / assemble-d81.sh). Reported
+    through the same fail-loud / --allow-incomplete gate as the SIEC
+    binaries, not a separate quieter path.
+    """
+    if os.path.isfile(os.path.join(door_build_dir, DOOR_PRG_SRC)):
+        return []
+    return [DOOR_PRG_SRC]
+
+
 def copy_siec_artifacts(siec_dir, version, outdir):
     """Copy whichever of the required SIEC binaries are present in siec_dir
     into outdir (root vs SYSTEM/ per the verified layout). Caller is
@@ -203,6 +230,22 @@ def copy_siec_artifacts(siec_dir, version, outdir):
             shutil.copy2(src, os.path.join(outdir, "SYSTEM", n))
             copied.append(n)
     return copied
+
+
+def copy_door_artifact(door_build_dir, outdir):
+    """Copy the example door PRG into DOORS/, renamed per the SIEC naming
+    convention (lowercase, .prg kept so the extension marks it as a PRG to
+    tooling; SoftIEC itself strips the type marker at LOAD time and presents
+    the CBM name as uppercase FORTUNE, matching the overlays copied above).
+    Returns the destination name if copied, [] if the source is absent
+    (caller has already decided, via find_missing_door, whether that is
+    tolerable).
+    """
+    src = os.path.join(door_build_dir, DOOR_PRG_SRC)
+    if not os.path.isfile(src):
+        return []
+    shutil.copy2(src, os.path.join(outdir, "DOORS", DOOR_PRG_DST))
+    return [DOOR_PRG_DST]
 
 
 def write_config(outdir, specs):
@@ -233,6 +276,11 @@ def main():
                     default=os.path.join(root, "build", "c64", "siec"),
                     help="where ovl_*.prg / BOOT-<ver>-SIEC.prg were built "
                          "(default: build/c64/siec, i.e. 'make c64-siec')")
+    ap.add_argument("--door-build-dir",
+                    default=os.path.join(root, "build", "c64"),
+                    help="where FORTUNE.prg was built (default: build/c64, "
+                         "i.e. 'make door-example' — NOT --siec-build-dir; "
+                         "doors are shared between the REL and SIEC flavors)")
     ap.add_argument("--version-header",
                     default=os.path.join(root, "include", "bbs", "version.h"))
     ap.add_argument("--allow-incomplete", action="store_true",
@@ -255,14 +303,32 @@ def main():
     # data layout only; it is not a way to produce a deployable tree.
     version = read_version(args.version_header)
     missing_bin = find_missing_siec_artifacts(args.siec_build_dir, version)
-    if missing_bin and not args.allow_incomplete:
+    # The example door is checked here too, not skipped past silently: a
+    # DOORS/ folder with nothing in it is exactly the "looks complete but
+    # isn't" trap this tool exists to remove, just for the DOORS feature
+    # instead of boot. See find_missing_door().
+    missing_door = find_missing_door(args.door_build_dir)
+    if (missing_bin or missing_door) and not args.allow_incomplete:
+        parts = []
+        if missing_bin:
+            parts.append(
+                "missing SIEC build artifact(s) in {}: {}\n"
+                "This tree would not boot on hardware. Build them first:\n"
+                "    make c64-siec".format(
+                    args.siec_build_dir, ", ".join(missing_bin))
+            )
+        if missing_door:
+            parts.append(
+                "missing example door in {}: {}\n"
+                "DOORS/ would ship empty and the DOORS feature would have "
+                "nothing to demonstrate. Build it first:\n"
+                "    make door-example".format(
+                    args.door_build_dir, ", ".join(missing_door))
+            )
         sys.exit(
-            "missing SIEC build artifact(s) in {}: {}\n"
-            "This tree would not boot on hardware. Build them first:\n"
-            "    make c64-siec\n"
+            "\n\n".join(parts) + "\n\n"
             "(pass --allow-incomplete to write the tree anyway, for "
-            "inspecting the data layout only)".format(
-                args.siec_build_dir, ", ".join(missing_bin))
+            "inspecting the data layout only)"
         )
 
     for section in SECTIONS:
@@ -314,6 +380,7 @@ def main():
     write_config(args.outdir, specs)
 
     copied = copy_siec_artifacts(args.siec_build_dir, version, args.outdir)
+    door_copied = copy_door_artifact(args.door_build_dir, args.outdir)
 
     for line in converted:
         print(line)
@@ -325,9 +392,15 @@ def main():
               f"{', '.join(unrecognized)}")
     print(f"\ncopied {len(copied)} SIEC binaries from {args.siec_build_dir}: "
           f"{', '.join(copied)}")
+    if door_copied:
+        print(f"copied example door: {args.door_build_dir}/{DOOR_PRG_SRC} "
+              f"-> DOORS/{DOOR_PRG_DST}")
     if missing_bin:
         print(f"WARNING: tree is INCOMPLETE and will not boot — missing: "
               f"{', '.join(missing_bin)}")
+    if missing_door:
+        print(f"WARNING: DOORS/ is INCOMPLETE — missing example door: "
+              f"{', '.join(missing_door)}")
     print(f"\nwrote {args.outdir}; copy its contents to {args.base} on the stick")
     print("the source image was not modified")
 

@@ -417,7 +417,12 @@ deploy_d81() {
 
     if [ "$BUILD" -eq 1 ]; then
         echo -e "${BLUE}Building REL binaries...${NC}"
-        (cd "$ROOT" && make c64 && make editor)
+        # door-example is NOT optional here, despite assemble-d81.sh guarding
+        # its write with a file-existence test. tools/build.sh has always built
+        # it; this path did not, so every disk it produced silently lacked
+        # `fortune` — leaving the DOORS feature with nothing to demonstrate and
+        # making COPYALL report FORTUNE as a failure on every single run.
+        (cd "$ROOT" && make c64 && make editor && make door-example)
     fi
 
     if [ ! -f "$D81_SEED" ]; then
@@ -606,7 +611,13 @@ siec_verify_pass() {
 deploy_siec() {
     if [ "$BUILD" -eq 1 ]; then
         echo -e "${BLUE}Building SIEC binaries...${NC}"
-        (cd "$ROOT" && make c64-siec && make editor-siec)
+        # door-example is not siec-flavored (the door PRG is shared with the
+        # REL build — see Makefile's `door` target, always $(OUTDIR)) but
+        # migrate-d81.py needs it in build/c64/ to populate DOORS/. Without
+        # it here the tree ships with an empty DOORS/ and COPYALL reports
+        # FORTUNE as a failure on every run — the same trap deploy_d81 was
+        # already fixed for above.
+        (cd "$ROOT" && make c64-siec && make editor-siec && make door-example)
     fi
 
     if [ ! -f "$D81_SEED" ]; then

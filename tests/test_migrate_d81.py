@@ -143,6 +143,23 @@ with tempfile.TemporaryDirectory() as td:
           os.path.isfile(os.path.join(outdir, "ovl_wfc.prg")), False)
 
 
+# --- example door: missing is reported, not silently skipped --------------
+
+with tempfile.TemporaryDirectory() as td:
+    check("door.missing_when_empty", mig.find_missing_door(td), [mig.DOOR_PRG_SRC])
+    check("door.copy_noop_when_missing", mig.copy_door_artifact(td, td), [])
+
+    open(os.path.join(td, mig.DOOR_PRG_SRC), "w").close()
+    check("door.none_missing_when_built", mig.find_missing_door(td), [])
+
+    outdir = os.path.join(td, "out")
+    os.makedirs(os.path.join(outdir, "DOORS"))
+    copied = mig.copy_door_artifact(td, outdir)
+    check("door.copied", copied, [mig.DOOR_PRG_DST])
+    check("door.lands_in_doors_lowercase",
+          os.path.isfile(os.path.join(outdir, "DOORS", mig.DOOR_PRG_DST)), True)
+
+
 # --- read_version parses BBS_RELEASE_VERSION_COMPACT -----------------------
 
 with tempfile.TemporaryDirectory() as td:

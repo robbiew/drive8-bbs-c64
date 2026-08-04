@@ -326,6 +326,16 @@ if [ -f "$EXAMPLE_DOOR_PRG" ]; then
     echo "Adding example door (fortune)..."
     "$C1541" "$OUTPUT_DISK" -write "$EXAMPLE_DOOR_PRG" "fortune" >/dev/null 2>&1 || \
         { echo "WARNING: failed to write example door" >&2; }
+else
+    # Do NOT skip silently. A missing door is invisible on the resulting disk
+    # but not harmless downstream: src-diag/copyall.c's file list includes
+    # FORTUNE unconditionally, so every COPYALL run to a physical drive
+    # reports a failure for a file that was never built. That cost real
+    # debugging time when it showed up as "DONE. 1 FAILED" with no clue why.
+    echo "WARNING: $EXAMPLE_DOOR_PRG not found — the example door will be" >&2
+    echo "         missing from $(basename "$OUTPUT_DISK"), the DOORS feature" >&2
+    echo "         will have nothing to demonstrate, and COPYALL will report" >&2
+    echo "         FORTUNE as a failure. Run 'make door-example' first." >&2
 fi
 
 # Add config data file if present
