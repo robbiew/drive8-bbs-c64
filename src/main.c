@@ -656,7 +656,17 @@ int main(void)
    * path, fatal or not. Oscar64's startup RTS-es back to BASIC once main()
    * returns; if BASIC ROM is still banked out, that RTS runs into RAM (our
    * BSS at $A000-$BFFF) instead of BASIC code — observed on hardware as an
-   * endless reboot loop instead of a READY. prompt a SysOp could act on. */
+   * endless reboot loop instead of a READY. prompt a SysOp could act on.
+   *
+   * This RTS-to-BASIC only works because BOOT's BSSEnd (see the .map file)
+   * stays below $A000 — BASIC's own post-LOAD workspace pointers land
+   * comfortably above it, so ROM being banked back in here doesn't shadow
+   * live BASIC state the way it does for CONFIGURE (src-editor/main.c's
+   * BSSEnd sits at ~$B6xx, inside the $A000-$BFFF window, which is exactly
+   * why that binary jumps to the KERNAL reset vector instead of RTSing).
+   * If BOOT's BSSEnd ever grows past $A000, this RTS becomes exactly that
+   * same hazard — check BSSEnd in the map after any change that grows the
+   * resident region and switch to the same reset-vector jump if it crosses. */
   *((volatile char *)0x01) = 0x37;
 
   return 0;

@@ -34,6 +34,43 @@
 
 /* CONFIGURE SysOp Editor — disk init, user/msg/file/vote/config management. */
 
+/** Exit the editor by jumping to the KERNAL reset vector instead of RTSing
+ * back to BASIC. CONFIGURE's BSSEnd sits inside the BASIC ROM window
+ * ($A000-$BFFF, banked out at startup so the linker can place BSS there —
+ * see the #pragma region above and the $01=$36 write in main()). After a
+ * LOAD, BASIC's own variable/workspace pointers land just past the ~43KB
+ * program image (around $B0D0), inside that same window. A plain RTS-back-
+ * to-BASIC only restores $01=$37 and resumes BASIC's EXISTING interpreter
+ * state, which read as ROM (not RAM) for the whole run and is now corrupt —
+ * observed on hardware as an infinite "?FORMULA TOO COMPLEX" storm after
+ * "GOODBYE.". Jumping to the hardware reset entry point ($FCE2, same as the
+ * KERNAL RESET vector at $FFFC/$FFFD) instead performs a full BASIC cold
+ * start, which reinitializes those pointers from scratch rather than
+ * resuming corrupted ones, sidestepping the problem entirely.
+ *
+ * Must bank in $01=$37 (BASIC+KERNAL ROM+I/O, the hardware default) first:
+ * $FCE2 ends with JMP ($A000), reading BASIC's cold-start vector out of
+ * BASIC ROM — with ROM still banked out that read would hit our BSS instead.
+ * krnio_clrchn() first clears any KERNAL input/output channel selection
+ * left over from disk I/O (main_menu()'s admin submenus, or cfg_init()'s
+ * CONFIG read on the failure path below) so the reset starts from a clean
+ * KERNAL channel state, same as a real RESET would find after power-on.
+ * The jump never returns.
+ *
+ * Written as inline asm (JMP $FCE2), not a `((void(*)(void))0xFCE2)()`
+ * function-pointer call: the function-pointer form crashes the oscar64
+ * compiler outright (segfault, reproduced standalone) rather than emitting
+ * bad code — confirmed this is the correct absolute JMP either way, but the
+ * asm form is what actually compiles. */
+static void editor_exit_to_reset(void)
+{
+    krnio_clrchn();
+    *((volatile char *)0x01) = 0x37;
+    __asm {
+        jmp $fce2
+    }
+}
+
 static void do_stats(void)
 {
     ui_screen_header("BBS STATISTICS");
@@ -173,9 +210,12 @@ int main(void)
 #ifndef T64_STORE_SEQ
         disk_reset_cursor_root(bbs_cfg.device_system);
 #endif
-        /* Same restore as the bottom of main() (see its comment) — this is
-         * an early exit and BASIC ROM is still banked out at this point. */
-        *((volatile char *)0x01) = 0x37;
+        /* A sysop whose config fails to load needs a usable prompt just as
+         * much as a normal QUIT — hold the error on screen for a keypress
+         * before editor_exit_to_reset() clears it (see that function's
+         * doc comment for why RTS-to-BASIC is not safe here). */
+        ui_press_any_key();
+        editor_exit_to_reset();
         return 1;
     }
 
@@ -225,10 +265,13 @@ int main(void)
     disk_reset_cursor_root(bbs_cfg.device_system);
 #endif
 
-    /* Restore BASIC ROM so spexit's RTS can return cleanly to BASIC.
-     * $36 banks out BASIC ROM ($A000-$BFFF) to expose BSS; $37 puts it back.
-     * Without this, spexit's RTS executes our BSS (zeros = BRK) instead of BASIC. */
-    *((volatile char *)0x01) = 0x37;
+    /* Hold GOODBYE. on screen for a keypress — editor_exit_to_reset()'s
+     * reset jump clears the screen almost immediately (KERNAL CINT), so
+     * without this pause the message would be unreadable. See that
+     * function's doc comment for why a plain RTS back to BASIC is not
+     * safe here instead. */
+    ui_press_any_key();
+    editor_exit_to_reset();
 
     return 0;
 }
