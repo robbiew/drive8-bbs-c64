@@ -60,6 +60,15 @@ static const copy_file_t files[] = {
 
 static u8 buf[128];
 
+/* Per-chunk source read status (krnio_pstatus[LF_SRC], captured right after
+   krnio_read). Held file-static, not a copy_one() local: it must stay valid
+   across the krnio_write()/krnio_status() calls later in the same loop
+   iteration, and oscar64 gives functions static per-function frames that can
+   overlap with a callee's frame across a call (see src/data/users.c:25-30).
+   A stack local surviving a call is exactly the shape of that hazard; a
+   fixed BSS slot is immune. */
+static krnioerr s_read_status;
+
 static bool_t copy_one(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
 {
     char sn[40], dn[40];
@@ -77,14 +86,38 @@ static bool_t copy_one(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
     krnio_setnam(dn);
     if (!krnio_open(LF_DST, ddev, LF_DST)) { krnio_close(LF_SRC); return FALSE; }
 
-    /* Loop until krnio_read reports no more data. Do NOT treat a short read
-       as end-of-file: a short read can occur mid-stream, and stopping there
-       silently truncates the file. A truncated PRG still LOADs successfully
-       and then crashes on RUN, which is a miserable thing to debug. */
+    /* Loop until krnio_read reports clean end-of-file. Do NOT treat every
+       n <= 0 as end-of-file: krnio_read() returns -1 only when CHKIN on the
+       source channel fails outright, but a mid-stream drive error (timeout,
+       checksum, device dropped) can also come back as a SHORT read - even
+       n == 0 - without going negative. The only reliable signal is the
+       per-channel status krnio_read() itself latches into krnio_pstatus[]
+       (see vendor/oscar64/include/c64/kernalio.c): KRNIO_OK/KRNIO_EOF mean
+       the bytes actually in `buf` are good, anything else is a real error.
+       Reading krnio_pstatus[LF_SRC] directly (not krnio_status()) matters
+       because krnio_status() reflects the KERNAL's single shared ST
+       register, which the krnio_write() call below clobbers with the
+       destination channel's status - see disk_write()'s comment in
+       src/hal/disk.c for the same caveat on the write side.
+
+       A truncated PRG still LOADs successfully and then crashes on RUN,
+       which is a miserable thing to debug - so on any doubt we fail the
+       file rather than print a false '.'. */
     for (;;) {
         int n = krnio_read(LF_SRC, (char *)buf, (int)sizeof(buf));
-        if (n <= 0) { ok = TRUE; break; }
+        if (n < 0) break;                      /* source CHKIN failed outright */
+
+        s_read_status = krnio_pstatus[LF_SRC];
+        if (s_read_status != KRNIO_OK && s_read_status != KRNIO_EOF) break; /* mid-stream read error */
+
+        if (n == 0) { ok = TRUE; break; }        /* clean EOF, nothing left to flush */
+
         if (krnio_write(LF_DST, (const char *)buf, n) != n) break;
+        /* Mirrors disk_write(): krnio_write() returns `n` once CHKOUT
+           succeeds, before the bytes are confirmed on the drive. */
+        if (krnio_status() != KRNIO_OK) break;
+
+        if (s_read_status == KRNIO_EOF) { ok = TRUE; break; }
     }
 
     krnio_clrchn();
