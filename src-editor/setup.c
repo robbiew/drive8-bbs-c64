@@ -14,9 +14,27 @@
 #include "bbs/err.h"
 #include "bbs/cfg.h"
 #include "bbs/hal/disk.h"
+#include "bbs/hal/reu.h"
 #include "bbs/users.h"
 #include "bbs/access.h"
 #include "ui/ui.h"
+
+#ifdef T64_STORE_SEQ
+/* rel_open() (rel_seq.c) hard-requires a working REU under T64_STORE_SEQ.
+ * Both database initializers below must check this BEFORE scratching their
+ * file, not after: otherwise a machine with no REU deletes the file and then
+ * fails to recreate it, and boot_sequence() refuses to start the BBS at all
+ * once it is missing — a dead install, not just an empty one.
+ * reu_data_available() is the exact same guard rel_open() uses itself.
+ * Shared as one function (rather than duplicated inline) so the check and
+ * its message cost code space once, not twice — CONFIGURE-SIEC's headroom
+ * is single-digit bytes. */
+static bbs_err_t require_reu(const char *label) {
+  if (reu_data_available()) return BBS_OK;
+  printf("NO REU - %s NOT TOUCHED\n", label);
+  return BBS_EIO;
+}
+#endif
 
 /* Initialize USR LOG REL file with sysop account.
  *
@@ -37,6 +55,10 @@ bbs_err_t setup_create_user_database(u8 device) {
   u16 rec;
 
   printf("CREATING USER DATABASE...\n");
+
+#ifdef T64_STORE_SEQ
+  { bbs_err_t rerr = require_reu("USR LOG"); if (rerr != BBS_OK) return rerr; }
+#endif
 
   (void)disk_scratch(device, bbs_cfg.drive_system, "USR LOG");
 
@@ -127,6 +149,10 @@ bbs_err_t setup_create_user_profiles(u8 device) {
   u16 rec;
 
   printf("CREATING USR PROF...\n");
+
+#ifdef T64_STORE_SEQ
+  { bbs_err_t rerr = require_reu("USR PROF"); if (rerr != BBS_OK) return rerr; }
+#endif
 
   (void)disk_scratch(device, bbs_cfg.drive_system, "USR PROF");
   rel_reset();
