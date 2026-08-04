@@ -119,6 +119,13 @@ bbs_err_t disk_load_overlay(const char *name);
  * alive for the lifetime of the program (bbs_cfg does). Called once per
  * section after config load. */
 void disk_set_section_path(u8 index, const char *path);
+
+/* Restore the drive's persistent CD: cursor to the section tree root
+ * (bbs_cfg.init_system with its last /-component stripped) before the
+ * process exits. See disk.c for why every exit path needs this. A no-op
+ * if bbs_cfg.init_system has no parent component (e.g. still empty because
+ * cfg_init() hasn't run yet). */
+void disk_reset_cursor_root(u8 device);
 #endif
 
 /* Read drive status into disk_errmsg. Returns numeric error code (0=OK). */

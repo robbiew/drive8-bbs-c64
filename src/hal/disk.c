@@ -77,7 +77,46 @@ static bbs_err_t disk_verify_section_marker(u8 device)
     if (status == 62) return BBS_EIO;
     return BBS_OK;
 }
-#endif
+
+/* Every process exit must leave the cursor at the section tree root, not
+ * wherever the last op left it — SoftIEC's CD: target is persistent drive
+ * state that survives a reset and a power cycle, so a stranded cursor
+ * breaks the operator's very next LOAD"BOOT...",device with FILE NOT FOUND
+ * (same disease commit e57b968 fixed for src-diag/, see cfgread.c's tail
+ * comment). There is no config field for the root, so it is derived by
+ * stripping bbs_cfg.init_system's last /-component — sound because
+ * tools/migrate-d81.py always builds the section folders as siblings of one
+ * root; a sysop-chosen layout that breaks this assumption just makes the
+ * CD: land somewhere else, which is inert (see below), not destructive.
+ *
+ * Reuses disk_errmsg as the command scratch buffer instead of adding a
+ * static one: disk_cmd() -> check_status() -> read_status() overwrites
+ * disk_errmsg right after krnio_open() has already consumed the name, so
+ * nothing downstream ever observes the borrowed content. cut is bounded by
+ * CFG_INIT_MAX-1 (23), so "CD:" + cut + NUL never exceeds sizeof(disk_errmsg)
+ * (40) and needs no runtime bounds check.
+ *
+ * A CD: to a wrong-but-existing folder is harmless (nothing here reads a
+ * result), and CD: to a nonexistent one leaves the cursor unmoved (measured
+ * on hardware) — either way this can never be worse than the stranded
+ * cursor it replaces. */
+void disk_reset_cursor_root(u8 device)
+{
+    char *cmd = disk_errmsg;
+    u8 i, cut = 0;
+
+    for (i = 0; bbs_cfg.init_system[i]; i++) {
+        if (bbs_cfg.init_system[i] == '/') cut = i;
+    }
+    if (cut == 0) return;
+
+    cmd[0] = 'C'; cmd[1] = 'D'; cmd[2] = ':';
+    for (i = 0; i < cut; i++) cmd[3 + i] = bbs_cfg.init_system[i];
+    cmd[3 + cut] = '\0';
+
+    disk_cmd(device, cmd);
+}
+#endif /* T64_STORE_SEQ */
 
 bbs_err_t disk_select_partition(u8 device, u8 partition)
 {
