@@ -65,7 +65,26 @@
 static void editor_exit_to_reset(void)
 {
     krnio_clrchn();
-    *((volatile char *)0x01) = 0x37;
+    /* Deliberately does NOT write $01=$37 before the jump, despite $FCE2
+     * ending in JMP ($A000) which needs BASIC ROM.
+     *
+     * THIS FUNCTION'S OWN CODE LIVES IN $A000-$BFFF (BSSEnd is $B6B8 / $BFF5;
+     * the linker packs code and bss into one region there). Banking BASIC ROM
+     * in over that window swaps ROM in on top of the very bytes the CPU is
+     * about to fetch, so the JMP that follows the STA is never executed —
+     * the CPU reads whatever BASIC ROM holds at that address instead.
+     * Verified in the listing: STA $01 at $AA7B, JMP $FCE2 at $AA7D, both
+     * inside the window. On hardware the SIEC build fell through to a plain
+     * return, leaving BASIC with a 45KB program still resident (?OUT OF
+     * MEMORY on the next LOAD); the REL build happened to reset anyway
+     * because BASIC ROM at its address led somewhere that did — luck, not
+     * correctness, and not something to rely on.
+     *
+     * $01 is $36 here (set in main()): LORAM=0 so BASIC ROM is out, but
+     * HIRAM=1 so KERNAL ROM IS mapped and $FCE2 is directly reachable. The
+     * KERNAL reset path then calls IOINIT ($FDA3), which stores $E7 to $01 —
+     * banking BASIC back in itself, before its JMP ($A000). Letting the
+     * KERNAL do it is both correct and the only version that can execute. */
     __asm {
         jmp $fce2
     }
