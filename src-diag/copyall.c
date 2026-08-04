@@ -69,6 +69,16 @@ static const copy_file_t files[] = {
    is truncated. */
 #define MAX_FAIL_SHOW 15
 
+/* Total attempts per file (1 initial + 2 retries). The IEC bus between the
+   emulated 1581 and the physical uIEC has been measured to drop 1-6 files
+   out of 30 on a run, intermittently and unrelated to file size - exactly
+   the shape of a transient bus fault, which a retry is meant to absorb.
+   3 gives every file two chances to recover from a glitch without turning
+   a single bad handshake into a third or fourth full-file re-read; going
+   higher buys little (a fault that survives two retries is far more likely
+   a real problem than bad luck) while extending the worst-case run time. */
+#define MAX_ATTEMPTS 3
+
 static u8 buf[128];
 
 /* Failed-file indices, not copied name strings: files[] already holds the
@@ -93,6 +103,16 @@ static u8 s_fail_n;
    A stack local surviving a call is exactly the shape of that hazard; a
    fixed BSS slot is immune. */
 static krnioerr s_read_status;
+
+/* Attempt number for the file currently in copy_with_retry()'s retry loop,
+   1-based. File-static for the same reason as s_fail_idx/s_fail_n above:
+   copy_with_retry() re-enters copy_one() on each retry, and copy_one() calls
+   krnio_/disk_ functions throughout, so a plain local here would be exactly
+   the frame-overlay hazard documented at src/data/users.c:25-30 - a value
+   that must outlive such a call needs a fixed BSS slot, not a stack frame.
+   main() reads it once copy_with_retry() returns, to report whether the
+   file needed more than one attempt. */
+static u8 s_attempt;
 
 static bool_t copy_one(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
 {
@@ -151,6 +171,38 @@ static bool_t copy_one(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
     return ok;
 }
 
+/* No timer is available on this HAL, so this is a counted busy-loop, not a
+   real delay - same idiom as the connect-banner drain wait in
+   src/hal/term.c:248. ~20000 iterations is a rough tens-of-milliseconds
+   pause: enough for a wedged IEC handshake to time out and both devices to
+   settle before the next attempt hits them again, but small enough that
+   even a file that burns every retry only adds a fraction of a second to a
+   run that already takes ~10 minutes on real hardware. */
+static void retry_delay(void)
+{
+    volatile u16 i;
+    for (i = 0; i < 20000; i++) ;
+}
+
+/* Retries a single file up to MAX_ATTEMPTS times. Every call into
+   copy_one() - including retries - starts with copy_one() scratching the
+   destination before it opens anything, so a failed attempt can never leave
+   bytes on disk for the next attempt to build on top of: attempt N+1 always
+   sees the same clean (absent) destination a first attempt would. This
+   holds even though a failed attempt N still closes LF_DST (copy_one()
+   closes both channels on every exit path, success or failure) - that
+   close is what finalizes the truncated file as a normal directory entry,
+   which is exactly what makes it scratchable on the next attempt instead of
+   leaving the drive's directory in a half-open, inconsistent state. */
+static bool_t copy_with_retry(u8 sdev, u8 ddev, const char *name, bool_t is_prg)
+{
+    for (s_attempt = 1; s_attempt <= MAX_ATTEMPTS; s_attempt++) {
+        if (copy_one(sdev, ddev, name, is_prg)) return TRUE;
+        if (s_attempt < MAX_ATTEMPTS) retry_delay();
+    }
+    return FALSE;
+}
+
 int main(void)
 {
     u8 sdev = 8, ddev = 10, i;
@@ -167,8 +219,16 @@ int main(void)
     }
 
     for (i = 0; i < (u8)NFILE; i++) {
-        bool_t ok = copy_one(sdev, ddev, files[i].name, files[i].is_prg);
-        printf("%c %s\n", ok ? '.' : '!', files[i].name);
+        bool_t ok = copy_with_retry(sdev, ddev, files[i].name, files[i].is_prg);
+        /* s_attempt is only worth reporting when the file needed more than
+           one try to succeed - a file that used every attempt and still
+           failed always shows the same MAX_ATTEMPTS count, which the '!'
+           marker and the FAILED: summary below already communicate. */
+        if (ok && s_attempt > 1) {
+            printf(". %s R%u\n", files[i].name, (unsigned)s_attempt);
+        } else {
+            printf("%c %s\n", ok ? '.' : '!', files[i].name);
+        }
         if (!ok) s_fail_idx[s_fail_n++] = i;
     }
     printf("\nDONE. %u FAILED.\n", (unsigned)s_fail_n);
