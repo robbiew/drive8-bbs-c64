@@ -78,16 +78,26 @@ static bbs_err_t disk_verify_section_marker(u8 device)
     return BBS_OK;
 }
 
-/* Every process exit must leave the cursor at the section tree root, not
- * wherever the last op left it — SoftIEC's CD: target is persistent drive
- * state that survives a reset and a power cycle, so a stranded cursor
- * breaks the operator's very next LOAD"BOOT...",device with FILE NOT FOUND
- * (same disease commit e57b968 fixed for src-diag/, see cfgread.c's tail
- * comment). There is no config field for the root, so it is derived by
- * stripping bbs_cfg.init_system's last /-component — sound because
- * tools/migrate-d81.py always builds the section folders as siblings of one
- * root; a sysop-chosen layout that breaks this assumption just makes the
- * CD: land somewhere else, which is inert (see below), not destructive.
+#endif /* T64_STORE_SEQ */
+
+/* Every process exit must leave the drive's persistent navigation cursor at
+ * "home" — wherever the install's own binaries live — not wherever the last
+ * op left it. Both builds have exactly this disease: the cursor (SoftIEC's
+ * CD: target, sd2iec's CP<n> partition) is drive state that survives a
+ * reset and a power cycle, so a stranded cursor breaks the operator's very
+ * next LOAD"BOOT...",device with FILE NOT FOUND (same disease commit
+ * e57b968 fixed for src-diag/, see cfgread.c's tail comment; verified on a
+ * physical sd2iec left on partition 2 by a REL CONFIGURE session while the
+ * install lived in partition 1). One function, two bodies — mirrors
+ * disk_select_partition()'s own #ifdef shape, since "home" resolves
+ * differently per build but the exit-time obligation is identical.
+ *
+ * T64_STORE_SEQ: there is no config field for the tree root, so it is
+ * derived by stripping bbs_cfg.init_system's last /-component — sound
+ * because tools/migrate-d81.py always builds the section folders as
+ * siblings of one root; a sysop-chosen layout that breaks this assumption
+ * just makes the CD: land somewhere else, which is inert (see below), not
+ * destructive.
  *
  * Reuses disk_errmsg as the command scratch buffer instead of adding a
  * static one: disk_cmd() -> check_status() -> read_status() overwrites
@@ -99,9 +109,21 @@ static bbs_err_t disk_verify_section_marker(u8 device)
  * A CD: to a wrong-but-existing folder is harmless (nothing here reads a
  * result), and CD: to a nonexistent one leaves the cursor unmoved (measured
  * on hardware) — either way this can never be worse than the stranded
- * cursor it replaces. */
+ * cursor it replaces.
+ *
+ * REL: "home" is NOT partition 0 — it's whatever partition the install's
+ * binaries actually occupy, i.e. bbs_cfg.drive_system. This just re-invokes
+ * disk_select_partition() with the config's own device/partition: that
+ * function already contains the correct partition-0 handling (send nothing
+ * at all — see its comment, which is explicit that this must stay
+ * byte-for-byte quiet for a partition-0 install) plus the redundant-CP
+ * cache, so duplicating either here would risk drifting from them. Before
+ * cfg_init() has run, bbs_cfg.drive_system is still its CFG_DRIVE_DEFAULT
+ * (0) zero value, so this is correctly a no-op too — the same pre-init
+ * no-op the T64_STORE_SEQ body gets from init_system still being empty. */
 void disk_reset_cursor_root(u8 device)
 {
+#ifdef T64_STORE_SEQ
     char *cmd = disk_errmsg;
     u8 i, cut = 0;
 
@@ -115,8 +137,10 @@ void disk_reset_cursor_root(u8 device)
     cmd[3 + cut] = '\0';
 
     disk_cmd(device, cmd);
+#else
+    disk_select_partition(device, bbs_cfg.drive_system);
+#endif
 }
-#endif /* T64_STORE_SEQ */
 
 bbs_err_t disk_select_partition(u8 device, u8 partition)
 {

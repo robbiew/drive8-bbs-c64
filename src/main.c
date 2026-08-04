@@ -590,15 +590,14 @@ int main(void)
   krnio_setnam(P"OVL_BOOT");
   if (!krnio_load(1, *(volatile u8 *)0xBA, 1)) {
     main_print("\nERROR: OVL_BOOT LOAD FAILED.\n");
-    /* bbs_cfg.init_system is still empty here (cfg_init() hasn't run) so
-     * disk_reset_cursor_root() is a no-op — correctly: the cursor hasn't
-     * moved from the boot cursor yet either. Called anyway rather than
-     * special-cased out, so this exit doesn't silently rot if that ever
-     * changes. See the block below the final return for the other half of
-     * this exit's cleanup (BASIC ROM restore), needed on every exit path. */
-#ifdef T64_STORE_SEQ
+    /* bbs_cfg.init_system/drive_system are still their pre-cfg_init()
+     * defaults here, so disk_reset_cursor_root() is a no-op in both builds
+     * — correctly: the cursor hasn't moved from the boot cursor yet either.
+     * Called anyway rather than special-cased out, so this exit doesn't
+     * silently rot if that ever changes. See the block below the final
+     * return for the other half of this exit's cleanup (BASIC ROM
+     * restore), needed on every exit path. */
     disk_reset_cursor_root(*(volatile u8 *)0xBA);
-#endif
     *((volatile char *)0x01) = 0x37;
     return 1;
   }
@@ -615,9 +614,7 @@ int main(void)
       main_print("REDEPLOY ALL OVL_* WITH BOOT.\n");
       /* Still pre-cfg_init(): see the OVL_BOOT-load-failure exit above for
        * why this is a correct no-op here too. */
-#ifdef T64_STORE_SEQ
       disk_reset_cursor_root(*(volatile u8 *)0xBA);
-#endif
       *((volatile char *)0x01) = 0x37;
       return 1;
     }
@@ -629,17 +626,16 @@ int main(void)
   if (err != BBS_OK) {
     main_print("\nBOOT FAILED.\n");
     /* This is the exit that matters most: boot_sequence() runs cfg_init()
-     * and (under T64_STORE_SEQ) rel_seq_require_storage()/rel_open(), so a
-     * failure here typically means the cursor is already stranded inside
-     * SYSTEM/ — exactly the state that breaks the operator's very next
+     * and, under T64_STORE_SEQ, rel_seq_require_storage()/rel_open() too, so
+     * a failure here typically means the cursor is already stranded inside
+     * SYSTEM/ (or, in the REL build, a partition other than drive_system) —
+     * exactly the state that breaks the operator's very next
      * LOAD"BOOT...",device retry. bbs_cfg.device_system may still be its
-     * zero default if cfg_init() itself is what failed; disk_cmd() sends to
-     * whatever device that is, which is the same "harmless if wrong,
-     * inert if the folder doesn't exist" case documented on
-     * disk_reset_cursor_root(). */
-#ifdef T64_STORE_SEQ
+     * zero default if cfg_init() itself is what failed; disk_cmd() /
+     * disk_select_partition() send to whatever device/partition that is,
+     * which is the same "harmless if wrong, inert if the folder doesn't
+     * exist" case documented on disk_reset_cursor_root(). */
     disk_reset_cursor_root(bbs_cfg.device_system);
-#endif
     *((volatile char *)0x01) = 0x37;
     return 1;
   }
@@ -654,9 +650,7 @@ int main(void)
   /* Graceful WFC exit (BBS_EQUIT) — the cursor could be anywhere a section
    * op last left it (msgs/files/gfiles), same stranded-cursor hazard as the
    * boot-failure exit above. */
-#ifdef T64_STORE_SEQ
   disk_reset_cursor_root(bbs_cfg.device_system);
-#endif
 
   /* Restore BASIC ROM ($01 = $37) before returning to BASIC on every exit
    * path, fatal or not. Oscar64's startup RTS-es back to BASIC once main()

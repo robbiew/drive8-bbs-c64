@@ -158,6 +158,21 @@ int main(void)
     err = cfg_init();
     if (err != BBS_OK && err != BBS_ENOTFOUND) {
         printf("ERROR: CONFIG INIT FAILED\n");
+        /* bbs_cfg.init_system/drive_system are still their pre-cfg_init()
+         * defaults here, so disk_reset_cursor_root() is a correct no-op in
+         * both builds (see src/main.c's matching early exit and disk.c's
+         * doc comment on disk_reset_cursor_root()). Called anyway so this
+         * exit doesn't silently rot if that ever changes.
+         *
+         * #ifndef'd out under T64_STORE_SEQ: CONFIGURE-SIEC has only 47
+         * bytes of BSS headroom (measured from BSSEnd in the .map — see the
+         * other call site below for the full story) and neither call fits.
+         * REL CONFIGURE has ~2346 bytes free and gets the fix; SIEC
+         * CONFIGURE keeps its pre-existing stranded-cursor bug rather than
+         * dropping a feature to make room (standing project constraint). */
+#ifndef T64_STORE_SEQ
+        disk_reset_cursor_root(bbs_cfg.device_system);
+#endif
         /* Same restore as the bottom of main() (see its comment) — this is
          * an early exit and BASIC ROM is still banked out at this point. */
         *((volatile char *)0x01) = 0x37;
@@ -187,6 +202,28 @@ int main(void)
 
     clrscr();
     printf("GOODBYE.\n");
+
+    /* main_menu()'s admin submenus can leave the drive cursor anywhere a
+     * msgs/files/doors op last parked it — same stranded-cursor hazard
+     * documented on disk_reset_cursor_root() (src/hal/disk.c), and the exact
+     * bug reported on hardware: exiting REL CONFIGURE left a physical
+     * sd2iec on partition 2 while the install lived in partition 1.
+     *
+     * #ifndef'd out under T64_STORE_SEQ: adding both call sites in this file
+     * grows CONFIGURE-SIEC's code enough to push BSSStart 79 bytes later —
+     * code and bss share one region (see this file's #pragma region), and
+     * the calls also pull in disk_reset_cursor_root()'s SEQ body itself,
+     * previously dead-stripped here since nothing in the editor called it.
+     * 79 bytes blows through the build's 47-byte headroom: oscar64 fails to
+     * link with "Could not place object 's_lflag' — Size 32 Available 0",
+     * an exact 32-byte shortfall confirmed with `-rmp`'s error map (total
+     * requested bss is unchanged at 1811 bytes; only BSSStart moved).
+     * Left unmodified per the no-forced-fit / nothing-gets-dropped
+     * constraint — CONFIGURE-SIEC keeps the pre-existing stranded-cursor bug
+     * rather than losing a feature to make room. */
+#ifndef T64_STORE_SEQ
+    disk_reset_cursor_root(bbs_cfg.device_system);
+#endif
 
     /* Restore BASIC ROM so spexit's RTS can return cleanly to BASIC.
      * $36 banks out BASIC ROM ($A000-$BFFF) to expose BSS; $37 puts it back.
