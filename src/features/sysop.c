@@ -817,6 +817,12 @@ static bool_t cal_wait_tenth(void)
     u8  t0 = TOD_10THS;
     u16 guard = 0;
     while (TOD_10THS == t0)
+        /* The u16 wrap back to 0 after 65536 iterations IS the escape: a
+         * stopped TOD would otherwise spin here forever and hang the boot.
+         * cppcheck reports this as always-false because its value analysis
+         * does not model unsigned wraparound (confirmed: the same finding
+         * appears under --platform=avr8, so it is not an int-width artefact). */
+        /* cppcheck-suppress knownConditionTrueFalse */
         if (++guard == 0u) return FALSE;
     return TRUE;
 }
@@ -824,8 +830,7 @@ static bool_t cal_wait_tenth(void)
 /* Measure the TOD feed. Returns 50, 60, or 0 if it could not be identified. */
 static u8 tod_calibrate(void)
 {
-    u16 a, b, ticks;
-    u8  i;
+    u16 ticks;
 
     CIA2_CRA   = 0x00;
     CIA2_CRB   = 0x00;
@@ -838,11 +843,13 @@ static u8 tod_calibrate(void)
 
     ticks = 0;
     if (cal_wait_tenth()) {
+        u16 a;
+        u8  i;
         a = cal_tb_read();
         for (i = 0; i < CAL_TENTHS; i++)
             if (!cal_wait_tenth()) break;
         if (i == CAL_TENTHS) {
-            b = cal_tb_read();
+            u16 b = cal_tb_read();
             ticks = (u16)(a - b);   /* counts down; u16 wrap makes this right */
         }
     }
